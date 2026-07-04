@@ -37,23 +37,30 @@
   </style>
 
   <div class="gc-wrap">
-    <section class="gc-hero" id="gc-home">
-  <div class="gc-eyebrow">GalviTriage™ by GalviCare</div>
-  <h1>How Healthy Is Your Business?</h1>
-  <p class="gc-lede">Check in to GalviTriage™ for a quick business diagnostic designed to identify whether your venture needs immediate attention. You'll receive your personalized GalviScore™—a clear snapshot highlighting your strengths, potential risks, and the priorities that matter most right now.</p>
-  <button class="gc-btn gc-light" data-gc-show="gc-assessment">Check In to GalviTriage™</button>
-</section>
 
-    <section class="gc-panel" id="gc-journey">
-      <h2>The GalviCare Customer Journey</h2>
-      <div class="gc-grid">
-        <div class="gc-card"><h3>1. Obtain GalviCare</h3><p>Founder enters from the GalviPro homepage CTA and lands inside the GalviCare experience.</p></div>
-        <div class="gc-card"><h3>2. Take GalviScore™</h3><p>The assessment scores business, customer, revenue, product, operations, technology, leadership, and decision intelligence health.</p></div>
-        <div class="gc-card"><h3>3. Review Results</h3><p>The founder receives a score, classification, snapshot, growth insight, and lowest-category bottleneck.</p></div>
-        <div class="gc-card"><h3>4. Book GalviClinic™</h3><p>The result routes the founder to a practical diagnostic working session or manual follow-up.</p></div>
-      </div>
-      <div class="gc-stepnav gc-no-print"><button class="gc-btn" data-gc-show="gc-assessment">Begin Assessment</button></div>
-    </section>
+    <section class="gc-hero" id="gc-home">
+      <h1>How Healthy Is Your Business?</h1>
+      <p class="gc-lede">
+        
+        Check in to <strong>GalviTriage™</strong> for a quick business diagnostic
+        designed to identify whether your venture needs immediate attention.
+
+        You'll receive your personalized
+        <strong>GalviScore™</strong>—
+        a clear snapshot highlighting your strengths,
+        potential risks,
+        and the priorities that matter most right now.
+
+    </p>
+
+    <button class="gc-btn gc-light"
+        data-gc-show="gc-assessment">
+
+        Check In to GalviTriage™
+
+    </button>
+
+</section>
 
     <form id="gc-form" class="gc-panel gc-hidden">
       <h2>GalviTriage™ Business Diagnostic</h2>
@@ -126,7 +133,7 @@
       {cat:'Decision Intelligence Health',key:'decisionFollowThrough',text:'How consistently do decisions turn into action?'}
     ];
     function show(target){
-      ['gc-journey','gc-form','gc-result'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.add('gc-hidden'); });
+      ['gc-form','gc-result'].forEach(id=>{ const el=document.getElementById(id); if(el) el.classList.add('gc-hidden'); });
       if(target==='gc-assessment') target='gc-form';
       const el=document.getElementById(target); if(el) {el.classList.remove('gc-hidden'); el.scrollIntoView({behavior:'smooth',block:'start'});} }
     app.querySelectorAll('[data-gc-show]').forEach(btn=>btn.addEventListener('click',()=>show(btn.getAttribute('data-gc-show'))));
