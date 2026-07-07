@@ -3,35 +3,56 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GalviTriage™ Assessment</title>
+  <title>GalviTriage™ Health Assessment</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 0; background: #f8f7f4; color: #1f2933; }
-    .wrap { max-width: 920px; margin: 0 auto; padding: 32px 18px; }
-    .panel { background: white; padding: 26px; border-radius: 14px; box-shadow: 0 1px 8px rgba(0,0,0,.08); margin-bottom: 20px; }
-    h1 { font-size: 34px; }
-    h2 { margin-top: 0; }
-    label { display:block; font-weight:bold; margin: 16px 0 6px; }
-    input, select, textarea { width: 100%; padding: 11px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; }
-    textarea { min-height: 84px; }
-    .scale { display:grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin: 8px 0 18px; }
-    .scale label { font-weight: normal; background:#f1f5f9; padding:10px; border-radius:8px; text-align:center; margin:0; cursor:pointer; }
-    .scale input { width:auto; }
-    button { padding: 14px 22px; border:0; border-radius:8px; background:#111827; color:white; font-size:16px; font-weight:bold; cursor:pointer; }
-    .result { display:none; }
-    .score { font-size: 58px; font-weight:bold; margin: 8px 0; }
-    .bar { background:#e5e7eb; height: 12px; border-radius: 20px; overflow:hidden; }
-    .fill { background:#111827; height: 12px; width:0%; }
-    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
-    .mini { background:#f8fafc; border:1px solid #e5e7eb; padding:14px; border-radius:10px; }
-    .small { color:#4b5563; font-size:14px; line-height:1.5; }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; max-width: 100%; overflow-x: hidden; }
+    body { font-family: Arial, sans-serif; background: #f8f7f4; color: #1f2933; }
+    .wrap { width: 100%; max-width: 920px; margin: 0 auto; padding: 32px 18px; }
+    .panel { background: white; padding: 26px; border-radius: 14px; box-shadow: 0 1px 8px rgba(0,0,0,.08); margin-bottom: 20px; width: 100%; }
+    .hero-title { text-align: center; font-size: 34px; line-height: 1.15; margin: 0 0 16px; }
+    h2 { margin-top: 0; line-height: 1.25; }
+    label { display: block; font-weight: bold; margin: 16px 0 6px; }
+    input, select, textarea { width: 100%; max-width: 100%; padding: 11px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; }
+    textarea { min-height: 84px; resize: vertical; }
+    .scale { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 8px 0 18px; width: 100%; }
+    .scale label { font-weight: normal; background: #f1f5f9; padding: 10px; border-radius: 8px; text-align: center; margin: 0; cursor: pointer; min-width: 0; }
+    .scale input { width: auto; margin-right: 4px; }
+    .button-row { display: flex; justify-content: center; align-items: center; margin: 24px 0; width: 100%; }
+    button { padding: 14px 22px; border: 0; border-radius: 8px; background: #111827; color: white; font-size: 16px; font-weight: bold; cursor: pointer; }
+    button:disabled { opacity: .65; cursor: not-allowed; }
+    .result { display: none; }
+    .score { font-size: 58px; font-weight: bold; margin: 8px 0; }
+    .bar { background: #e5e7eb; height: 12px; border-radius: 20px; overflow: hidden; }
+    .fill { background: #111827; height: 12px; width: 0%; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+    .mini { background: #f8fafc; border: 1px solid #e5e7eb; padding: 14px; border-radius: 10px; }
+    .small { color: #4b5563; font-size: 14px; line-height: 1.5; }
     .required { color: #b91c1c; }
+    .status { display: none; text-align: center; margin: 12px 0; color: #4b5563; font-size: 14px; }
+    .error { display: none; background: #fef2f2; color: #991b1b; border: 1px solid #fecaca; padding: 12px; border-radius: 8px; margin: 12px 0; }
+
+    @media (max-width: 640px) {
+      .wrap { padding: 18px 12px; }
+      .panel { padding: 18px 14px; border-radius: 12px; }
+      .hero-title { font-size: 28px; }
+      .scale { grid-template-columns: repeat(5, minmax(42px, 1fr)); gap: 6px; }
+      .scale label { padding: 10px 4px; font-size: 14px; }
+      button { width: 100%; max-width: 320px; }
+      .score { font-size: 46px; }
+    }
+
+    @media (max-width: 380px) {
+      .scale { grid-template-columns: repeat(5, minmax(36px, 1fr)); }
+      .scale label { font-size: 13px; padding: 9px 2px; }
+    }
   </style>
 </head>
 <body>
 <div class="wrap">
   <div class="panel">
-    <h1>GalviTriage™  Assessment</h1>
-    <p>Answer honestly. This will help you understand where you and your venture are healthy, where there may risk, and what to focus on next.</p>
+    <h1 class="hero-title">GalviTriage™ Health Assessment</h1>
+    <p>In five minutes, GalviTriage™ helps us understand the current symptoms, pressure points, and health signals inside your venture so GalviCare can prepare your initial business health snapshot: GalviVitals™.</p>
     <p class="small">Scale: 1 = not clear / not confident / not consistent. 5 = very clear / very confident / very consistent.</p>
   </div>
 
@@ -49,7 +70,7 @@
     </div>
 
     <div class="panel">
-      <h2>GalviVitals Snapshot</h2>
+      <h2>GalviScore™ Questions</h2>
       <label>Which best describes your current stage?</label>
       <select name="stage" required>
         <option value="">Select one</option>
@@ -97,7 +118,7 @@
     </div>
 
     <div class="panel" id="scoreQuestions">
-      <h2>GalviScore™ Questions</h2>
+      <h2>Business Health Signals</h2>
     </div>
 
     <div class="panel">
@@ -114,43 +135,74 @@
       <textarea name="oneproblem" required></textarea>
     </div>
 
-    <button type="submit">Calculate My GalviScore™</button>
+    <div class="error" id="submitError">Something went wrong submitting GalviTriage. Your score will still display below. Please try again or contact GalviPro if needed.</div>
+    <div class="status" id="submitStatus">GalviEngine is preparing your initial business health snapshot...</div>
+    <div class="button-row">
+      <button type="submit" id="submitButton">Complete GalviTriage™</button>
+    </div>
   </form>
 
   <div class="panel result" id="result">
-    <h2>Your GalviScore™</h2>
+    <h2>Your GalviVitals™ Snapshot</h2>
     <div class="score" id="totalScore"></div>
     <div class="bar"><div class="fill" id="scoreFill"></div></div>
     <h3 id="classification"></h3>
     <p id="interpretation"></p>
-
     <h2>Business Health Snapshot</h2>
     <div class="grid" id="categoryGrid"></div>
-
     <h2>Growth Insight</h2>
     <p id="growthInsight"></p>
-
     <h2>Recommended Next Step</h2>
-    <p>Your GalviScore™ gives you the mirror. A GalviClinic™ session helps diagnose the root cause and build a practical prescription for growth.</p>
-    <p><strong>Suggested CTA:</strong> Schedule a GalviClinic™ session to review your score, identify your biggest growth bottleneck, and leave with a clear action plan.</p>
+    <p>Your GalviVitals™ give you the first business health snapshot. A GalviClinic™ session helps diagnose the root cause and build a practical prescription for growth.</p>
+    <p><strong>Suggested CTA:</strong> Schedule a GalviClinic™ session to review your snapshot, identify your biggest growth bottleneck, and leave with a clear action plan.</p>
     <button onclick="window.print()">Print / Save Results</button>
   </div>
 </div>
 
 <script>
+const MAKE_WEBHOOK_URL = 'PASTE_YOUR_MAKE_WEBHOOK_URL_HERE';
+const SCORING_VERSION = 'galvitriage_0_5_cosmetic_make_ready_v1';
+
+function getSessionId() {
+  const params = new URLSearchParams(window.location.search);
+  const fromUrl = params.get('session_id');
+  if (fromUrl) {
+    localStorage.setItem('galvitriage_session_id', fromUrl);
+    return fromUrl;
+  }
+  let existing = localStorage.getItem('galvitriage_session_id');
+  if (existing) return existing;
+  const created = 'gt_' + Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem('galvitriage_session_id', created);
+  return created;
+}
+
+function getDeviceType() {
+  return window.innerWidth <= 640 ? 'mobile' : 'desktop';
+}
+
+function getUtmPayload() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    source: params.get('source') || document.referrer || 'direct',
+    utm_source: params.get('utm_source') || '',
+    utm_campaign: params.get('utm_campaign') || '',
+    utm_medium: params.get('utm_medium') || ''
+  };
+}
+
 const questions = [
   {cat:'Business Health', key:'clearExplain', text:'How clearly can you explain what your organization does in one sentence?'},
   {cat:'Business Health', key:'realProblem', text:'How confident are you that your business solves a real customer problem?'},
   {cat:'Business Health', key:'payingNeed', text:'How confident are you that people are willing to pay for your solution?'},
-  {cat:'Customer Health', key:'idealCustomer', text:'How clearly do you understand your ideal customer?'},
+  {cat:'Customer Health', key:'idealCustomer', text:'How clearly do you understand who your ideal customer is?'},
   {cat:'Customer Health', key:'attractCustomers', text:'How consistently are you attracting new customers, users, donors, or supporters?'},
   {cat:'Customer Health', key:'customerConvos', text:'How often do you speak directly with customers, users, donors, or stakeholders?'},
   {cat:'Revenue Health', key:'predictRevenue', text:'How predictable is your revenue or funding today?'},
   {cat:'Revenue Health', key:'growRevenue', text:'How confident are you in your ability to grow revenue or funding over the next 12 months?'},
-  {cat:'Product / Service Health', key:'customerSatisfaction', text:'How well do you understand what is driving - or limiting - your revenue today?'},
+  {cat:'Product / Service Health', key:'customerSatisfaction', text:'How satisfied are people with your product, service, program, or offering?'},
   {cat:'Product / Service Health', key:'improveOffering', text:'How consistently do you improve your product, service, program, or customer experience?'},
-  {cat:'Operational Health', key:'organizedOps', text:'How consistently do you improve your offering based on feedback?'},
-  {cat:'Operational Health', key:'organizedOps', text:'How consistently do you operational bottlenecks limit current growth?'},
+  {cat:'Operational Health', key:'organizedOps', text:'How organized are your day-to-day operations?'},
   {cat:'Operational Health', key:'founderDependent', text:'How well can the business function without everything depending on you personally?'},
   {cat:'Technology Health', key:'techGrowth', text:'How effectively are you using technology to support growth and execution?'},
   {cat:'Technology Health', key:'aiReady', text:'How prepared are you to use AI tools or automation in a meaningful way?'},
@@ -198,9 +250,7 @@ function insight(lowestCat) {
   return map[lowestCat] || 'Focus on the area with the lowest score first. That is likely where your next growth bottleneck lives.';
 }
 
-document.getElementById('assessmentForm').addEventListener('submit', function(e) {
-  e.preventDefault();
-  const data = new FormData(e.target);
+function calculateScores(data) {
   let catScores = {};
   let catCounts = {};
   let totalRaw = 0;
@@ -211,26 +261,120 @@ document.getElementById('assessmentForm').addEventListener('submit', function(e)
     catCounts[q.cat] = (catCounts[q.cat] || 0) + 1;
   });
   const total = Math.round((totalRaw / (questions.length * 5)) * 100);
-  const [label, interp] = classify(total);
-  document.getElementById('totalScore').innerText = total + '/100';
-  document.getElementById('scoreFill').style.width = total + '%';
-  document.getElementById('classification').innerText = label;
-  document.getElementById('interpretation').innerText = interp;
-
   let lowestCat = null, lowestScore = 999;
-  const grid = document.getElementById('categoryGrid');
-  grid.innerHTML = '';
+  const categories = {};
   Object.keys(catScores).forEach(cat => {
     const pct = Math.round((catScores[cat] / (catCounts[cat] * 5)) * 100);
+    categories[cat] = pct;
     if (pct < lowestScore) { lowestScore = pct; lowestCat = cat; }
+  });
+  const [label, interp] = classify(total);
+  return { total, label, interp, categories, lowestCat, lowestScore };
+}
+
+function buildPayload(data, scores) {
+  const utm = getUtmPayload();
+  const scoredAnswers = {};
+  questions.forEach(q => { scoredAnswers[q.key] = Number(data.get(q.key)); });
+  return {
+    session: {
+      session_id: getSessionId(),
+      timestamp: new Date().toISOString(),
+      device_type: getDeviceType(),
+      page_url: window.location.href,
+      ...utm
+    },
+    founder: {
+      name: data.get('name') || '',
+      email: data.get('email') || '',
+      website_or_linkedin: data.get('website') || ''
+    },
+    venture: {
+      venture_name: data.get('venture') || '',
+      organization_stage: data.get('stage') || '',
+      organization_type: data.get('orgtype') || '',
+      industry: data.get('industry') || '',
+      team_size: data.get('team') || '',
+      revenue_range: data.get('revenue') || ''
+    },
+    open_text: {
+      biggest_challenge: data.get('challenge') || '',
+      feels_broken: data.get('broken') || '',
+      growth_blocker: data.get('slowgrowth') || '',
+      keeps_up_at_night: data.get('worry') || '',
+      one_30_day_problem: data.get('oneproblem') || ''
+    },
+    scored_answers: scoredAnswers,
+    derived_scores: {
+      total_score: scores.total,
+      health_band: scores.label,
+      lowest_domain: scores.lowestCat,
+      lowest_domain_score: scores.lowestScore,
+      category_scores: scores.categories,
+      confidence_percent: 100,
+      scoring_version: SCORING_VERSION
+    },
+    journey_event: {
+      event_name: 'galvitriage_submitted',
+      current_stage: 'GalviTriage'
+    }
+  };
+}
+
+async function sendToMake(payload) {
+  if (!MAKE_WEBHOOK_URL || MAKE_WEBHOOK_URL === 'PASTE_YOUR_MAKE_WEBHOOK_URL_HERE') {
+    console.warn('Make webhook URL has not been added yet. Skipping webhook submission.');
+    return { skipped: true };
+  }
+  const response = await fetch(MAKE_WEBHOOK_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!response.ok) throw new Error('Make webhook failed: ' + response.status);
+  return response.json().catch(() => ({ success: true }));
+}
+
+function displayResults(scores) {
+  document.getElementById('totalScore').innerText = scores.total + '/100';
+  document.getElementById('scoreFill').style.width = scores.total + '%';
+  document.getElementById('classification').innerText = scores.label;
+  document.getElementById('interpretation').innerText = scores.interp;
+  const grid = document.getElementById('categoryGrid');
+  grid.innerHTML = '';
+  Object.keys(scores.categories).forEach(cat => {
     const div = document.createElement('div');
     div.className = 'mini';
-    div.innerHTML = `<strong>${cat}</strong><br>${pct}/100`;
+    div.innerHTML = `<strong>${cat}</strong><br>${scores.categories[cat]}/100`;
     grid.appendChild(div);
   });
-  document.getElementById('growthInsight').innerText = insight(lowestCat) + ` Your lowest current category is ${lowestCat} (${lowestScore}/100).`;
+  document.getElementById('growthInsight').innerText = insight(scores.lowestCat) + ` Your lowest current category is ${scores.lowestCat} (${scores.lowestScore}/100).`;
   document.getElementById('result').style.display = 'block';
   document.getElementById('result').scrollIntoView({behavior:'smooth'});
+}
+
+document.getElementById('assessmentForm').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  const form = e.target;
+  const data = new FormData(form);
+  const submitButton = document.getElementById('submitButton');
+  const submitStatus = document.getElementById('submitStatus');
+  const submitError = document.getElementById('submitError');
+  submitButton.disabled = true;
+  submitStatus.style.display = 'block';
+  submitError.style.display = 'none';
+  const scores = calculateScores(data);
+  const payload = buildPayload(data, scores);
+  try {
+    await sendToMake(payload);
+  } catch (err) {
+    console.error(err);
+    submitError.style.display = 'block';
+  } finally {
+    submitStatus.style.display = 'none';
+    submitButton.disabled = false;
+    displayResults(scores);
+  }
 });
 </script>
 </body>
