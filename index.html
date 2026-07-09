@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>GalviCare™ | GalviTriage + GalviVitals + GalviScore</title>
-
+ 
   <!-- Google Analytics 4 - GalviCare / GalviAnalytics 0.5 -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-KXJFKN7RTS"></script>
   <script>
@@ -16,7 +16,7 @@
       anonymize_ip: true
     });
   </script>
-
+ 
   <!-- Microsoft Clarity - GalviCare / GalviAnalytics 0.5 -->
   <script type="text/javascript">
     (function(c,l,a,r,i,t,y){
@@ -25,7 +25,7 @@
       y=l.getElementsByTagName(r)[0];y.parentNode.insertBefore(t,y);
     })(window, document, "clarity", "script", "xjsdmprr4z");
   </script>
-
+ 
   <style>
     * { box-sizing: border-box; }
     html, body { margin: 0; padding: 0; max-width: 100%; overflow-x: hidden; }
@@ -91,7 +91,7 @@
     <p class="center">In five minutes, GalviTriage™ helps us understand the current symptoms, pressure points, and health signals inside your venture so GalviCare can prepare your initial business health snapshot: GalviVitals™.</p>
     <p class="small center">Scale: 1 = not clear / not confident / not consistent. 5 = very clear / very confident / very consistent.</p>
   </div>
-
+ 
   <form id="assessmentForm">
     <div class="panel">
       <h2>About You</h2>
@@ -109,7 +109,7 @@
       <input name="website" />
       <label><input type="checkbox" name="consent" required style="width:auto; margin-right: 8px;" /> I agree to submit this GalviTriage™ assessment.</label>
     </div>
-
+ 
     <div class="panel">
       <h2>GalviScore™ Questions</h2>
       <label>Which best describes your current stage?</label>
@@ -131,9 +131,9 @@
         <option value="">Select one</option><option>Pre-Revenue</option><option>Less than $10K</option><option>$10K-$50K</option><option>$50K-$250K</option><option>$250K-$1M</option><option>$1M-$5M</option><option>$5M+</option>
       </select>
     </div>
-
+ 
     <div class="panel" id="scoreQuestions"><h2>Business Health Signals</h2></div>
-
+ 
     <div class="panel">
       <h2>What Do You Need Help With?</h2>
       <label>Which area would create the greatest positive impact if improved first?</label>
@@ -151,12 +151,12 @@
       <label>What keeps you up at night?</label>
       <textarea name="keeps_up_at_night"></textarea>
     </div>
-
+ 
     <div class="error" id="submitError">Something went wrong submitting GalviTriage. Please try again or contact GalviPro if needed.</div>
     <div class="status" id="submitStatus">GalviEngine is preparing your initial business health snapshot...</div>
     <div class="button-row"><button type="submit" id="submitButton">Complete GalviTriage™</button></div>
   </form>
-
+ 
   <div class="panel result" id="result">
     <h2 class="center">Your GalviVitals™ Snapshot</h2>
     <p class="small center">Your initial business health snapshot has been prepared based on your GalviTriage™ responses.</p>
@@ -175,7 +175,7 @@
       <button type="button" class="primary-btn" id="continue-to-galviscore" data-cta-name="galviscore_paywall" data-cta-location="galvivitals_result">Continue to GalviScore™</button>
     </div>
   </div>
-
+ 
   <section id="galviscore-paywall" class="galvicare-card hidden">
     <p class="eyebrow">GALVISCORE™</p>
     <h2>Your Business Health Score is ready.</h2>
@@ -185,14 +185,14 @@
     <div class="button-row"><button id="galviscore-stripe-cta" class="primary-btn" type="button">Unlock GalviScore</button></div>
     <p class="microcopy">Secure checkout powered by Stripe. Your score unlocks after payment confirmation.</p>
   </section>
-
+ 
   <section id="galviscore-followup" class="galvicare-card hidden">
     <p class="eyebrow">CLINICAL FOLLOW-UP</p>
     <h2>One more detail will improve your GalviScore confidence.</h2>
     <div id="followup-question-container"></div>
     <div class="button-row"><button id="submit-followup" class="primary-btn" type="button">Submit and generate GalviScore</button></div>
   </section>
-
+ 
   <section id="galviscore-result" class="galvicare-card hidden">
     <p class="eyebrow">GALVISCORE™ UNLOCKED</p>
     <h2>Your Business Health Score</h2>
@@ -205,7 +205,7 @@
     <ol id="galviscore-priorities"></ol>
     <div class="button-row"><button id="continue-galvishot" class="primary-btn" type="button">Continue to GalviShot™</button></div>
   </section>
-
+ 
   <section id="galviscore-repair" class="galvicare-card hidden">
     <p class="eyebrow">GALVISCORE™ CONFIDENCE CHECK</p>
     <h2>We need a little more GalviTriage data before unlocking this diagnostic.</h2>
@@ -213,11 +213,11 @@
     <div class="button-row"><button id="return-to-triage" class="secondary-button" type="button">Return to GalviTriage™</button></div>
   </section>
 </div>
-
+ 
 <script>
 const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-triage-intake.mrgalvipro.workers.dev';
 const GALVICARE_SCORE_ENDPOINT = ''; // QA mode: leave blank until the GalviScore Recovery Worker exists
-const GALVISCORE_STRIPE_PAYMENT_LINK = ‘https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01’;
+const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01';
 const SCORING_VERSION = 'galvitriage_0_5_final_worker_ga4_clarity_v2_fetch_required';
 const GALVI_ANALYTICS_VERSION = 'galvianalytics_0_5';
 const GALVI_SESSION_STORAGE_KEY = 'galvitriage_session_id';
@@ -233,7 +233,7 @@ function postGalviScoreEvent(body) {
     body: JSON.stringify(body)
   }).catch(() => null);
 }
-
+ 
 const questions = [
  { cat:'business_identity', key:'q01_business_clarity', text:'How clearly can you explain what your organization does in one sentence?' },
  { cat:'business_identity', key:'q02_stage_signal', text:'How clearly does your current stage reflect where your organization actually is today?' },
@@ -258,7 +258,7 @@ const questions = [
 ];
 const domainWeights = { business_identity: 0.05, customer_health: 0.20, revenue_health: 0.20, product_health: 0.15, operations_health: 0.15, ai_readiness: 0.10, leadership_decision_intelligence: 0.15 };
 const GALVISCORE_WEIGHTS = { business_stage: 0.10, primary_goal: 0.10, revenue_range: 0.15, customer_acquisition: 0.15, primary_challenge: 0.15, product_status: 0.10, team_capacity: 0.10, timeline: 0.05, industry_context: 0.10 };
-
+ 
 function labelDomain(domainKey){ return ({business_identity:'Business Identity',customer_health:'Customer Health',revenue_health:'Revenue Health',product_health:'Product / Service Health',operations_health:'Operational Health',ai_readiness:'Technology / AI Health',leadership_decision_intelligence:'Leadership & Decision Intelligence'})[domainKey] || domainKey; }
 function getOrCreateSessionId(){ const submitted=localStorage.getItem(GALVI_SUBMITTED_STORAGE_KEY)==='true'; const existing=localStorage.getItem(GALVI_SESSION_STORAGE_KEY); if(existing && !submitted) return existing; const created='gt_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,10); localStorage.setItem(GALVI_SESSION_STORAGE_KEY,created); localStorage.setItem(GALVI_SUBMITTED_STORAGE_KEY,'false'); return created; }
 function getDeviceType(){ const w=window.innerWidth||document.documentElement.clientWidth; if(w<=767)return'mobile'; if(w<=1024)return'tablet'; return'desktop'; }
@@ -272,7 +272,7 @@ function markTriageStarted(trigger='unknown'){ const state=getAnalyticsState(); 
 function markTriageSubmitted(summary={}){ setAnalyticsState({submitted:true,submitted_at:Date.now(),last_step:'submitted',completion_percent:100}); trackGalviEvent('galvitriage_submitted',Object.assign({journey_step:'triage_submitted'},summary)); }
 function markVitalsViewed(summary={}){ const state=getAnalyticsState(); if(state.vitals_viewed)return; setAnalyticsState({vitals_viewed:true,vitals_viewed_at:Date.now(),last_step:'vitals_viewed'}); trackGalviEvent('galvivitals_viewed',Object.assign({journey_step:'vitals_viewed'},summary)); }
 window.addEventListener('beforeunload',function(){ const state=getAnalyticsState(); if(!state.started||state.submitted)return; const seconds=state.started_at?Math.round((Date.now()-state.started_at)/1000):0; trackGalviEvent('galvitriage_abandoned',{journey_step:'triage_abandoned',last_step:state.last_step||'unknown',completion_percent:state.completion_percent||0,time_on_form_seconds:seconds}); });
-
+ 
 const scoreContainer=document.getElementById('scoreQuestions');
 questions.forEach((q,i)=>{ const label=document.createElement('label'); label.innerHTML=`${i+1}. ${q.text}`; scoreContainer.appendChild(label); const scale=document.createElement('div'); scale.className='scale'; for(let n=1;n<=5;n++){ const item=document.createElement('label'); item.innerHTML=`<input type="radio" name="${q.key}" value="${n}" required> ${n}`; scale.appendChild(item); } scoreContainer.appendChild(scale); });
 function average(keys,scoredAnswers){ const values=keys.map(k=>Number(scoredAnswers[k]||0)).filter(v=>v>0); return values.length?values.reduce((a,b)=>a+b,0)/values.length:0; }
@@ -283,7 +283,7 @@ function insight(lowestDomainKey){ const map={business_identity:'Clarify the cor
 function buildPayload(formData,scores,scoredAnswers){ return {session:{session_id:getOrCreateSessionId(),timestamp:new Date().toISOString(),source:'galvitriage_github_live',utm_source:getUrlParam('utm_source'),utm_campaign:getUrlParam('utm_campaign'),device_type:getDeviceType()},founder:{first_name:formData.get('first_name')||'',last_name:formData.get('last_name')||'',email:formData.get('email')||'',phone:formData.get('phone')||'',linkedin_url:'',consent:formData.get('consent')==='on'},venture:{venture_name:formData.get('venture_name')||'',website:formData.get('website')||'',organization_stage:formData.get('organization_stage')||'',organization_type:formData.get('organization_type')||'',industry:formData.get('industry')||'',revenue_range:formData.get('revenue_range')||'',team_size:formData.get('team_size')||''},scored_answers:scoredAnswers,priority:{highest_impact_area:formData.get('highest_impact_area')||''},open_text:{biggest_challenge:formData.get('biggest_challenge')||'',one_30_day_problem:formData.get('one_30_day_problem')||'',growth_blocker:formData.get('growth_blocker')||'',feels_broken:formData.get('feels_broken')||'',keeps_up_at_night:formData.get('keeps_up_at_night')||''},derived_scores:scores,journey_event:{event_name:'galvitriage_submitted',screen:'GalviTriage'}}; }
 async function submitToGalviCareWorker(payload){ const response=await fetch(GALVICARE_INTAKE_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}); let result={}; try{result=await response.json();}catch(error){result={success:false,message:'Worker returned a non-JSON response'};} console.log('GalviCare Worker response:',result); if(!response.ok||!result.success)throw new Error(result.error||result.message||'Worker submission failed'); return result; }
 function displayResults(scores){ const[,interp]=classify(scores.total_score); document.getElementById('assessmentForm').style.display='none'; document.getElementById('totalScore').innerText=scores.total_score+'/100'; document.getElementById('scoreFill').style.width=scores.total_score+'%'; document.getElementById('classification').innerText='Health Band: '+scores.health_band; document.getElementById('interpretation').innerText=interp; const grid=document.getElementById('categoryGrid'); grid.innerHTML=''; Object.keys(domainWeights).forEach(domain=>{const div=document.createElement('div'); div.className='mini'; div.innerHTML=`<strong>${labelDomain(domain)}</strong><br>${scores[domain]||0}/100`; grid.appendChild(div);}); const lowestLabel=labelDomain(scores.lowest_domain); const lowestScore=scores[scores.lowest_domain]||0; document.getElementById('growthInsight').innerText=`${insight(scores.lowest_domain)} Your priority risk signal is ${lowestLabel} (${lowestScore}/100).`; document.getElementById('result').style.display='block'; document.getElementById('result').classList.remove('hidden'); document.getElementById('result').scrollIntoView({behavior:'smooth'}); }
-
+ 
 function normalizeFivePoint(value){ const n=Number(value||0); if(!n||n<1)return 0; return Math.round(((Math.min(n,5)-1)/4)*100); }
 function mapRevenueRange(range){ const v=String(range||'').toLowerCase(); if(v.includes('5m'))return 95; if(v.includes('1m')||v.includes('$1m'))return 90; if(v.includes('250')||v.includes('500'))return 75; if(v.includes('50')||v.includes('100'))return 60; if(v.includes('10k'))return 45; if(v.includes('pre')||v.includes('none'))return 35; if(v.trim())return 50; return 0; }
 function classifyGalviScore(score){ if(score>=85)return'Healthy/Scaling'; if(score>=70)return'Stable but Watch'; if(score>=55)return'Strained'; if(score>=40)return'At Risk'; return'Critical'; }
@@ -312,12 +312,12 @@ function cacheGalviScoreResult(result){ try{localStorage.setItem(GALVISCORE_LAST
 function getCachedGalviScoreResult(){ try{return JSON.parse(localStorage.getItem(GALVISCORE_LAST_RESULT_KEY)||'null');}catch(e){return null;} }
 function storeGalviScoreFromPayload(payload,paymentStatus='unpaid'){ const result=calculateGalviScore(payload); const diagnosticFields=buildGalviScoreDiagnosticFields(payload,result,paymentStatus); cacheGalviScoreResult({...result,...diagnosticFields,category_scores:result.category_scores}); return result; }
 function checkGalviScoreAbandonment(){ const viewedAt=Number(localStorage.getItem(GALVISCORE_PAYWALL_VIEWED_AT_KEY)||0); if(!viewedAt)return; const hasPaid=getUrlParams().get('paid')==='score_success'; const resultViewed=getAnalyticsState().galviscore_result_viewed; const minutesElapsed=(Date.now()-viewedAt)/60000; if(!hasPaid&&!resultViewed&&minutesElapsed>=30){const sessionId=localStorage.getItem('galvicare_session_id'); fireGalviEvent('journey_abandoned',{product:'galviscore',session_id:sessionId,stage:'GalviScore Paywall',recovery_tag:'lost patient - score hesitation'}); updateJourneyStage(sessionId,'GalviScore Paywall Abandoned',{recovery_tag:'lost patient - score hesitation'});} }
-
+ 
 const assessmentForm=document.getElementById('assessmentForm');
 assessmentForm.addEventListener('input',function(event){markTriageStarted(event.target&&event.target.name?event.target.name:'form_input');},{once:true});
 assessmentForm.addEventListener('change',function(){const formData=new FormData(assessmentForm); const answeredQuestions=questions.filter(q=>formData.get(q.key)).length; if(answeredQuestions===questions.length)trackGalviEvent('galvitriage_questions_completed',{journey_step:'questions_completed'});});
 assessmentForm.addEventListener('submit',async function(e){ e.preventDefault(); const form=e.target; if(!form.checkValidity()){ trackGalviEvent('form_validation_error',{journey_step:'validation_error',error_stage:'submit_check_validity'}); form.reportValidity(); return;} const data=new FormData(form); const submitButton=document.getElementById('submitButton'); const submitStatus=document.getElementById('submitStatus'); const submitError=document.getElementById('submitError'); submitButton.disabled=true; submitButton.innerText='Preparing GalviVitals™...'; submitStatus.style.display='block'; submitError.style.display='none'; const scoredAnswers={}; questions.forEach(q=>{scoredAnswers[q.key]=Number(data.get(q.key));}); const scores=calculateDerivedScores(scoredAnswers); const payload=buildPayload(data,scores,scoredAnswers); storeGalviScoreFromPayload(payload,'unpaid'); localStorage.setItem('galvicare_session_id',payload.session.session_id); try{ await submitToGalviCareWorker(payload); localStorage.setItem(GALVI_SUBMITTED_STORAGE_KEY,'true'); markTriageSubmitted({score_band:scores.health_band,lowest_domain:scores.lowest_domain,confidence_percent:scores.confidence_percent,organization_stage:data.get('organization_stage')||'unknown'}); displayResults(scores); markVitalsViewed({score_band:scores.health_band,lowest_domain:scores.lowest_domain,confidence_percent:scores.confidence_percent}); }catch(err){ console.error('GalviTriage submission error:',err); submitError.style.display='block'; submitButton.disabled=false; submitButton.innerText='Complete GalviTriage™'; }finally{ submitStatus.style.display='none'; } });
-
+ 
 document.getElementById('continue-to-galviscore')?.addEventListener('click',function(){ const sessionId=localStorage.getItem('galvicare_session_id')||localStorage.getItem(GALVI_SESSION_STORAGE_KEY)||getOrCreateSessionId(); showGalviScorePaywall(sessionId); });
 document.getElementById('galviscore-stripe-cta')?.addEventListener('click',function(){ const sessionId=localStorage.getItem('galvicare_session_id')||localStorage.getItem(GALVI_SESSION_STORAGE_KEY)||getOrCreateSessionId(); localStorage.setItem('galvicare_session_id',sessionId); fireGalviEvent('stripe_click',{product:'galviscore',session_id:sessionId,stage:'GalviScore Paywall'}); window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK; });
 document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=localStorage.getItem('galvicare_session_id'); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const el of textareas){ if(!el.value.trim()){el.reportValidity(); return;} await saveClinicalFollowUp(sessionId,{question_id:el.dataset.questionId,confidence_impact:Number(el.dataset.confidenceImpact||0)},el.value.trim()); } const cached=getCachedGalviScoreResult(); if(cached){ cached.galviscore_confidence=Math.min(100,Number(cached.galviscore_confidence||0)+12); cacheGalviScoreResult(cached); routeByGalviScoreConfidence(cached); } });
@@ -328,3 +328,4 @@ document.addEventListener('DOMContentLoaded',async function(){ await routeGalviC
 </script>
 </body>
 </html>
+
