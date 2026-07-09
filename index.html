@@ -11,7 +11,10 @@
     window.dataLayer = window.dataLayer || [];
     function gtag(){ dataLayer.push(arguments); }
     gtag('js', new Date());
-    gtag('config', 'G-KXJFKN7RTS', { send_page_view: true, anonymize_ip: true });
+    gtag('config', 'G-KXJFKN7RTS', {
+      send_page_view: true,
+      anonymize_ip: true
+    });
   </script>
 
   <!-- Microsoft Clarity - GalviCare / GalviAnalytics 0.5 -->
@@ -38,7 +41,7 @@
     .scale { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 8px 0 18px; width: 100%; }
     .scale label { font-weight: normal; background: #f1f5f9; padding: 10px; border-radius: 8px; text-align: center; margin: 0; cursor: pointer; min-width: 0; }
     .scale input { width: auto; margin-right: 4px; }
-    .button-row { display: flex; justify-content: center; align-items: center; margin: 24px 0; width: 100%; }
+    .button-row { display: flex; justify-content: center; align-items: center; margin: 24px 0; width: 100%; gap: 10px; flex-wrap: wrap; }
     button, .cta-link { display: inline-block; padding: 14px 22px; border: 0; border-radius: 8px; background: #111827; color: #ffffff; font-size: 16px; font-weight: bold; cursor: pointer; text-decoration: none; margin: 6px 8px 6px 0; }
     .secondary-button { background: #374151; }
     button:disabled { opacity: .65; cursor: not-allowed; }
@@ -62,6 +65,7 @@
       button, .cta-link { width: 100%; max-width: 320px; text-align: center; margin-left: auto; margin-right: auto; }
       .score { font-size: 46px; }
     }
+
     @media (max-width: 380px) {
       .scale { grid-template-columns: repeat(5, minmax(36px, 1fr)); }
       .scale label { font-size: 13px; padding: 9px 2px; }
@@ -81,21 +85,28 @@
       <h2>About You</h2>
       <label>First Name <span class="required">*</span></label>
       <input name="first_name" autocomplete="given-name" required />
+
       <label>Last Name <span class="required">*</span></label>
       <input name="last_name" autocomplete="family-name" required />
+
       <label>Email <span class="required">*</span></label>
       <input name="email" type="email" autocomplete="email" required />
+
       <label>Phone</label>
       <input name="phone" autocomplete="tel" />
+
       <label>Company / Venture Name <span class="required">*</span></label>
       <input name="venture_name" required />
+
       <label>Website or LinkedIn</label>
       <input name="website" />
+
       <label><input type="checkbox" name="consent" required style="width:auto; margin-right: 8px;" /> I agree to submit this GalviTriage™ assessment.</label>
     </div>
 
     <div class="panel">
       <h2>GalviScore™ Questions</h2>
+
       <label>Which best describes your current stage?</label>
       <select name="organization_stage" required>
         <option value="">Select one</option>
@@ -106,6 +117,7 @@
         <option>Scaling</option>
         <option>Established</option>
       </select>
+
       <label>What type of organization are you building?</label>
       <select name="organization_type" required>
         <option value="">Select one</option>
@@ -117,8 +129,10 @@
         <option>Corporate Innovation Team</option>
         <option>Other</option>
       </select>
+
       <label>Industry</label>
       <input name="industry" placeholder="Example: technology, healthcare, education, nonprofit, consumer products" />
+
       <label>Current team size</label>
       <select name="team_size" required>
         <option value="">Select one</option>
@@ -129,6 +143,7 @@
         <option>26-50</option>
         <option>50+</option>
       </select>
+
       <label>Approximate annual revenue</label>
       <select name="revenue_range" required>
         <option value="">Select one</option>
@@ -148,6 +163,7 @@
 
     <div class="panel">
       <h2>What Do You Need Help With?</h2>
+
       <label>Which area would create the greatest positive impact if improved first?</label>
       <select name="highest_impact_area" required>
         <option value="">Select one</option>
@@ -162,14 +178,19 @@
         <option>Investor Readiness</option>
         <option>I'm not sure</option>
       </select>
+
       <label>What is the biggest challenge you want to solve? <span class="required">*</span></label>
       <textarea name="biggest_challenge" required placeholder="Example: We are not getting enough customers, we do not know what to build next, we need investor readiness, or we are not sure how to grow."></textarea>
+
       <label>If you could solve only ONE problem in the next 30 days, what would it be? <span class="required">*</span></label>
       <textarea name="one_30_day_problem" required></textarea>
+
       <label>What is currently preventing growth?</label>
       <textarea name="growth_blocker"></textarea>
+
       <label>What feels broken today?</label>
       <textarea name="feels_broken"></textarea>
+
       <label>What keeps you up at night?</label>
       <textarea name="keeps_up_at_night"></textarea>
     </div>
@@ -188,13 +209,17 @@
     <div class="bar"><div class="fill" id="scoreFill"></div></div>
     <h3 id="classification" class="center"></h3>
     <p id="interpretation"></p>
+
     <h2>Business Health Snapshot</h2>
     <div class="grid" id="categoryGrid"></div>
+
     <h2>Growth Insight</h2>
     <p id="growthInsight"></p>
+
     <h2>Recommended Next Step</h2>
     <p>Your GalviVitals™ give you the first business health snapshot. A GalviClinic™ session helps diagnose the root cause and build a practical prescription for growth.</p>
     <p><strong>Suggested CTA:</strong> Schedule a GalviClinic™ session to review your snapshot, identify your biggest growth bottleneck, and leave with a clear action plan.</p>
+
     <div class="button-row">
       <button type="button" class="secondary-button" onclick="window.print()" data-cta-name="print_save_results" data-cta-location="galvivitals_result">Print / Save Results</button>
       <a class="cta-link" href="https://www.galvipro.com" data-cta-name="galviclinic_next_step" data-cta-location="galvivitals_result">Continue to GalviClinic™</a>
@@ -204,7 +229,7 @@
 
 <script>
 const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-triage-intake.mrgalvipro.workers.dev';
-const SCORING_VERSION = 'galvitriage_0_5_final_worker_ga4_clarity_v1';
+const SCORING_VERSION = 'galvitriage_0_5_final_worker_ga4_clarity_v2_fetch_required';
 const GALVI_ANALYTICS_VERSION = 'galvianalytics_0_5';
 const GALVI_SESSION_STORAGE_KEY = 'galvitriage_session_id';
 const GALVI_SUBMITTED_STORAGE_KEY = 'galvitriage_session_submitted';
@@ -336,17 +361,6 @@ window.addEventListener('beforeunload', function () {
   trackGalviEvent('galvitriage_abandoned', { journey_step: 'triage_abandoned', last_step: state.last_step || 'unknown', completion_percent: state.completion_percent || 0, time_on_form_seconds: seconds });
 });
 
-document.querySelectorAll('[data-cta-name]').forEach(function(el) {
-  el.addEventListener('click', function() {
-    trackGalviEvent('galvicare_cta_clicked', {
-      journey_step: 'cta_clicked',
-      cta_name: el.getAttribute('data-cta-name') || 'unknown',
-      cta_location: el.getAttribute('data-cta-location') || 'unknown',
-      destination: el.getAttribute('href') || ''
-    });
-  });
-});
-
 const scoreContainer = document.getElementById('scoreQuestions');
 questions.forEach((q, i) => {
   const label = document.createElement('label');
@@ -468,13 +482,37 @@ function buildPayload(formData, scores, scoredAnswers) {
   };
 }
 
+async function submitToGalviCareWorker(payload) {
+  const response = await fetch(GALVICARE_INTAKE_ENDPOINT, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+
+  let result = {};
+  try {
+    result = await response.json();
+  } catch (error) {
+    result = { success: false, message: 'Worker returned a non-JSON response' };
+  }
+
+  console.log('GalviCare Worker response:', result);
+
+  if (!response.ok || !result.success) {
+    throw new Error(result.error || result.message || 'Worker submission failed');
+  }
+
+  return result;
+}
+
 function displayResults(scores) {
-  const [label, interp] = classify(scores.total_score);
+  const [, interp] = classify(scores.total_score);
   document.getElementById('assessmentForm').style.display = 'none';
   document.getElementById('totalScore').innerText = scores.total_score + '/100';
   document.getElementById('scoreFill').style.width = scores.total_score + '%';
   document.getElementById('classification').innerText = 'Health Band: ' + scores.health_band;
   document.getElementById('interpretation').innerText = interp;
+
   const grid = document.getElementById('categoryGrid');
   grid.innerHTML = '';
   Object.keys(domainWeights).forEach(domain => {
@@ -483,53 +521,72 @@ function displayResults(scores) {
     div.innerHTML = `<strong>${labelDomain(domain)}</strong><br>${scores[domain] || 0}/100`;
     grid.appendChild(div);
   });
-  document.getElementById('growthInsight').innerText = insight(scores.lowest_domain) + ` Your priority risk signal is ${labelDomain(scores.lowest_domain)} (${scores[scores.lowest_domain] || 0}/100).`;
+
+  const lowestLabel = labelDomain(scores.lowest_domain);
+  const lowestScore = scores[scores.lowest_domain] || 0;
+  document.getElementById('growthInsight').innerText = `${insight(scores.lowest_domain)} Your priority risk signal is ${lowestLabel} (${lowestScore}/100).`;
   document.getElementById('result').style.display = 'block';
   document.getElementById('result').scrollIntoView({ behavior: 'smooth' });
 }
 
 const assessmentForm = document.getElementById('assessmentForm');
-assessmentForm.addEventListener('input', function(event) { markTriageStarted(event.target && event.target.name ? event.target.name : 'form_input'); }, { once: true });
+
+assessmentForm.addEventListener('input', function(event) {
+  markTriageStarted(event.target && event.target.name ? event.target.name : 'form_input');
+}, { once: true });
+
 assessmentForm.addEventListener('change', function() {
   const formData = new FormData(assessmentForm);
   const answeredQuestions = questions.filter(q => formData.get(q.key)).length;
-  if (answeredQuestions === questions.length) trackGalviEvent('galvitriage_questions_completed', { journey_step: 'questions_completed' });
+  if (answeredQuestions === questions.length) {
+    trackGalviEvent('galvitriage_questions_completed', { journey_step: 'questions_completed' });
+  }
 });
 
 assessmentForm.addEventListener('submit', async function(e) {
   e.preventDefault();
+
   const form = e.target;
   if (!form.checkValidity()) {
     trackGalviEvent('form_validation_error', { journey_step: 'validation_error', error_stage: 'submit_check_validity' });
     form.reportValidity();
     return;
   }
+
   const data = new FormData(form);
   const submitButton = document.getElementById('submitButton');
   const submitStatus = document.getElementById('submitStatus');
   const submitError = document.getElementById('submitError');
+
   submitButton.disabled = true;
   submitButton.innerText = 'Preparing GalviVitals™...';
   submitStatus.style.display = 'block';
   submitError.style.display = 'none';
+
   const scoredAnswers = {};
   questions.forEach(q => { scoredAnswers[q.key] = Number(data.get(q.key)); });
+
   const scores = calculateDerivedScores(scoredAnswers);
   const payload = buildPayload(data, scores, scoredAnswers);
 
   try {
-    const response = await fetch(GALVICARE_INTAKE_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const result = await response.json();
-    console.log('GalviCare Worker response:', result);
-    if (!response.ok || !result.success) throw new Error(result.error || result.message || 'Worker submission failed');
+    await submitToGalviCareWorker(payload);
+
     localStorage.setItem(GALVI_SUBMITTED_STORAGE_KEY, 'true');
-    markTriageSubmitted({ score_band: scores.health_band, lowest_domain: scores.lowest_domain, confidence_percent: scores.confidence_percent, organization_stage: data.get('organization_stage') || 'unknown' });
+    markTriageSubmitted({
+      score_band: scores.health_band,
+      lowest_domain: scores.lowest_domain,
+      confidence_percent: scores.confidence_percent,
+      organization_stage: data.get('organization_stage') || 'unknown'
+    });
+
     displayResults(scores);
-    markVitalsViewed({ score_band: scores.health_band, lowest_domain: scores.lowest_domain, confidence_percent: scores.confidence_percent });
+
+    markVitalsViewed({
+      score_band: scores.health_band,
+      lowest_domain: scores.lowest_domain,
+      confidence_percent: scores.confidence_percent
+    });
   } catch (err) {
     console.error('GalviTriage submission error:', err);
     submitError.style.display = 'block';
@@ -538,6 +595,17 @@ assessmentForm.addEventListener('submit', async function(e) {
   } finally {
     submitStatus.style.display = 'none';
   }
+});
+
+document.querySelectorAll('[data-cta-name]').forEach(function(el) {
+  el.addEventListener('click', function() {
+    trackGalviEvent('galvicare_cta_clicked', {
+      journey_step: 'cta_clicked',
+      cta_name: el.getAttribute('data-cta-name') || 'unknown',
+      cta_location: el.getAttribute('data-cta-location') || 'unknown',
+      destination: el.getAttribute('href') || ''
+    });
+  });
 });
 </script>
 </body>
