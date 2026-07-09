@@ -3,87 +3,204 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GalviTriage™ Health Assessment</title>
+ 
+  <title>GalviTriage Health Assessment</title>
+ 
+  <!-- ============================================================
+       Google Analytics 4 - GalviCare / GalviAnalytics 0.5
+       Measurement ID: G-VQGZQGLRN0
+       Notes:
+       - This is non-blocking analytics.
+       - Do not send PII to GA4.
+       - If GA4 fails, the assessment still works.
+  ============================================================ -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-VQGZQGLRN0"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+ 
+    gtag('js', new Date());
+ 
+    gtag('config', 'G-VQGZQGLRN0', {
+      send_page_view: true,
+      anonymize_ip: true
+    });
+  </script>
+ 
   <style>
-    * { box-sizing: border-box; }
-    body { font-family: Arial, sans-serif; margin: 0; background: #f8f7f4; color: #1f2933; }
-    .wrap { max-width: 920px; margin: 0 auto; padding: 24px 14px; width: 100%; }
-    .panel { background: white; padding: 24px; border-radius: 14px; box-shadow: 0 1px 8px rgba(0,0,0,.08); margin-bottom: 20px; width: 100%; }
-    h1 { font-size: 32px; text-align: center; margin-bottom: 14px; }
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: #f8f7f4;
+      color: #1f2933;
+    }
+ 
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 32px 18px;
+    }
+ 
+    .panel {
+      background: white;
+      padding: 26px;
+      border-radius: 14px;
+      box-shadow: 0 1px 8px rgba(0,0,0,.08);
+      margin-bottom: 20px;
+    }
+ 
+    h1 { font-size: 34px; }
     h2 { margin-top: 0; }
-    label { display:block; font-weight:bold; margin: 16px 0 6px; }
-    input, select, textarea { width: 100%; max-width: 100%; padding: 11px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 15px; }
+ 
+    label {
+      display:block;
+      font-weight:bold;
+      margin: 16px 0 6px;
+    }
+ 
+    input, select, textarea {
+      width: 100%;
+      padding: 11px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+ 
     textarea { min-height: 84px; }
-    .scale { display:grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 8px 0 18px; }
-    .scale label { font-weight: normal; background:#f1f5f9; padding:10px; border-radius:8px; text-align:center; margin:0; cursor:pointer; }
+ 
+    .scale {
+      display:grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      margin: 8px 0 18px;
+    }
+ 
+    .scale label {
+      font-weight: normal;
+      background:#f1f5f9;
+      padding:10px;
+      border-radius:8px;
+      text-align:center;
+      margin:0;
+      cursor:pointer;
+    }
+ 
     .scale input { width:auto; }
-    .button-wrap { text-align:center; margin-top: 24px; }
-    button { padding: 14px 22px; border:0; border-radius:8px; background:#111827; color:white; font-size:16px; font-weight:bold; cursor:pointer; }
-    button:disabled { opacity: .65; cursor: not-allowed; }
+ 
+    button, .cta-link {
+      display: inline-block;
+      padding: 14px 22px;
+      border:0;
+      border-radius:8px;
+      background:#111827;
+      color:white;
+      font-size:16px;
+      font-weight:bold;
+      cursor:pointer;
+      text-decoration: none;
+      margin: 6px 8px 6px 0;
+    }
+ 
+    .secondary-button {
+      background:#374151;
+    }
+ 
     .result { display:none; }
-    .score { font-size: 54px; font-weight:bold; margin: 8px 0; text-align:center; }
-    .grid { display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-    .mini { background:#f8fafc; border:1px solid #e5e7eb; padding:14px; border-radius:10px; }
-    .small { color:#4b5563; font-size:14px; line-height:1.5; }
+ 
+    .score {
+      font-size: 58px;
+      font-weight:bold;
+      margin: 8px 0;
+    }
+ 
+    .bar {
+      background:#e5e7eb;
+      height: 12px;
+      border-radius: 20px;
+      overflow:hidden;
+    }
+ 
+    .fill {
+      background:#111827;
+      height: 12px;
+      width:0%;
+    }
+ 
+    .grid {
+      display:grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+ 
+    .mini {
+      background:#f8fafc;
+      border:1px solid #e5e7eb;
+      padding:14px;
+      border-radius:10px;
+    }
+ 
+    .small {
+      color:#4b5563;
+      font-size:14px;
+      line-height:1.5;
+    }
+ 
     .required { color: #b91c1c; }
-    .center { text-align:center; }
-    @media (max-width: 520px) {
-      .wrap { padding: 16px 10px; }
+ 
+    @media (max-width: 640px) {
+      .wrap { padding: 20px 12px; }
       .panel { padding: 18px; }
-      h1 { font-size: 26px; }
-      .scale { gap: 5px; }
-      .scale label { padding: 8px 4px; font-size: 14px; }
-      .score { font-size: 42px; }
+      h1 { font-size: 28px; }
+      .scale { grid-template-columns: repeat(5, 1fr); gap: 6px; }
+      .scale label { padding: 9px 4px; }
+      .score { font-size: 46px; }
+      button, .cta-link { width: 100%; text-align: center; box-sizing: border-box; }
     }
   </style>
 </head>
+ 
 <body>
 <div class="wrap">
   <div class="panel">
-    <h1>GalviTriage™ Health Assessment</h1>
-    <p class="center">
-      In five minutes, GalviTriage™ helps us understand the current symptoms, pressure points, and health signals inside your venture so GalviCare can prepare your initial business health snapshot: GalviVitals™.
-    </p>
-    <p class="small center">Scale: 1 = not clear / not confident / not consistent. 5 = very clear / very confident / very consistent.</p>
+    <h1>GalviTriage Health Assessment</h1>
+    <p>Answer honestly - It takes less than 5 minutes. This is not a test. It is a mirror to help you understand where your venture is healthy, where it may be at risk, and what to focus on next.</p>
+    <p class="small">Scale: 1 = not clear / not confident / not consistent. 5 = very clear / very confident / very consistent.</p>
   </div>
-
+ 
   <form id="assessmentForm">
     <div class="panel">
       <h2>About You</h2>
-      <label>First Name <span class="required">*</span></label>
-      <input name="first_name" required />
-      <label>Last Name <span class="required">*</span></label>
-      <input name="last_name" required />
+ 
+      <label>Name <span class="required">*</span></label>
+      <input name="name" required />
+ 
       <label>Email <span class="required">*</span></label>
       <input name="email" type="email" required />
-      <label>Phone</label>
-      <input name="phone" />
+ 
+      <label>Company / Venture Name <span class="required">*</span></label>
+      <input name="venture" required />
+ 
       <label>Website or LinkedIn</label>
       <input name="website" />
-      <label>
-        <input type="checkbox" name="consent" required style="width:auto;" />
-        I agree to submit this GalviTriage™ assessment.
-      </label>
     </div>
-
+ 
     <div class="panel">
-      <h2>GalviScore™ Questions</h2>
-      <label>Company / Venture Name <span class="required">*</span></label>
-      <input name="venture_name" required />
-
+      <h2>Business Snapshot</h2>
+ 
       <label>Which best describes your current stage?</label>
-      <select name="organization_stage" required>
+      <select name="stage" required>
         <option value="">Select one</option>
-        <option>Idea</option>
-        <option>Pre-Revenue</option>
-        <option>Early Revenue</option>
-        <option>Growing</option>
-        <option>Scaling</option>
-        <option>Established</option>
+        <option>I have an idea but have not started yet</option>
+        <option>I am actively building</option>
+        <option>I have launched my business</option>
+        <option>I have paying customers</option>
+        <option>I am growing my business</option>
+        <option>I lead an established organization</option>
       </select>
-
+ 
       <label>What type of organization are you building?</label>
-      <select name="organization_type" required>
+      <select name="orgtype" required>
         <option value="">Select one</option>
         <option>Startup</option>
         <option>Small Business</option>
@@ -93,330 +210,508 @@
         <option>Corporate Innovation Team</option>
         <option>Other</option>
       </select>
-
+ 
       <label>Industry</label>
-      <input name="industry" />
-
+      <input name="industry" placeholder="Example: technology, healthcare, education, nonprofit, consumer products" />
+ 
       <label>Current team size</label>
-      <select name="team_size">
+      <select name="team" required>
         <option value="">Select one</option>
         <option>Just me</option>
-        <option>2–5</option>
-        <option>6–10</option>
-        <option>11–25</option>
-        <option>26–50</option>
+        <option>2-5</option>
+        <option>6-10</option>
+        <option>11-25</option>
+        <option>26-50</option>
         <option>50+</option>
       </select>
-
+ 
       <label>Approximate annual revenue</label>
-      <select name="revenue_range">
+      <select name="revenue" required>
         <option value="">Select one</option>
         <option>Pre-Revenue</option>
         <option>Less than $10K</option>
-        <option>$10K–$50K</option>
-        <option>$50K–$250K</option>
-        <option>$250K–$1M</option>
-        <option>$1M–$5M</option>
+        <option>$10K-$50K</option>
+        <option>$50K-$250K</option>
+        <option>$250K-$1M</option>
+        <option>$1M-$5M</option>
         <option>$5M+</option>
       </select>
     </div>
-
+ 
     <div class="panel" id="scoreQuestions">
-      <h2>Business Health Signals</h2>
+      <h2>GalviScore&trade; Questions</h2>
     </div>
-
+ 
     <div class="panel">
       <h2>What Do You Need Help With?</h2>
-
-      <label>Which area would create the greatest positive impact if improved first?</label>
-      <select name="highest_impact_area" required>
-        <option value="">Select one</option>
-        <option>Customer Growth & Sales</option>
-        <option>Product & Service Strategy</option>
-        <option>Marketing & Brand</option>
-        <option>Operations & Processes</option>
-        <option>Finance & Funding</option>
-        <option>Leadership & Team</option>
-        <option>AI & Technology</option>
-        <option>Go-to-Market Strategy</option>
-        <option>Investor Readiness</option>
-        <option>I'm not sure</option>
-      </select>
-
-      <label>What is the biggest challenge you want to solve?</label>
-      <textarea name="biggest_challenge" required></textarea>
-
-      <label>If you could solve only ONE problem in the next 30 days, what would it be?</label>
-      <textarea name="one_30_day_problem" required></textarea>
-
-      <label>What is currently preventing growth?</label>
-      <textarea name="growth_blocker"></textarea>
-
-      <label>What feels broken today?</label>
-      <textarea name="feels_broken"></textarea>
-
+ 
+      <label>What challenge are you hoping to solve?</label>
+      <textarea name="challenge" required placeholder="Example: We are not getting enough customers, we don't know what to build next, we need investor readiness, or we are not sure how to grow."></textarea>
+ 
+      <label>What feels broken right now?</label>
+      <textarea name="broken" placeholder="What process, activity, system, relationship, or part of the business is not working the way you want?"></textarea>
+ 
+      <label>What is slowing growth?</label>
+      <textarea name="slowgrowth" placeholder="What is preventing your organization from reaching the next level?"></textarea>
+ 
       <label>What keeps you up at night?</label>
-      <textarea name="keeps_up_at_night"></textarea>
+      <textarea name="worry" placeholder="What concern, uncertainty, or risk causes the most stress?"></textarea>
+ 
+      <label>If one problem could be solved in the next 30 days, what should it be?</label>
+      <textarea name="oneproblem" required></textarea>
     </div>
-
-    <div class="button-wrap">
-      <button id="submitBtn" type="submit">Complete GalviTriage™</button>
-    </div>
+ 
+    <button type="submit">Calculate My GalviScore&trade;</button>
   </form>
-
-  <div class="panel result" id="galviVitalsPanel">
-    <h2 class="center">Your GalviVitals™ Are Ready</h2>
-    <p class="small center">Your initial business health snapshot has been prepared based on your GalviTriage™ responses.</p>
-    <div class="score" id="gvTotalScore"></div>
-    <h3 class="center" id="gvHealthBand"></h3>
-
-    <div class="grid">
-      <div class="mini"><strong>Strongest Signal</strong><br><span id="gvStrongestDomain"></span></div>
-      <div class="mini"><strong>Priority Risk Signal</strong><br><span id="gvLowestDomain"></span></div>
-      <div class="mini"><strong>Confidence</strong><br><span id="gvConfidence"></span></div>
-    </div>
-
-    <h3>Initial Business Health Interpretation</h3>
-    <p id="gvInterpretation"></p>
-
-    <h3>Recommended Next Step</h3>
-    <p id="gvNextStep">Continue to GalviScore™ to quantify your venture health and identify the next best diagnostic step.</p>
+ 
+  <div class="panel result" id="result">
+    <h2>Your GalviScore&trade;</h2>
+    <div class="score" id="totalScore"></div>
+    <div class="bar"><div class="fill" id="scoreFill"></div></div>
+    <h3 id="classification"></h3>
+    <p id="interpretation"></p>
+ 
+    <h2>Business Health Snapshot</h2>
+    <div class="grid" id="categoryGrid"></div>
+ 
+    <h2>Growth Insight</h2>
+    <p id="growthInsight"></p>
+ 
+    <h2>Recommended Next Step</h2>
+    <p>Your GalviScore&trade; gives you the mirror. A GalviClinic&trade; session helps diagnose the root cause and build a practical prescription for growth.</p>
+    <p><strong>Suggested CTA:</strong> Schedule a GalviClinic&trade; session to review your score, identify your biggest growth bottleneck, and leave with a clear action plan.</p>
+ 
+    <button
+      type="button"
+      class="secondary-button"
+      data-cta-name="print_save_results"
+      data-cta-location="galviscore_result"
+      onclick="window.print()">
+      Print / Save Results
+    </button>
+ 
+    <a
+      class="cta-link"
+      href="https://www.galvipro.com"
+      data-cta-name="galviclinic_next_step"
+      data-cta-location="galviscore_result">
+      Continue to GalviClinic&trade;
+    </a>
   </div>
 </div>
-
+ 
 <script>
-const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-triage-intake.mrgalvipro.workers.dev';
-
-const SCORING_VERSION = 'galvitriage_0_5_live_github_v1';
-
+/* ============================================================
+   GalviAnalytics 0.5 Helper Layer
+   Purpose:
+   - Fire GA4 events for GalviTriage / GalviScore journey behavior.
+   - Keep analytics non-blocking.
+   - Never send PII such as name, email, phone, or free-text responses.
+============================================================ */
+ 
+const GALVI_ANALYTICS_VERSION = 'galvianalytics_0_5';
+const GALVI_FORM_VERSION = 'galvitriage_assessment_rev_ga4_1';
+const GALVI_ANALYTICS_STORAGE_KEY = 'galvitriage_analytics_state';
+const GALVI_SESSION_STORAGE_KEY = 'galvitriage_session_id';
+ 
+function getOrCreateSessionId() {
+  const existing = localStorage.getItem(GALVI_SESSION_STORAGE_KEY);
+  if (existing) return existing;
+ 
+  const id = 'gt_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem(GALVI_SESSION_STORAGE_KEY, id);
+  return id;
+}
+ 
+function getDeviceType() {
+  const w = window.innerWidth || document.documentElement.clientWidth;
+  if (w <= 767) return 'mobile';
+  if (w <= 1024) return 'tablet';
+  return 'desktop';
+}
+ 
+function getAnalyticsState() {
+  try {
+    return JSON.parse(localStorage.getItem(GALVI_ANALYTICS_STORAGE_KEY) || '{}');
+  } catch (e) {
+    return {};
+  }
+}
+ 
+function setAnalyticsState(patch) {
+  const current = getAnalyticsState();
+  const next = Object.assign({}, current, patch);
+  localStorage.setItem(GALVI_ANALYTICS_STORAGE_KEY, JSON.stringify(next));
+  return next;
+}
+ 
+function cleanAnalyticsParams(params) {
+  const blocked = [
+    'name',
+    'email',
+    'phone',
+    'first_name',
+    'last_name',
+    'website',
+    'linkedin_url',
+    'challenge',
+    'broken',
+    'slowgrowth',
+    'worry',
+    'oneproblem',
+    'biggest_challenge',
+    'one_30_day_problem',
+    'growth_blocker',
+    'feels_broken',
+    'keeps_up_at_night'
+  ];
+ 
+  const cleaned = {};
+  Object.keys(params || {}).forEach(function(key) {
+    if (!blocked.includes(key) && params[key] !== undefined && params[key] !== null) {
+      cleaned[key] = params[key];
+    }
+  });
+  return cleaned;
+}
+ 
+function trackGalviEvent(eventName, params = {}) {
+  const session_id = getOrCreateSessionId();
+ 
+  const payload = cleanAnalyticsParams(Object.assign({
+    session_id: session_id,
+    analytics_version: GALVI_ANALYTICS_VERSION,
+    form_version: GALVI_FORM_VERSION,
+    product_module: 'galvitriage',
+    source_page: window.location.pathname,
+    device_type: getDeviceType()
+  }, params));
+ 
+  try {
+    if (typeof window.gtag === 'function') {
+      window.gtag('event', eventName, payload);
+    }
+  } catch (e) {
+    console.warn('GA4 tracking failed:', eventName, e);
+  }
+}
+ 
+function markTriageStarted(trigger = 'unknown') {
+  const state = getAnalyticsState();
+  if (state.started) return;
+ 
+  setAnalyticsState({
+    started: true,
+    submitted: false,
+    started_at: Date.now(),
+    last_step: 'started',
+    completion_percent: 0
+  });
+ 
+  trackGalviEvent('galvitriage_started', {
+    journey_step: 'triage_started',
+    start_trigger: trigger
+  });
+}
+ 
+function updateTriageProgress(lastStep, completionPercent) {
+  setAnalyticsState({
+    last_step: lastStep,
+    completion_percent: Math.max(0, Math.min(100, Number(completionPercent || 0)))
+  });
+}
+ 
+function trackValidationError(errorStage) {
+  trackGalviEvent('form_validation_error', {
+    journey_step: 'validation_error',
+    error_stage: errorStage || 'unknown'
+  });
+}
+ 
+function markIdentityCompleted(stageValue, orgTypeValue) {
+  const state = getAnalyticsState();
+  if (state.identity_completed) return;
+ 
+  setAnalyticsState({
+    identity_completed: true,
+    last_step: 'identity_completed',
+    completion_percent: 25
+  });
+ 
+  trackGalviEvent('galvitriage_identity_completed', {
+    journey_step: 'identity_completed',
+    organization_stage: stageValue || 'unknown',
+    organization_type: orgTypeValue || 'unknown'
+  });
+}
+ 
+function markQuestionsCompleted() {
+  const state = getAnalyticsState();
+  if (state.questions_completed) return;
+ 
+  setAnalyticsState({
+    questions_completed: true,
+    last_step: 'questions_completed',
+    completion_percent: 75
+  });
+ 
+  trackGalviEvent('galvitriage_questions_completed', {
+    journey_step: 'questions_completed'
+  });
+}
+ 
+function markTriageSubmitted(summary = {}) {
+  setAnalyticsState({
+    submitted: true,
+    submitted_at: Date.now(),
+    last_step: 'submitted',
+    completion_percent: 100
+  });
+ 
+  trackGalviEvent('galvitriage_submitted', Object.assign({
+    journey_step: 'triage_submitted'
+  }, summary));
+}
+ 
+function markVitalsViewed(summary = {}) {
+  const state = getAnalyticsState();
+  if (state.vitals_viewed) return;
+ 
+  setAnalyticsState({
+    vitals_viewed: true,
+    vitals_viewed_at: Date.now(),
+    last_step: 'vitals_viewed'
+  });
+ 
+  trackGalviEvent('galvivitals_viewed', Object.assign({
+    journey_step: 'vitals_viewed'
+  }, summary));
+}
+ 
+function trackCtaClick(ctaName, ctaLocation, destination) {
+  trackGalviEvent('galvicare_cta_clicked', {
+    journey_step: 'cta_clicked',
+    cta_name: ctaName || 'unknown',
+    cta_location: ctaLocation || 'unknown',
+    destination: destination || ''
+  });
+}
+ 
+window.addEventListener('beforeunload', function () {
+  const state = getAnalyticsState();
+ 
+  if (!state.started || state.submitted) return;
+ 
+  const seconds = state.started_at ? Math.round((Date.now() - state.started_at) / 1000) : 0;
+ 
+  trackGalviEvent('galvitriage_abandoned', {
+    journey_step: 'triage_abandoned',
+    last_step: state.last_step || 'unknown',
+    completion_percent: state.completion_percent || 0,
+    time_on_form_seconds: seconds
+  });
+});
+ 
+/* ============================================================
+   Existing GalviTriage Assessment Logic
+============================================================ */
+ 
 const questions = [
-  { key:'q01_business_clarity', cat:'business_identity', text:'How clearly can you explain what your organization does in one sentence?' },
-  { key:'q02_stage_signal', cat:'business_identity', text:'How clearly does your current stage reflect where your organization actually is today?' },
-  { key:'q03_real_problem', cat:'customer_health', text:'How confident are you that your business solves a real customer problem?' },
-  { key:'q04_ideal_customer', cat:'customer_health', text:'How clearly do you understand who your ideal customer is?' },
-  { key:'q05_attract_customers', cat:'customer_health', text:'How consistently are you attracting new customers, users, donors, or supporters?' },
-  { key:'q06_customer_conversations', cat:'customer_health', text:'How often do you speak directly with customers, users, donors, or stakeholders?' },
-  { key:'q07_predictable_revenue', cat:'revenue_health', text:'How predictable is your revenue or funding today?' },
-  { key:'q08_revenue_growth_confidence', cat:'revenue_health', text:'How confident are you in growing revenue or funding over the next 12 months?' },
-  { key:'q09_revenue_driver_clarity', cat:'revenue_health', text:'How well do you understand what is driving or limiting your revenue today?' },
-  { key:'q10_customer_satisfaction', cat:'product_health', text:'How satisfied are customers with your product, service, program, or offering?' },
-  { key:'q11_feedback_improvement', cat:'product_health', text:'How consistently do you improve your offering based on feedback?' },
-  { key:'q12_organized_operations', cat:'operations_health', text:'How organized are your day-to-day operations?' },
-  { key:'q13_founder_dependency', cat:'operations_health', text:'How dependent is the organization on you personally?' },
-  { key:'q14_systems_support_growth', cat:'operations_health', text:'How well are your systems supporting growth?' },
-  { key:'q15_technology_effectiveness', cat:'ai_readiness', text:'How effectively are you using technology today?' },
-  { key:'q16_ai_readiness', cat:'ai_readiness', text:'How ready is your organization to use AI responsibly and practically?' },
-  { key:'q17_leadership_confidence', cat:'leadership_decision_intelligence', text:'How confident are you in your leadership?' },
-  { key:'q18_vision_clarity', cat:'leadership_decision_intelligence', text:'How clear is your vision?' },
-  { key:'q19_decision_information', cat:'leadership_decision_intelligence', text:'How confident are you that decisions are based on the right information?' },
-  { key:'q20_execution_action', cat:'leadership_decision_intelligence', text:'How consistently do decisions turn into action?' }
+  {cat:'Business Health', key:'clearExplain', text:'How clearly can you explain what your organization does in one sentence?'},
+  {cat:'Business Health', key:'realProblem', text:'How confident are you that your business solves a real customer problem?'},
+  {cat:'Business Health', key:'payingNeed', text:'How confident are you that people are willing to pay for your solution?'},
+  {cat:'Customer Health', key:'idealCustomer', text:'How clearly do you understand who your ideal customer is?'},
+  {cat:'Customer Health', key:'attractCustomers', text:'How consistently are you attracting new customers, users, donors, or supporters?'},
+  {cat:'Customer Health', key:'customerConvos', text:'How often do you speak directly with customers, users, donors, or stakeholders?'},
+  {cat:'Revenue Health', key:'predictRevenue', text:'How predictable is your revenue or funding today?'},
+  {cat:'Revenue Health', key:'growRevenue', text:'How confident are you in your ability to grow revenue or funding over the next 12 months?'},
+  {cat:'Product / Service Health', key:'customerSatisfaction', text:'How satisfied are people with your product, service, program, or offering?'},
+  {cat:'Product / Service Health', key:'improveOffering', text:'How consistently do you improve your product, service, program, or customer experience?'},
+  {cat:'Operational Health', key:'organizedOps', text:'How organized are your day-to-day operations?'},
+  {cat:'Operational Health', key:'founderDependent', text:'How well can the business function without everything depending on you personally?'},
+  {cat:'Technology Health', key:'techGrowth', text:'How effectively are you using technology to support growth and execution?'},
+  {cat:'Technology Health', key:'aiReady', text:'How prepared are you to use AI tools or automation in a meaningful way?'},
+  {cat:'Leadership Health', key:'leadershipConfidence', text:'How confident are you in your leadership abilities today?'},
+  {cat:'Leadership Health', key:'visionClarity', text:'How clear is your vision for the next 12 months?'},
+  {cat:'Decision Intelligence Health', key:'decisionSpeed', text:'How quickly can important decisions be made?'},
+  {cat:'Decision Intelligence Health', key:'rightInfo', text:'How confident are you that your decisions are based on the right information?'},
+  {cat:'Decision Intelligence Health', key:'decisionFollowThrough', text:'How consistently do decisions turn into action?'}
 ];
-
-const domainWeights = {
-  business_identity: 0.05,
-  customer_health: 0.20,
-  revenue_health: 0.20,
-  product_health: 0.15,
-  operations_health: 0.15,
-  ai_readiness: 0.10,
-  leadership_decision_intelligence: 0.15
-};
-
-const scoreContainer = document.getElementById('scoreQuestions');
-
+ 
+const container = document.getElementById('scoreQuestions');
+ 
 questions.forEach((q, i) => {
   const label = document.createElement('label');
-  label.innerHTML = `${i + 1}. ${q.text}`;
-  scoreContainer.appendChild(label);
-
+  label.innerHTML = `${i+1}. ${q.text}`;
+  container.appendChild(label);
+ 
   const scale = document.createElement('div');
   scale.className = 'scale';
-
-  for (let n = 1; n <= 5; n++) {
+ 
+  for (let n=1; n<=5; n++) {
     const item = document.createElement('label');
     item.innerHTML = `<input type="radio" name="${q.key}" value="${n}" required> ${n}`;
     scale.appendChild(item);
   }
-
-  scoreContainer.appendChild(scale);
+ 
+  container.appendChild(scale);
 });
-
-function getSessionId() {
-  let sessionId = localStorage.getItem('galvitriage_session_id');
-  if (!sessionId) {
-    sessionId = 'galvitriage_' + Date.now() + '_' + Math.random().toString(36).slice(2);
-    localStorage.setItem('galvitriage_session_id', sessionId);
-  }
-  return sessionId;
+ 
+function classify(score) {
+  if (score < 40) return ['Foundation Builder', 'Your venture may have potential, but the foundation needs clearer structure, stronger validation, and sharper priorities.'];
+  if (score < 60) return ['Emerging Founder', 'You have meaningful momentum, but several areas need attention before growth becomes consistent.'];
+  if (score < 80) return ['Growth Operator', 'Your venture has a healthy base and can benefit from stronger systems, focus, and execution discipline.'];
+  if (score < 90) return ['Venture Leader', 'You are operating with strong clarity and maturity. The next opportunity is scale, systems, and leverage.'];
+  return ['Innovation Architect', 'Your venture is demonstrating strong health across most areas. The opportunity is to expand, optimize, and build for long-term impact.'];
 }
-
-function getDeviceType() {
-  return window.innerWidth <= 768 ? 'mobile' : 'desktop';
+ 
+function insight(lowestCat) {
+  const map = {
+    'Business Health': 'Clarify the core promise: what you do, who it helps, and why someone should care now.',
+    'Customer Health': 'Spend more time with your ideal customer. Growth improves when customer pain is specific and validated.',
+    'Revenue Health': 'Focus on one repeatable path to revenue or funding before expanding into new opportunities.',
+    'Product / Service Health': 'Translate feedback into a sharper offer. The goal is not more features; it is clearer outcomes.',
+    'Operational Health': 'Create simple systems so the business does not depend on heroic effort or memory.',
+    'Technology Health': 'Use technology to remove friction from growth, delivery, communication, and decision-making.',
+    'Leadership Health': 'Strengthen the founder operating rhythm: vision, priorities, accountability, and communication.',
+    'Decision Intelligence Health': 'Improve how decisions are made, tracked, and turned into action. Better decisions improve everything downstream.'
+  };
+ 
+  return map[lowestCat] || 'Focus on the area with the lowest score first. That is likely where your next growth bottleneck lives.';
 }
-
-function getUrlParam(name) {
-  return new URLSearchParams(window.location.search).get(name);
-}
-
-function average(keys, scoredAnswers) {
-  const values = keys.map(k => Number(scoredAnswers[k] || 0)).filter(v => v > 0);
-  return values.length ? values.reduce((a,b) => a + b, 0) / values.length : 0;
-}
-
-function bandFromScore(score) {
-  if (score < 40) return 'Critical';
-  if (score < 60) return 'At Risk';
-  if (score < 80) return 'Stable';
-  return 'Healthy';
-}
-
-function calculateDerivedScores(scoredAnswers) {
-  const domainMap = {};
-  questions.forEach(q => {
-    if (!domainMap[q.cat]) domainMap[q.cat] = [];
-    domainMap[q.cat].push(q.key);
+ 
+function getLowestDomain(catScores, catCounts) {
+  let lowestCat = null;
+  let lowestScore = 999;
+ 
+  Object.keys(catScores).forEach(cat => {
+    const pct = Math.round((catScores[cat] / (catCounts[cat] * 5)) * 100);
+    if (pct < lowestScore) {
+      lowestScore = pct;
+      lowestCat = cat;
+    }
   });
-
-  const domainScores = {};
-  Object.keys(domainMap).forEach(domain => {
-    domainScores[domain] = Math.round((average(domainMap[domain], scoredAnswers) / 5) * 100);
-  });
-
-  let total = 0;
-  Object.keys(domainWeights).forEach(domain => {
-    total += (domainScores[domain] || 0) * domainWeights[domain];
-  });
-
-  const sorted = Object.entries(domainScores).sort((a,b) => a[1] - b[1]);
-  const lowest = sorted[0]?.[0] || 'unknown';
-  const strongest = sorted[sorted.length - 1]?.[0] || 'unknown';
-
+ 
   return {
-    ...domainScores,
-    total_score: Math.round(total),
-    health_band: bandFromScore(Math.round(total)),
-    lowest_domain: lowest,
-    strongest_domain: strongest,
-    highest_risk_flag: lowest,
-    confidence_percent: Math.round((Object.values(scoredAnswers).filter(v => Number(v) > 0).length / 20) * 100),
-    scoring_version: SCORING_VERSION
+    lowestCat,
+    lowestScore
   };
 }
-
-function labelDomain(domainKey) {
-  const labels = {
-    business_identity: 'Business Identity',
-    customer_health: 'Customer Health',
-    revenue_health: 'Revenue Health',
-    product_health: 'Product Health',
-    operations_health: 'Operational Health',
-    ai_readiness: 'AI Readiness',
-    leadership_decision_intelligence: 'Leadership & Decision Intelligence'
-  };
-  return labels[domainKey] || domainKey;
+ 
+function getHealthBand(totalScore) {
+  if (totalScore < 40) return 'foundation_builder';
+  if (totalScore < 60) return 'emerging_founder';
+  if (totalScore < 80) return 'growth_operator';
+  if (totalScore < 90) return 'venture_leader';
+  return 'innovation_architect';
 }
-
-function interpretation(scores) {
-  const weakest = labelDomain(scores.lowest_domain);
-  if (scores.health_band === 'Healthy') return 'Your business health signals appear strong overall. Your next opportunity is to quantify where scale, systems, and strategic focus can create more leverage.';
-  if (scores.health_band === 'Stable') return `Your venture shows meaningful stability, but ${weakest} appears to be the area most likely limiting the next level of growth.`;
-  if (scores.health_band === 'At Risk') return `Your GalviTriage™ responses suggest several areas need attention. The most important current risk signal is ${weakest}.`;
-  return `Your business health snapshot shows foundational strain. The priority is to stabilize ${weakest} before adding more growth pressure.`;
-}
-
-function displayGalviVitals(scores) {
-  document.getElementById('assessmentForm').style.display = 'none';
-  document.getElementById('gvTotalScore').innerText = `${scores.total_score}/100`;
-  document.getElementById('gvHealthBand').innerText = `Health Band: ${scores.health_band}`;
-  document.getElementById('gvStrongestDomain').innerText = labelDomain(scores.strongest_domain);
-  document.getElementById('gvLowestDomain').innerText = labelDomain(scores.lowest_domain);
-  document.getElementById('gvConfidence').innerText = `${scores.confidence_percent}%`;
-  document.getElementById('gvInterpretation').innerText = interpretation(scores);
-  document.getElementById('galviVitalsPanel').style.display = 'block';
-  document.getElementById('galviVitalsPanel').scrollIntoView({ behavior: 'smooth' });
-}
-
-document.getElementById('assessmentForm').addEventListener('submit', async function(e) {
-  e.preventDefault();
-
-  const submitBtn = document.getElementById('submitBtn');
-  submitBtn.disabled = true;
-  submitBtn.innerText = 'Preparing GalviVitals™...';
-
-  const form = new FormData(e.target);
-  const sessionId = getSessionId();
-
-  const scoredAnswers = {};
-  questions.forEach(q => scoredAnswers[q.key] = Number(form.get(q.key)));
-
-  const derivedScores = calculateDerivedScores(scoredAnswers);
-
-  const payload = {
-    session: {
-      session_id: sessionId,
-      timestamp: new Date().toISOString(),
-      source: 'galvitriage_github_live',
-      utm_source: getUrlParam('utm_source') || '',
-      utm_campaign: getUrlParam('utm_campaign') || '',
-      device_type: getDeviceType()
-    },
-    founder: {
-      first_name: form.get('first_name') || '',
-      last_name: form.get('last_name') || '',
-      email: form.get('email') || '',
-      phone: form.get('phone') || '',
-      linkedin_url: '',
-      consent: form.get('consent') === 'on'
-    },
-    venture: {
-      venture_name: form.get('venture_name') || '',
-      website: form.get('website') || '',
-      organization_stage: form.get('organization_stage') || '',
-      organization_type: form.get('organization_type') || '',
-      industry: form.get('industry') || '',
-      revenue_range: form.get('revenue_range') || '',
-      team_size: form.get('team_size') || ''
-    },
-    scored_answers: scoredAnswers,
-    priority: {
-      highest_impact_area: form.get('highest_impact_area') || ''
-    },
-    open_text: {
-      biggest_challenge: form.get('biggest_challenge') || '',
-      one_30_day_problem: form.get('one_30_day_problem') || '',
-      growth_blocker: form.get('growth_blocker') || '',
-      feels_broken: form.get('feels_broken') || '',
-      keeps_up_at_night: form.get('keeps_up_at_night') || ''
-    },
-    derived_scores: derivedScores,
-    journey_event: {
-      event_name: 'galvitriage_submitted',
-      screen: 'GalviTriage'
-    }
-  };
-
-  try {
-    const response = await fetch(GALVICARE_INTAKE_ENDPOINT, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    const result = await response.json();
-    console.log('GalviCare Worker response:', result);
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.error || result.message || 'Worker submission failed');
-    }
-
-    displayGalviVitals(derivedScores);
-
-  } catch (error) {
-    console.error('GalviTriage submission error:', error);
-    alert('There was an issue submitting your GalviTriage. Please try again.');
-    submitBtn.disabled = false;
-    submitBtn.innerText = 'Complete GalviTriage™';
+ 
+const assessmentForm = document.getElementById('assessmentForm');
+ 
+assessmentForm.addEventListener('input', function(event) {
+  markTriageStarted(event.target && event.target.name ? event.target.name : 'form_input');
+}, { once: true });
+ 
+assessmentForm.addEventListener('change', function(event) {
+  markTriageStarted(event.target && event.target.name ? event.target.name : 'form_change');
+ 
+  const formData = new FormData(assessmentForm);
+  const name = formData.get('name');
+  const email = formData.get('email');
+  const venture = formData.get('venture');
+  const stage = formData.get('stage');
+  const orgtype = formData.get('orgtype');
+  const team = formData.get('team');
+  const revenue = formData.get('revenue');
+ 
+  if (name && email && venture && stage && orgtype && team && revenue) {
+    markIdentityCompleted(stage, orgtype);
   }
+ 
+  const answeredQuestions = questions.filter(q => formData.get(q.key)).length;
+  const questionCompletionPercent = Math.round((answeredQuestions / questions.length) * 100);
+ 
+  if (answeredQuestions > 0) {
+    updateTriageProgress('scored_questions_started', Math.max(30, questionCompletionPercent));
+  }
+ 
+  if (answeredQuestions === questions.length) {
+    markQuestionsCompleted();
+  }
+});
+ 
+assessmentForm.addEventListener('submit', function(e) {
+  e.preventDefault();
+ 
+  const form = e.target;
+ 
+  if (!form.checkValidity()) {
+    trackValidationError('submit_check_validity');
+    form.reportValidity();
+    return;
+  }
+ 
+  const data = new FormData(form);
+ 
+  let catScores = {};
+  let catCounts = {};
+  let totalRaw = 0;
+ 
+  questions.forEach(q => {
+    let val = parseInt(data.get(q.key), 10);
+    totalRaw += val;
+    catScores[q.cat] = (catScores[q.cat] || 0) + val;
+    catCounts[q.cat] = (catCounts[q.cat] || 0) + 1;
+  });
+ 
+  const total = Math.round((totalRaw / (questions.length * 5)) * 100);
+  const [label, interp] = classify(total);
+  const healthBand = getHealthBand(total);
+  const lowest = getLowestDomain(catScores, catCounts);
+ 
+  document.getElementById('totalScore').innerText = total + '/100';
+  document.getElementById('scoreFill').style.width = total + '%';
+  document.getElementById('classification').innerText = label;
+  document.getElementById('interpretation').innerText = interp;
+ 
+  const grid = document.getElementById('categoryGrid');
+  grid.innerHTML = '';
+ 
+  Object.keys(catScores).forEach(cat => {
+    const pct = Math.round((catScores[cat] / (catCounts[cat] * 5)) * 100);
+    const div = document.createElement('div');
+    div.className = 'mini';
+    div.innerHTML = `<strong>${cat}</strong><br>${pct}/100`;
+    grid.appendChild(div);
+  });
+ 
+  document.getElementById('growthInsight').innerText = insight(lowest.lowestCat) + ` Your lowest current category is ${lowest.lowestCat} (${lowest.lowestScore}/100).`;
+ 
+  markTriageSubmitted({
+    score_band: healthBand,
+    lowest_domain: lowest.lowestCat || 'unknown',
+    confidence_percent: 100,
+    organization_stage: data.get('stage') || 'unknown'
+  });
+ 
+  document.getElementById('result').style.display = 'block';
+ 
+  markVitalsViewed({
+    score_band: healthBand,
+    lowest_domain: lowest.lowestCat || 'unknown'
+  });
+ 
+  document.getElementById('result').scrollIntoView({behavior:'smooth'});
+});
+ 
+document.querySelectorAll('[data-cta-name]').forEach(function(el) {
+  el.addEventListener('click', function() {
+    trackCtaClick(
+      el.getAttribute('data-cta-name'),
+      el.getAttribute('data-cta-location') || 'unknown',
+      el.getAttribute('href') || ''
+    );
+  });
 });
 </script>
 </body>
