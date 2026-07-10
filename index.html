@@ -3,649 +3,434 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GalviCare 0.5 | GalviShot</title>
-
-  <!--
-    GALVISHOT 0.5 DROP-IN INDEX.HTML
-    Purpose: Add GalviShot paywall, confidence gate, clinical follow-up, Stripe return, result screen,
-    GA4/Clarity events, and GalviSight handoff without breaking the existing GalviTriage/GalviVitals/GalviScore path.
-
-    REQUIRED BEFORE DEPLOYMENT:
-    1) Replace GALVICARE_API_ENDPOINT with your active Cloudflare Worker or Make webhook URL.
-    2) Replace GALVISHOT_STRIPE_PAYMENT_LINK with the Stripe Payment Link for GalviShot Unlock.
-    3) If your current app already has GalviTriage/GalviScore code, merge the CONFIG + GalviShot sections below,
-       do not overwrite your working triage submission unless intentionally replacing the entire app.
-  -->
-
+  <meta name="description" content="GalviSight QA module for GalviCare MVP 0.5" />
+  <title>GalviSight™ | GalviCare 0.5 QA</title>
   <style>
-    :root {
-      --navy: #174a73;
-      --navy-dark: #0f2f47;
-      --blue-soft: #eaf3f8;
-      --gold: #c89b3c;
-      --ink: #17212b;
-      --muted: #5d6b78;
-      --border: #d9e3ea;
-      --surface: #ffffff;
-      --success: #1f7a4d;
-      --warning: #9b6500;
-      --danger: #a33b3b;
-      --shadow: 0 18px 45px rgba(15, 47, 71, 0.12);
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      color: var(--ink);
-      background: linear-gradient(180deg, #f5f9fc 0%, #ffffff 100%);
-    }
-    .galvicare-shell { max-width: 940px; margin: 0 auto; padding: 28px 16px 56px; }
-    .brand-bar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
-    .brand-title { font-weight: 800; letter-spacing: 0.03em; color: var(--navy-dark); }
-    .stage-pill { font-size: 12px; color: var(--navy); background: var(--blue-soft); border: 1px solid var(--border); padding: 7px 10px; border-radius: 999px; }
-    .progress { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 10px 0 22px; }
-    .progress span { height: 6px; border-radius: 999px; background: #d9e3ea; }
-    .progress span.active { background: var(--navy); }
-    .galvicare-card { background: var(--surface); border: 1px solid var(--border); border-radius: 22px; box-shadow: var(--shadow); padding: 26px; margin: 18px 0; }
-    .hidden { display: none !important; }
-    .eyebrow { color: var(--gold); font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; margin: 0 0 8px; }
-    h1, h2, h3 { color: var(--navy-dark); margin: 0 0 12px; line-height: 1.15; }
-    h1 { font-size: clamp(30px, 5vw, 48px); }
-    h2 { font-size: clamp(23px, 3vw, 34px); }
-    h3 { font-size: 18px; margin-top: 22px; }
-    p { color: var(--muted); line-height: 1.6; }
-    .primary-btn, .secondary-btn { border: 0; border-radius: 12px; padding: 14px 18px; font-weight: 800; cursor: pointer; font-size: 15px; min-height: 48px; }
-    .primary-btn { color: #fff; background: var(--navy); }
-    .primary-btn:hover { background: var(--navy-dark); }
-    .secondary-btn { color: var(--navy); background: var(--blue-soft); border: 1px solid var(--border); }
-    .button-row { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 18px; }
-    .preview-card { border: 1px solid var(--border); background: #fbfdff; border-radius: 16px; padding: 16px; margin: 18px 0; }
-    .inclusions { display: grid; gap: 10px; margin: 18px 0; }
-    .inclusion { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border: 1px solid var(--border); border-radius: 14px; background: #fff; }
-    .check { color: var(--success); font-weight: 900; }
-    .followup-panel { background: #fff8ed; border: 1px solid #f0d8ad; border-radius: 16px; padding: 16px; margin-top: 18px; }
-    label { display: block; font-weight: 750; margin: 14px 0 6px; color: var(--navy-dark); }
-    textarea, input, select { width: 100%; border: 1px solid var(--border); border-radius: 12px; padding: 12px; font-size: 15px; font-family: inherit; }
-    textarea { min-height: 90px; resize: vertical; }
-    .confidence-row { display: flex; align-items: center; gap: 10px; margin: 12px 0 18px; }
-    .meter { flex: 1; background: #e8eef3; border-radius: 999px; overflow: hidden; height: 13px; }
-    .meter > span { display: block; height: 100%; background: var(--navy); width: 0%; }
-    .finding { border-left: 5px solid var(--navy); background: #fbfdff; border-radius: 14px; padding: 16px; margin: 13px 0; }
-    .finding-title { font-weight: 850; color: var(--navy-dark); margin-bottom: 6px; }
-    .evidence { color: var(--muted); font-size: 14px; }
-    .risk-list, .action-list { margin: 8px 0 0 18px; color: var(--ink); line-height: 1.55; }
-    .status-note { font-size: 13px; color: var(--muted); margin-top: 10px; }
-    .error { color: var(--danger); background: #fff0f0; border: 1px solid #f2c1c1; border-radius: 12px; padding: 12px; }
-    .success { color: var(--success); background: #effaf4; border: 1px solid #bee8cf; border-radius: 12px; padding: 12px; }
-    @media (max-width: 680px) {
-      .galvicare-card { padding: 20px; border-radius: 18px; }
-      .button-row { flex-direction: column; }
-      .primary-btn, .secondary-btn { width: 100%; }
-      .progress { grid-template-columns: repeat(3, 1fr); }
-    }
+    :root { --navy:#17324d; --blue:#1f4e78; --sky:#d9eaf7; --gold:#c9a227; --ink:#17212b; --muted:#607080; --line:#d6dee6; --panel:#ffffff; --bg:#f4f7fa; --ok:#2e7d32; --warn:#a46300; --danger:#b42318; }
+    * { box-sizing:border-box; }
+    body { margin:0; font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif; color:var(--ink); background:linear-gradient(180deg,#eef5fa 0,#f8fafc 45%,#fff 100%); }
+    button,a { font:inherit; }
+    .app { width:min(980px,calc(100% - 28px)); margin:26px auto 56px; }
+    .brand { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px; }
+    .brand strong { color:var(--navy); letter-spacing:.02em; }
+    .session { font-size:.78rem; color:var(--muted); overflow-wrap:anywhere; }
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:22px; box-shadow:0 14px 40px rgba(23,50,77,.09); padding:clamp(22px,4vw,44px); }
+    .hidden { display:none !important; }
+    .eyebrow { margin:0 0 10px; color:var(--blue); font-size:.78rem; font-weight:800; letter-spacing:.15em; }
+    h1 { margin:.15em 0 .45em; color:var(--navy); font-size:clamp(2rem,5vw,3.4rem); line-height:1.04; }
+    h2 { color:var(--navy); margin:1.2em 0 .45em; }
+    h3 { color:var(--navy); margin:.2em 0 .45em; }
+    p { line-height:1.62; }
+    .lead { font-size:1.08rem; color:#33495e; max-width:760px; }
+    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:20px 0; }
+    .mini,.result-block,.question { border:1px solid var(--line); border-radius:16px; padding:18px; background:#fff; }
+    .mini { background:#f8fbfd; }
+    .mini strong { color:var(--navy); display:block; margin-bottom:6px; }
+    .preview { border-left:5px solid var(--gold); background:#fffaf0; border-radius:14px; padding:16px 18px; margin:18px 0; }
+    .followup { margin:22px 0; padding:20px; border:1px solid #b9d5e8; border-radius:18px; background:#f2f9fd; }
+    label { display:block; font-weight:700; color:var(--navy); margin-bottom:8px; }
+    textarea,select { width:100%; min-height:48px; padding:12px; border:1px solid #b9c7d4; border-radius:10px; background:white; color:var(--ink); }
+    textarea { min-height:92px; resize:vertical; }
+    .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:22px; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; min-height:48px; border-radius:999px; padding:12px 20px; border:1px solid transparent; cursor:pointer; text-decoration:none; font-weight:800; }
+    .btn-primary { background:var(--blue); color:white; }
+    .btn-secondary { background:white; color:var(--blue); border-color:var(--blue); }
+    .btn-quiet { background:#eef2f5; color:var(--navy); }
+    .btn:disabled { opacity:.55; cursor:not-allowed; }
+    .status { display:flex; gap:12px; align-items:flex-start; padding:15px 17px; border-radius:14px; margin:16px 0; background:#eef6fb; border:1px solid #c8ddea; }
+    .status.error { background:#fff2f0; border-color:#f0b8b1; color:#7a1b12; }
+    .spinner { width:20px; height:20px; flex:0 0 auto; border:3px solid #c7d8e6; border-top-color:var(--blue); border-radius:50%; animation:spin .8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+    .confidence { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; margin:18px 0; }
+    .meter { height:12px; background:#e5ebf0; border-radius:99px; overflow:hidden; }
+    .meter > span { display:block; height:100%; background:linear-gradient(90deg,var(--gold),var(--blue)); }
+    .badge { display:inline-flex; border-radius:999px; padding:6px 10px; font-size:.78rem; font-weight:800; background:#eaf2f8; color:var(--blue); }
+    .badge.high { background:#e8f5e9; color:var(--ok); }
+    .badge.medium { background:#fff4df; color:var(--warn); }
+    .badge.low { background:#fff0ef; color:var(--danger); }
+    .risk-grid,.opp-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .risk,.opp { border:1px solid var(--line); border-radius:14px; padding:16px; }
+    .risk[data-impact="high"] { border-left:5px solid var(--danger); }
+    .risk[data-impact="medium"] { border-left:5px solid var(--warn); }
+    .risk[data-impact="low"] { border-left:5px solid var(--ok); }
+    .opp { border-left:5px solid var(--gold); }
+    .meta { color:var(--muted); font-size:.85rem; }
+    ol,ul { padding-left:1.2rem; }
+    li { margin:.5em 0; line-height:1.5; }
+    .disclaimer { margin-top:24px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font-size:.82rem; }
+    .qa-ribbon { position:fixed; right:12px; bottom:12px; z-index:10; background:#17212b; color:white; padding:8px 12px; border-radius:999px; font-size:.72rem; }
+    @media (max-width:700px) { .grid,.risk-grid,.opp-grid { grid-template-columns:1fr; } .brand { align-items:flex-start; flex-direction:column; } .card { border-radius:16px; } }
+    @media print { body { background:#fff; } .app { width:100%; margin:0; } .brand,.no-print,.qa-ribbon { display:none !important; } .card { box-shadow:none; border:0; padding:0; } .risk-grid,.opp-grid { grid-template-columns:repeat(2,1fr); } }
+  
+    .clinic-dialog { width:min(720px,calc(100% - 28px)); border:0; border-radius:22px; padding:0; box-shadow:0 24px 70px rgba(23,50,77,.28); }
+    .clinic-dialog::backdrop { background:rgba(15,32,48,.62); }
+    .clinic-dialog-inner { padding:28px; background:#fff; border-radius:22px; }
+    .clinic-options { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:20px 0; }
+    .clinic-option { text-align:left; border:1px solid var(--line); border-radius:16px; padding:18px; background:#fff; cursor:pointer; }
+    .clinic-option:hover,.clinic-option:focus { border-color:var(--blue); box-shadow:0 8px 22px rgba(31,78,120,.12); outline:none; }
+    .clinic-option strong { display:block; color:var(--navy); margin-bottom:6px; }
+    .clinic-option span { color:var(--muted); font-size:.9rem; line-height:1.4; }
+    .clinic-dialog-actions { display:flex; justify-content:flex-end; margin-top:12px; }
+    @media (max-width:720px) { .clinic-options { grid-template-columns:1fr; } }
+
   </style>
 </head>
 <body>
-  <div class="galvicare-shell">
-    <div class="brand-bar">
-      <div class="brand-title">GalviCare™ 0.5</div>
-      <div class="stage-pill" id="stage-pill">Current Stage: GalviShot</div>
-    </div>
-
-    <div class="progress" aria-label="GalviCare journey progress">
-      <span class="active"></span><span class="active"></span><span class="active"></span><span class="active"></span><span></span><span></span>
-    </div>
-
-    <!-- OPTIONAL: Existing GalviScore result placeholder for standalone QA only. Remove if merging into a working app. -->
-    <section id="galviscore-result" class="galvicare-card hidden">
-      <p class="eyebrow">GALVISCORE™ COMPLETE</p>
-      <h2>Your GalviScore has been unlocked.</h2>
-      <p>Continue to GalviShot to understand the clinical findings behind the score.</p>
-      <button id="continue-galvishot" class="primary-btn">Continue to GalviShot™</button>
-    </section>
-
-    <!-- GALVISHOT PAYWALL -->
-    <section id="galvishot-paywall" class="galvicare-card hidden">
-      <p class="eyebrow">GALVISHOT™</p>
-      <h1>Your Executive Clinical Findings Are Ready.</h1>
-      <p>
-        GalviScore showed where your venture may be strained. GalviShot explains what findings are showing up in your business,
-        which symptoms matter most, and what to address before moving deeper into GalviSight™.
-      </p>
-
-      <div class="preview-card">
-        <strong>Preview:</strong>
-        <p id="galvishot-preview-copy">Your GalviShot will identify your highest-priority business symptom, likely bottlenecks, and recommended next-best actions. Full findings unlock after payment.</p>
+  <main class="app">
+    <header class="brand no-print">
+      <strong>GalviCare™ 0.5 • GalviSight™ QA</strong>
+      <span id="session-label" class="session"></span>
+    </header>
+ 
+    <section id="view-paywall" class="card hidden" aria-labelledby="paywall-title">
+      <p class="eyebrow">GALVISIGHT™</p>
+      <h1 id="paywall-title">Here Is What Your Findings Mean.</h1>
+      <p class="lead">GalviShot identified the symptoms. GalviSight translates those findings into strategic meaning—showing the likely root cause, decision risk, opportunity, urgency, and the next action to prioritize.</p>
+      <div class="preview"><strong>Your executive interpretation is ready.</strong><br />The full meaning, risk heatmap, opportunity matrix, and next-best actions remain locked until checkout is confirmed.</div>
+      <div class="grid">
+        <div class="mini"><strong>What the findings mean</strong><span>Plain-language executive interpretation.</span></div>
+        <div class="mini"><strong>Likely root cause</strong><span>A clearly labeled evidence-based hypothesis.</span></div>
+        <div class="mini"><strong>Strategic risks</strong><span>What becomes more difficult if no action is taken.</span></div>
+        <div class="mini"><strong>Opportunity matrix</strong><span>Where impact and realistic effort intersect.</span></div>
       </div>
-
-      <div class="inclusions" aria-label="GalviShot inclusions">
-        <div class="inclusion"><span class="check">✓</span><span>3-5 prioritized executive findings from your GalviTriage and GalviScore data.</span></div>
-        <div class="inclusion"><span class="check">✓</span><span>Evidence behind each finding so the result feels specific, not generic.</span></div>
-        <div class="inclusion"><span class="check">✓</span><span>Strategic risks, bottlenecks, assumptions, and next-best actions.</span></div>
-        <div class="inclusion"><span class="check">✓</span><span>Clear handoff into GalviSight™ for interpretation and GalviClinic™ readiness.</span></div>
-      </div>
-
-      <div id="galvishot-followup" class="followup-panel hidden">
-        <p class="eyebrow">GALVIENGINE CLINICAL FOLLOW-UP</p>
-        <h3>Answer up to 3 quick questions to improve finding accuracy.</h3>
-        <p>These questions are based on the weakest category from your GalviScore. They should take less than 60 seconds.</p>
-        <div id="galvishot-followup-questions"></div>
-        <div class="button-row">
-          <button id="submit-galvishot-followup" class="secondary-btn">Submit Follow-Up</button>
-          <button id="skip-galvishot-followup" class="secondary-btn">Skip for Now</button>
+      <div id="readiness-status" class="status hidden" role="status"></div>
+      <div id="followup-panel" class="followup hidden" aria-live="polite">
+        <h2>GalviEngine Clinical Follow-Up</h2>
+        <p>To improve the accuracy of your interpretation, answer these quick questions.</p>
+        <div id="followup-questions"></div>
+        <div class="actions">
+          <button id="submit-followup" class="btn btn-primary" type="button">Save and Recheck</button>
+          <button id="skip-followup" class="btn btn-quiet" type="button">Skip for Facilitator Review</button>
         </div>
-        <p id="followup-status" class="status-note"></p>
       </div>
-
-      <div class="confidence-row">
-        <span>GalviShot Confidence</span>
-        <div class="meter"><span id="galvishot-confidence-meter"></span></div>
-        <strong id="galvishot-confidence-label">--%</strong>
+      <div class="actions">
+        <button id="stripe-cta" class="btn btn-primary" type="button">Unlock GalviSight™</button>
+        <button id="fixture-result" class="btn btn-secondary" type="button">QA: Preview Result</button>
       </div>
-
-      <div class="button-row">
-        <button id="galvishot-stripe-cta" class="primary-btn">Unlock GalviShot™</button>
-        <button id="galvishot-live-test-override" class="secondary-btn">Live Test Override</button>
-      </div>
-      <p class="status-note">Secure checkout powered by Stripe. The full GalviShot appears after payment confirmation.</p>
-      <div id="galvishot-paywall-error" class="error hidden"></div>
+      <p class="meta">Secure checkout powered by Stripe. The browser contains no private API credentials.</p>
     </section>
-
-    <!-- GALVISHOT RESULT -->
-    <section id="galvishot-result" class="galvicare-card hidden">
-      <p class="eyebrow">GALVISHOT™ UNLOCKED</p>
-      <h1>Your Executive Clinical Findings</h1>
-      <p id="galvishot-executive-summary">Your findings are loading...</p>
-
-      <div class="confidence-row">
-        <span>Executive Confidence</span>
-        <div class="meter"><span id="galvishot-result-confidence-meter"></span></div>
-        <strong id="galvishot-result-confidence-label">--%</strong>
-      </div>
-
-      <h3>Top Executive Findings</h3>
-      <div id="galvishot-findings"></div>
-
-      <h3>Recommended Next-Best Actions</h3>
-      <ol id="galvishot-actions" class="action-list"></ol>
-
-      <h3>Strategic Risks</h3>
-      <ul id="galvishot-risks" class="risk-list"></ul>
-
-      <h3>Assumptions</h3>
-      <ul id="galvishot-assumptions" class="risk-list"></ul>
-
-      <div class="button-row">
-        <button id="continue-galvisight" class="primary-btn">Continue to GalviSight™</button>
-        <button id="book-galviclinic" class="secondary-btn">Book GalviClinic™</button>
-      </div>
-      <p class="status-note">Business guidance only; not legal, financial, medical, tax, or investment advice.</p>
-      <div id="galvishot-result-error" class="error hidden"></div>
+ 
+    <section id="view-processing" class="card hidden" aria-labelledby="processing-title">
+      <p class="eyebrow">GALVIENGINE™</p>
+      <h1 id="processing-title">Updating Your Founder Health Record…</h1>
+      <div class="status"><span class="spinner" aria-hidden="true"></span><div><strong>Please keep this page open.</strong><br />We are confirming your GalviSight unlock and retrieving your executive interpretation.</div></div>
     </section>
-  </div>
+ 
+    <section id="view-result" class="card hidden" aria-labelledby="result-title">
+      <p class="eyebrow">GALVISIGHT™ EXECUTIVE INTERPRETATION</p>
+      <h1 id="result-title">Here Is What Your Findings Mean.</h1>
+      <p id="result-meta" class="meta"></p>
+      <div class="confidence"><strong>Confidence</strong><div class="meter"><span id="confidence-meter" style="width:0%"></span></div><span id="confidence-value">0%</span></div>
+      <div id="confidence-band" class="badge">Pending</div>
+      <div class="result-block"><h2>1. What the Findings Mean</h2><p id="meaning-summary"></p></div>
+      <div class="result-block"><h2>2. Likely Root Cause</h2><p id="root-cause"></p><p class="meta">This is a hypothesis derived from the available business-health evidence—not a statement of certainty.</p></div>
+      <div class="result-block"><h2>3. Strategic Risk Heatmap</h2><div id="risk-grid" class="risk-grid"></div></div>
+      <div class="result-block"><h2>4. Opportunity Matrix</h2><div id="opp-grid" class="opp-grid"></div></div>
+      <div class="result-block"><h2>5. Urgency</h2><p><span id="urgency" class="badge"></span></p></div>
+      <div class="result-block"><h2>6. Recommended Next-Best Actions</h2><ol id="actions-list"></ol></div>
+      <div id="assumptions-block" class="result-block hidden"><h2>7. Assumptions and Missing Context</h2><ul id="assumptions-list"></ul></div>
+      <div class="actions no-print">
+        <button id="continue-path" class="btn btn-primary" type="button">Continue to Chart Your GalviPath™</button>
+        <button id="book-clinic" class="btn btn-secondary" type="button">Book GalviClinic™</button>
+        <button id="print-result" class="btn btn-quiet" type="button">Print GalviSight</button>
+      </div>
+      <p class="disclaimer">Business guidance only; not legal, financial, medical, tax, or investment advice.</p>
+    </section>
+ 
+    <section id="view-error" class="card hidden" aria-labelledby="error-title">
+      <p class="eyebrow">GALVISIGHT™</p>
+      <h1 id="error-title">We Could Not Complete This Step Yet.</h1>
+      <div class="status error"><div><strong id="error-message">A recoverable error occurred.</strong><br /><span id="error-detail"></span></div></div>
+      <div class="actions">
+        <button id="retry" class="btn btn-primary" type="button">Retry</button>
+        <button id="back-paywall" class="btn btn-secondary" type="button">Return to GalviSight</button>
+      </div>
+    </section>
+  </main>
 
+  <dialog id="clinic-dialog" class="clinic-dialog" aria-labelledby="clinic-dialog-title">
+    <div class="clinic-dialog-inner">
+      <p class="eyebrow">GALVICLINIC™</p>
+      <h2 id="clinic-dialog-title">Choose the clinic designed for your organization.</h2>
+      <p>GalviCare will use the organization type already stored in your health record when available. You may also choose the appropriate clinic below.</p>
+      <div class="clinic-options">
+        <button class="clinic-option" type="button" data-clinic-persona="founder">
+          <strong>Founder Clinic</strong>
+          <span>For founders, startups, entrepreneurs, and venture builders.</span>
+        </button>
+        <button class="clinic-option" type="button" data-clinic-persona="growth">
+          <strong>Growth Clinic</strong>
+          <span>For small and midsize businesses focused on sustainable growth.</span>
+        </button>
+        <button class="clinic-option" type="button" data-clinic-persona="mission">
+          <strong>Mission Impact Clinic</strong>
+          <span>For nonprofits, mission-driven organizations, and social-impact teams.</span>
+        </button>
+      </div>
+      <div id="clinic-dialog-error" class="status error hidden"></div>
+      <div class="clinic-dialog-actions">
+        <button id="close-clinic-dialog" class="btn btn-secondary" type="button">Cancel</button>
+      </div>
+    </div>
+  </dialog>
+
+  <div id="qa-ribbon" class="qa-ribbon">QA MODE</div>
+ 
   <script>
-    /**********************************************************************
-     * CONFIGURATION
-     **********************************************************************/
-    const CONFIG = {
-      // Replace with Cloudflare Worker or Make webhook used for GalviCare API events.
-      GALVICARE_API_ENDPOINT: 'https://YOUR-WORKER-OR-MAKE-WEBHOOK.example.com/galvicare',
-      // Replace with Stripe Payment Link for GalviShot Unlock.
-      GALVISHOT_STRIPE_PAYMENT_LINK: 'https://buy.stripe.com/test_00w14odrG1QLdcu9dA53O02’,
-      // Replace with real app route after deployment.
-      GALVICARE_APP_URL: window.location.origin + window.location.pathname,
-      GALVISIGHT_ROUTE: '#galvisight',
-      GALVICLINIC_BOOKING_URL: 'https://calendly.com/YOUR-CALENDLY/GalviClinic',
-      ABANDONMENT_WINDOW_MS: 20 * 60 * 1000,
-      GALVISHOT_CONFIDENCE_THRESHOLD: 80,
-      PROMPT_VERSION: 'rules_first_galvishot_v0_5'
-    };
+    'use strict';
+    const CONFIG = Object.freeze({
+      WORKER_API_URL: 'https://YOUR-WORKER.workers.dev',
+      GALVISIGHT_STRIPE_PAYMENT_LINK: 'https://buy.stripe.com/test_eVq3cw3R63YT6O6ahE53O03',
+      GALVIPATH_ROUTE: 'https://YOUR-GALVICARE-APP.example/#galvipath',
+      GALVICLINIC_BOOKING_URLS: Object.freeze({
+        founder: 'PASTE_FOUNDER_CLINIC_CALENDLY_LINK_HERE',
+        growth: 'PASTE_GROWTH_CLINIC_CALENDLY_LINK_HERE',
+        mission: 'PASTE_MISSION_IMPACT_CLINIC_CALENDLY_LINK_HERE'
+      }),
+      GA4_MEASUREMENT_ID: '',
+      FIXTURE_MODE: true,
+      ALLOW_TEST_OVERRIDE: true,
+      REQUEST_TIMEOUT_MS: 20000
+    });
+ 
+    const STORAGE = Object.freeze({
+      SESSION_ID: 'galvicare_session_id',
+      CURRENT_STAGE: 'galvicare_current_stage',
+      PAYMENT: 'payment_galvisight',
+      LAST_RESULT: 'galvisight_last_result',
+      ORG_TYPE: 'galvicare_org_type',
+      CUSTOMER_PERSONA: 'galvicare_customer_persona'
+    });
+    const THRESHOLD = 80;
+    const state = { readiness:null, lastAction:null, busy:false };
+    const $ = (s) => document.querySelector(s);
+    const views = ['#view-paywall','#view-processing','#view-result','#view-error'];
+ 
+    function makeSessionId() { return 'gc_' + Date.now().toString(36) + '_' + crypto.getRandomValues(new Uint32Array(1))[0].toString(36); }
+    function getSessionId() { let id=localStorage.getItem(STORAGE.SESSION_ID); if(!id){ id=makeSessionId(); localStorage.setItem(STORAGE.SESSION_ID,id); } return id; }
+    function setStage(stage) { localStorage.setItem(STORAGE.CURRENT_STAGE,stage); }
+    function showView(selector) { views.forEach(v=>$(v)?.classList.add('hidden')); $(selector)?.classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); }
+    function safeText(value,fallback='Not available') { return (value===null||value===undefined||String(value).trim()==='') ? fallback : String(value); }
+    function escapeHtml(value) { const d=document.createElement('div'); d.textContent=safeText(value,''); return d.innerHTML; }
+ 
 
-    const GALVISHOT_FOLLOWUP_QUESTIONS = {
-      strategy: [
-        { question_id: 'gshot_strategy_90_day_outcome', label: 'What business outcome matters most in the next 90 days?', confidence_impact: 8 },
-        { question_id: 'gshot_strategy_unclear_decision', label: 'What strategic decision feels most unclear right now?', confidence_impact: 7 }
-      ],
-      revenue: [
-        { question_id: 'gshot_revenue_kpi_concern', label: 'Which KPI concerns you most: leads, conversion, pricing, retention, or cash flow?', confidence_impact: 10 },
-        { question_id: 'gshot_revenue_prior_attempts', label: 'What have you already tried to improve revenue?', confidence_impact: 8 }
-      ],
-      customers: [
-        { question_id: 'gshot_customer_icp', label: 'Who is your ideal customer today?', confidence_impact: 8 },
-        { question_id: 'gshot_customer_discovery', label: 'How do customers currently discover you?', confidence_impact: 8 }
-      ],
-      operations: [
-        { question_id: 'gshot_ops_breakdown', label: 'What process breaks down most often?', confidence_impact: 8 },
-        { question_id: 'gshot_ops_constraint', label: 'What constraint most limits execution: budget, team, time, or tools?', confidence_impact: 8 }
-      ],
-      leadership: [
-        { question_id: 'gshot_leadership_confidence_gap', label: 'Where do you personally feel least confident leading the business right now?', confidence_impact: 8 }
-      ],
-      fallback: [
-        { question_id: 'gshot_success_definition', label: 'What would success look like after implementing recommendations?', confidence_impact: 6 }
-      ]
-    };
-
-    /**********************************************************************
-     * UTILITY / STATE
-     **********************************************************************/
-    function qs(selector) { return document.querySelector(selector); }
-    function qsa(selector) { return Array.from(document.querySelectorAll(selector)); }
-    function hideAllGalviShotViews() {
-      ['#galviscore-result', '#galvishot-paywall', '#galvishot-result'].forEach(id => qs(id)?.classList.add('hidden'));
-    }
-    function getUrlParams() { return new URLSearchParams(window.location.search); }
-    function getStoredSessionId() { return localStorage.getItem('galvicare_session_id') || ''; }
-    function setStoredSessionId(sessionId) { if (sessionId) localStorage.setItem('galvicare_session_id', sessionId); }
-    function setStage(stage) {
-      localStorage.setItem('galvicare_current_stage', stage);
-      const pill = qs('#stage-pill');
-      if (pill) pill.textContent = `Current Stage: ${stage}`;
-    }
-    function getSessionId() {
-      const params = getUrlParams();
-      const paramSession = params.get('galvicare_session_id') || params.get('session_id');
-      const stored = getStoredSessionId();
-      const sessionId = stored || paramSession || `gc_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      setStoredSessionId(sessionId);
-      return sessionId;
-    }
-    function setMeter(id, value) {
-      const n = Math.max(0, Math.min(100, Number(value || 0)));
-      const el = qs(id);
-      if (el) el.style.width = `${n}%`;
-    }
-    function normalizeCategory(category) {
-      const c = String(category || '').toLowerCase();
-      if (c.includes('revenue') || c.includes('pricing') || c.includes('cash')) return 'revenue';
-      if (c.includes('customer') || c.includes('acquisition') || c.includes('market')) return 'customers';
-      if (c.includes('operation') || c.includes('process') || c.includes('execution')) return 'operations';
-      if (c.includes('leadership') || c.includes('founder') || c.includes('team')) return 'leadership';
-      if (c.includes('strategy') || c.includes('goal') || c.includes('position')) return 'strategy';
-      return 'fallback';
+    function normalizePersona(value='') {
+      const v=String(value).trim().toLowerCase();
+      if(!v) return '';
+      if(['mission','nfp','nonprofit','non-profit','not for profit','not-for-profit','charity','foundation','social impact','social-impact'].some(x=>v.includes(x))) return 'mission';
+      if(['growth','smb','small business','small-business','mid-size','midsize','medium business','established business'].some(x=>v.includes(x))) return 'growth';
+      if(['founder','startup','start-up','entrepreneur','venture','pre-seed','seed'].some(x=>v.includes(x))) return 'founder';
+      return '';
     }
 
-    /**********************************************************************
-     * ANALYTICS / TELEMETRY
-     **********************************************************************/
-    function fireGalviEvent(eventName, params = {}) {
-      const payload = {
-        event: eventName,
-        product_name: params.product_name || 'galvishot',
-        current_stage: params.current_stage || localStorage.getItem('galvicare_current_stage') || 'GalviShot',
-        session_id: params.session_id || getStoredSessionId(),
-        weakest_category: params.weakest_category || localStorage.getItem('galvishot_weakest_category') || '',
-        confidence: params.confidence || localStorage.getItem('galvishot_confidence') || '',
-        price: params.price || '',
-        stripe_session_id: params.stripe_session_id || '',
-        timestamp: new Date().toISOString()
-      };
-      window.dataLayer = window.dataLayer || [];
-      window.dataLayer.push(payload);
-      if (window.clarity) {
-        window.clarity('event', eventName);
-        if (payload.session_id) window.clarity('set', 'galvicare_session_id', payload.session_id);
-        window.clarity('set', 'galvicare_product', payload.product_name);
-        window.clarity('set', 'galvicare_stage', payload.current_stage);
+    function detectClinicPersona() {
+      const params=new URLSearchParams(location.search);
+      const candidates=[
+        params.get('persona'),
+        params.get('customer_persona'),
+        params.get('org_type'),
+        localStorage.getItem(STORAGE.CUSTOMER_PERSONA),
+        localStorage.getItem(STORAGE.ORG_TYPE),
+        localStorage.getItem('organization_type'),
+        localStorage.getItem('org_type'),
+        localStorage.getItem('venture_type'),
+        localStorage.getItem('business_type')
+      ];
+      for(const candidate of candidates) {
+        const persona=normalizePersona(candidate);
+        if(persona) return persona;
       }
-      // Non-blocking server-side event write.
-      postToGalviCare({ event_name: eventName, ...payload }).catch(() => null);
+      return '';
     }
 
-    async function postToGalviCare(body) {
-      if (!CONFIG.GALVICARE_API_ENDPOINT || CONFIG.GALVICARE_API_ENDPOINT.includes('YOUR-WORKER')) {
-        console.warn('CONFIG.GALVICARE_API_ENDPOINT is not configured. Returning local QA response.', body);
-        return localQaResponse(body);
-      }
-      const res = await fetch(CONFIG.GALVICARE_API_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body)
-      });
-      if (!res.ok) throw new Error(`GalviCare API failed: ${res.status}`);
-      return res.json();
+    function clinicUrlIsConfigured(url='') {
+      return /^https:\/\/calendly\.com\//i.test(url) && !/PASTE_|REPLACE_ME/i.test(url);
     }
 
-    /**********************************************************************
-     * GALVISHOT CONFIDENCE + FOLLOW-UP
-     **********************************************************************/
-    function calculateLocalGalviShotConfidence() {
-      // MVP fallback only. Server/Make/Worker should be source of truth after Airtable retrieval.
-      const hasScore = Boolean(localStorage.getItem('galviscore_score') || localStorage.getItem('galviscore_result_json'));
-      const weakest = localStorage.getItem('galviscore_lowest_category') || localStorage.getItem('galvishot_weakest_category') || 'revenue';
-      const hasObjective = Boolean(localStorage.getItem('business_objective'));
-      const hasChallenge = Boolean(localStorage.getItem('primary_challenge'));
-      const hasIndustry = Boolean(localStorage.getItem('industry'));
-      const followups = JSON.parse(localStorage.getItem('galvishot_followups') || '[]');
-      let confidence = 45;
-      if (hasScore) confidence += 20;
-      if (weakest) confidence += 10;
-      if (hasObjective) confidence += 8;
-      if (hasChallenge) confidence += 8;
-      if (hasIndustry) confidence += 4;
-      confidence += Math.min(15, followups.reduce((sum, f) => sum + Number(f.confidence_impact || 0), 0));
-      confidence = Math.min(95, confidence);
-      localStorage.setItem('galvishot_confidence', String(confidence));
-      localStorage.setItem('galvishot_weakest_category', weakest);
-      return { confidence, weakest_category: weakest };
-    }
-
-    async function evaluateGalviShotReadiness(sessionId) {
-      try {
-        const response = await postToGalviCare({
-          event_name: 'galvishot_confidence_check',
-          action: 'evaluate_galvishot_readiness',
-          session_id: sessionId,
-          current_stage: 'GalviShot',
-          product_name: 'GalviShot'
-        });
-        const confidence = Number(response.confidence ?? response.galvishot_confidence ?? 0);
-        const weakest = response.weakest_category || response.bottleneck || localStorage.getItem('galviscore_lowest_category') || 'revenue';
-        if (confidence) localStorage.setItem('galvishot_confidence', String(confidence));
-        localStorage.setItem('galvishot_weakest_category', weakest);
-        return { confidence: confidence || calculateLocalGalviShotConfidence().confidence, weakest_category: weakest };
-      } catch (err) {
-        console.warn('Readiness check failed; using local fallback.', err);
-        return calculateLocalGalviShotConfidence();
-      }
-    }
-
-    function renderFollowUpQuestions(weakestCategory) {
-      const key = normalizeCategory(weakestCategory);
-      const questions = (GALVISHOT_FOLLOWUP_QUESTIONS[key] || GALVISHOT_FOLLOWUP_QUESTIONS.fallback).slice(0, 3);
-      const container = qs('#galvishot-followup-questions');
-      if (!container) return questions;
-      container.innerHTML = questions.map((q, idx) => `
-        <div class="followup-question" data-question-id="${q.question_id}" data-confidence-impact="${q.confidence_impact}">
-          <label for="${q.question_id}">${idx + 1}. ${q.label}</label>
-          <textarea id="${q.question_id}" name="${q.question_id}" placeholder="Type your answer..."></textarea>
-        </div>
-      `).join('');
-      return questions;
-    }
-
-    async function submitGalviShotFollowUp() {
-      const sessionId = getSessionId();
-      const answers = qsa('.followup-question').map(block => {
-        const questionId = block.getAttribute('data-question-id');
-        const answer = qs(`#${questionId}`)?.value?.trim() || '';
-        return {
-          question_id: questionId,
-          question_text: block.querySelector('label')?.textContent?.replace(/^\d+\.\s*/, '') || '',
-          answer,
-          confidence_impact: Number(block.getAttribute('data-confidence-impact') || 0)
-        };
-      }).filter(item => item.answer);
-
-      if (!answers.length) {
-        qs('#followup-status').textContent = 'Add at least one answer or choose Skip for Now.';
+    function openClinicForPersona(persona,{manual=false}={}) {
+      const url=CONFIG.GALVICLINIC_BOOKING_URLS[persona];
+      if(!clinicUrlIsConfigured(url)) {
+        const error=$('#clinic-dialog-error');
+        error.textContent='This Calendly event link has not been configured yet. Copy the event’s “Copy link” URL from Calendly and paste it into CONFIG.GALVICLINIC_BOOKING_URLS.';
+        error.classList.remove('hidden');
+        if(!$('#clinic-dialog').open) $('#clinic-dialog').showModal();
         return;
       }
-      localStorage.setItem('galvishot_followups', JSON.stringify(answers));
-      qs('#followup-status').textContent = 'Saving GalviEngine follow-up answers...';
-      fireGalviEvent('clinical_followup_submitted', { session_id: sessionId, question_count: answers.length });
-      await postToGalviCare({
-        event_name: 'clinical_followup_submitted',
-        action: 'save_galvishot_followup',
-        session_id: sessionId,
-        current_stage: 'GalviShot',
-        product_name: 'GalviShot',
-        follow_up_answers: answers
-      }).catch(err => console.warn('Follow-up save failed', err));
-      const readiness = calculateLocalGalviShotConfidence();
-      updateGalviShotConfidenceUI(readiness.confidence);
-      qs('#followup-status').textContent = 'Saved. GalviShot confidence has been updated.';
+      localStorage.setItem(STORAGE.CUSTOMER_PERSONA,persona);
+      fireGalviEvent('clinic_booking_clicked',{source_product:'galvisight',clinic_persona:persona,selection_method:manual?'manual':'automatic'});
+      window.location.href=url;
     }
 
-    function updateGalviShotConfidenceUI(confidence) {
-      const n = Number(confidence || 0);
-      setMeter('#galvishot-confidence-meter', n);
-      const label = qs('#galvishot-confidence-label');
-      if (label) label.textContent = `${n}%`;
-    }
-
-    /**********************************************************************
-     * PAYWALL + STRIPE
-     **********************************************************************/
-    async function showGalviShotPaywall() {
-      const sessionId = getSessionId();
-      hideAllGalviShotViews();
-      qs('#galvishot-paywall')?.classList.remove('hidden');
-      setStage('GalviShot Paywall');
-      const readiness = await evaluateGalviShotReadiness(sessionId);
-      updateGalviShotConfidenceUI(readiness.confidence);
-      fireGalviEvent('paywall_viewed', { session_id: sessionId, confidence: readiness.confidence, weakest_category: readiness.weakest_category });
-      if (Number(readiness.confidence) < CONFIG.GALVISHOT_CONFIDENCE_THRESHOLD) {
-        renderFollowUpQuestions(readiness.weakest_category);
-        qs('#galvishot-followup')?.classList.remove('hidden');
-        fireGalviEvent('clinical_followup_viewed', { session_id: sessionId, weakest_category: readiness.weakest_category, question_count: qsa('.followup-question').length });
-      } else {
-        qs('#galvishot-followup')?.classList.add('hidden');
-      }
-      scheduleGalviShotAbandonmentCheck(sessionId);
-    }
-
-    function buildStripeUrl() {
-      // Static Stripe Payment Links usually cannot accept dynamic success URL values from JS.
-      // Save GalviCare session locally before redirect. Stripe returns stripe_session_id in URL if configured.
-      return CONFIG.GALVISHOT_STRIPE_PAYMENT_LINK;
-    }
-
-    function goToGalviShotStripe() {
-      const sessionId = getSessionId();
-      localStorage.setItem('galvicare_last_paywall_product', 'galvishot');
-      localStorage.setItem('galvicare_last_paywall_viewed_at', new Date().toISOString());
-      fireGalviEvent('stripe_click', { session_id: sessionId, product_name: 'galvishot', price: '29-59' });
-      const url = buildStripeUrl();
-      if (!url || url.includes('YOUR_GALVISHOT_PAYMENT_LINK')) {
-        qs('#galvishot-paywall-error').textContent = 'Stripe Payment Link is not configured. Replace CONFIG.GALVISHOT_STRIPE_PAYMENT_LINK before live QA.';
-        qs('#galvishot-paywall-error').classList.remove('hidden');
+    function routeToClinic() {
+      const persona=detectClinicPersona();
+      if(persona && clinicUrlIsConfigured(CONFIG.GALVICLINIC_BOOKING_URLS[persona])) {
+        openClinicForPersona(persona);
         return;
       }
-      window.location.href = url;
+      $('#clinic-dialog-error').classList.add('hidden');
+      $('#clinic-dialog').showModal();
+      fireGalviEvent('clinic_persona_selector_viewed',{detected_persona:persona||'unknown'});
     }
 
-    async function handleGalviShotSuccessReturn() {
-      const params = getUrlParams();
-      const sessionId = getSessionId();
-      const stripeSessionId = params.get('stripe_session_id') || params.get('session_id') || '';
-      localStorage.setItem('payment_galvishot', 'paid');
-      fireGalviEvent('stripe_success', { session_id: sessionId, stripe_session_id: stripeSessionId, product_name: 'galvishot' });
-      await postToGalviCare({
-        event_name: 'stripe_success',
-        action: 'record_galvishot_payment_success',
-        session_id: sessionId,
-        stripe_session_id: stripeSessionId,
-        paid_status: 'shot_success',
-        product_name: 'GalviShot',
-        current_stage: 'GalviShot Paid'
-      }).catch(err => console.warn('Payment success write failed', err));
-      await renderGalviShotResult(sessionId);
+    function fireGalviEvent(eventName,params={}) {
+      const payload={ event_name:eventName, session_id:getSessionId(), product_name:'galvisight', current_stage:localStorage.getItem(STORAGE.CURRENT_STAGE)||'', ...params };
+      if(typeof window.gtag==='function') window.gtag('event',eventName,payload);
+      console.info('[GalviCare event]',payload);
     }
-
-    /**********************************************************************
-     * RESULT GENERATION + RENDERING
-     **********************************************************************/
-    async function fetchOrGenerateGalviShotResult(sessionId, options = {}) {
+ 
+    async function api(action,payload={}) {
+      state.lastAction={action,payload};
+      if(CONFIG.FIXTURE_MODE) return fixtureApi(action,payload);
+      const controller=new AbortController(); const timer=setTimeout(()=>controller.abort(),CONFIG.REQUEST_TIMEOUT_MS);
       try {
-        const response = await postToGalviCare({
-          event_name: 'diagnostic_requested',
-          action: 'get_or_generate_galvishot',
-          session_id: sessionId,
-          current_stage: 'GalviShot',
-          product_name: 'GalviShot',
-          paid_status: options.override ? 'test_override' : (localStorage.getItem('payment_galvishot') || 'unpaid'),
-          prompt_version: CONFIG.PROMPT_VERSION,
-          follow_up_answers: JSON.parse(localStorage.getItem('galvishot_followups') || '[]')
-        });
-        return normalizeGalviShotResult(response);
-      } catch (err) {
-        console.warn('GalviShot result fetch failed; using local QA result.', err);
-        return normalizeGalviShotResult(localQaGalviShotResult(sessionId));
-      }
+        const response=await fetch(CONFIG.WORKER_API_URL,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action,session_id:getSessionId(),product_name:'GalviSight',current_stage:localStorage.getItem(STORAGE.CURRENT_STAGE)||'GalviSight',...payload}), signal:controller.signal });
+        const text=await response.text(); let data; try{ data=JSON.parse(text); }catch{ throw new Error('Backend returned non-JSON: '+text.slice(0,180)); }
+        if(!response.ok || data.success===false) { const err=new Error(data.error||data.message||('Request failed: '+response.status)); err.status=response.status; err.data=data; throw err; }
+        return data;
+      } finally { clearTimeout(timer); }
     }
-
-    function normalizeGalviShotResult(raw) {
-      const result = raw.galvishot || raw.result || raw;
+ 
+    function fixtureApi(action,payload) {
+      const q=[
+        {question_id:'gsight_urgency',question_text:'What happens if this issue is not addressed in the next 30–90 days?',type:'textarea'},
+        {question_id:'gsight_constraint',question_text:'What is the biggest constraint preventing action right now?',type:'select',options:['Time','Budget','Team','Clarity','Systems','Customers']}
+      ];
+      if(action==='evaluate_galvisight_readiness') return Promise.resolve({success:true,confidence:76,confidence_band:'medium',needs_followup:true,questions:q});
+      if(action==='save_galvisight_followup') return Promise.resolve({success:true,confidence:88,confidence_band:'medium',needs_followup:false});
+      if(action==='record_galvisight_payment_success') return Promise.resolve({success:true,payment_status:'paid'});
+      if(action==='get_or_generate_galvisight') return Promise.resolve({success:true,source:'fixture',result:fixtureResult()});
+      return Promise.resolve({success:true});
+    }
+ 
+    function fixtureResult() {
       return {
-        session_id: result.session_id || getStoredSessionId(),
-        product: 'GalviShot',
-        confidence: Number(result.confidence || result.galvishot_confidence || localStorage.getItem('galvishot_confidence') || 82),
-        executive_summary: result.executive_summary || 'GalviShot identified the highest-priority business findings behind your GalviScore and translated them into focused next-best actions.',
-        findings: result.findings || [],
-        recommended_actions: result.recommended_actions || result.actions || [],
-        strategic_risks: result.strategic_risks || result.risks || [],
-        assumptions: result.assumptions || ['This result is based on the available GalviTriage, GalviVitals, GalviScore, and follow-up data.'],
-        next_step: result.next_step || 'GalviSight'
+        session_id:getSessionId(), product:'GalviSight', confidence:88, confidence_band:'medium',
+        meaning_summary:'The current findings indicate that the venture’s strongest near-term constraint is not a lack of ideas; it is the conversion of strategic intent into a repeatable customer and revenue operating rhythm.',
+        root_cause_hypothesis:'A likely root cause is fragmented prioritization: customer learning, offer refinement, and execution capacity are being managed as separate activities rather than one evidence-driven operating system.',
+        strategic_risks:[
+          {title:'Decision Delay',impact:'high',why_it_matters:'Important choices may continue to be revisited without enough new evidence.'},
+          {title:'Founder Capacity Strain',impact:'medium',why_it_matters:'Too many parallel priorities can weaken follow-through and learning speed.'},
+          {title:'Revenue Signal Ambiguity',impact:'high',why_it_matters:'Without a focused conversion loop, demand and pricing assumptions remain difficult to validate.'}
+        ],
+        opportunities:[
+          {title:'90-Day Decision System',impact:'high',effort:'medium',rationale:'Connect one customer signal, one revenue goal, and one operating cadence.'},
+          {title:'Offer Evidence Sprint',impact:'high',effort:'low',rationale:'Use structured conversations and conversion evidence to refine the offer.'},
+          {title:'Execution Capacity Reset',impact:'medium',effort:'low',rationale:'Reduce work in progress and assign explicit next decisions.'}
+        ],
+        urgency:'high',
+        recommended_actions:['Select one 90-day business-health outcome and the evidence required to confirm progress.','Convert the weakest GalviShot finding into one measurable operating experiment.','Define a weekly founder decision review using GalviScore/GalviSight evidence.','Continue to Chart Your GalviPath to sequence the care pathway.'],
+        assumptions:['The interpretation assumes the GalviShot findings and GalviScore categories stored for this session are current.','Market and customer context is limited to the structured inputs supplied.'],
+        next_step:'Chart Your GalviPath',
+        disclaimer:'Business guidance only; not legal, financial, medical, tax, or investment advice.'
       };
     }
-
-    async function renderGalviShotResult(sessionId, options = {}) {
-      hideAllGalviShotViews();
-      qs('#galvishot-result')?.classList.remove('hidden');
-      setStage('GalviShot Result');
+ 
+    function renderQuestions(questions=[]) {
+      const host=$('#followup-questions'); host.innerHTML='';
+      questions.slice(0,3).forEach((q,index)=>{
+        const wrap=document.createElement('div'); wrap.className='question';
+        const label=document.createElement('label'); label.htmlFor='q_'+index; label.textContent=q.question_text; wrap.appendChild(label);
+        let input;
+        if(q.type==='select' && Array.isArray(q.options)) { input=document.createElement('select'); input.innerHTML='<option value="">Select one</option>'+q.options.map(o=>`<option>${escapeHtml(o)}</option>`).join(''); }
+        else { input=document.createElement('textarea'); input.placeholder='Your answer'; }
+        input.id='q_'+index; input.dataset.questionId=q.question_id; input.dataset.questionText=q.question_text; wrap.appendChild(input); host.appendChild(wrap);
+      });
+      $('#followup-panel').classList.toggle('hidden',questions.length===0);
+      if(questions.length) fireGalviEvent('clinical_followup_viewed',{question_count:Math.min(questions.length,3),confidence:state.readiness?.confidence});
+    }
+ 
+    async function evaluateReadiness() {
+      $('#readiness-status').classList.remove('hidden'); $('#readiness-status').innerHTML='<span class="spinner"></span><div>GalviEngine is checking interpretation readiness…</div>';
       try {
-        const result = await fetchOrGenerateGalviShotResult(sessionId, options);
-        qs('#galvishot-executive-summary').textContent = result.executive_summary;
-        setMeter('#galvishot-result-confidence-meter', result.confidence);
-        qs('#galvishot-result-confidence-label').textContent = `${result.confidence}%`;
-        renderFindings(result.findings);
-        renderList('#galvishot-actions', result.recommended_actions);
-        renderList('#galvishot-risks', result.strategic_risks);
-        renderList('#galvishot-assumptions', result.assumptions);
-        fireGalviEvent('diagnostic_viewed', { session_id, confidence: result.confidence, product_name: 'galvishot' });
-      } catch (err) {
-        qs('#galvishot-result-error').textContent = `Unable to display GalviShot result: ${err.message}`;
-        qs('#galvishot-result-error').classList.remove('hidden');
+        const data=await api('evaluate_galvisight_readiness'); state.readiness=data;
+        $('#readiness-status').innerHTML=`<div><strong>GalviSight readiness: ${Number(data.confidence||0)}%</strong><br>${data.needs_followup?'A few targeted answers will improve accuracy.':'The interpretation has enough structured evidence to proceed.'}</div>`;
+        renderQuestions(data.needs_followup ? (data.questions||[]) : []);
+      } catch(err) { $('#readiness-status').innerHTML='<div>Readiness could not be checked yet. You can retry or continue through the facilitated QA path.</div>'; fireGalviEvent('journey_error',{action:'evaluate_galvisight_readiness',message:err.message}); }
+    }
+ 
+    async function submitFollowUp() {
+      const inputs=[...$('#followup-questions').querySelectorAll('textarea,select')];
+      const answers=inputs.map(i=>({question_id:i.dataset.questionId,question_text:i.dataset.questionText,answer:i.value.trim()})).filter(a=>a.answer);
+      if(!answers.length){ alert('Please answer at least one question.'); return; }
+      toggleBusy(true);
+      try {
+        const data=await api('save_galvisight_followup',{follow_up_answers:answers});
+        state.readiness=data; renderQuestions([]); $('#readiness-status').innerHTML=`<div><strong>Clinical follow-up saved.</strong><br>Updated confidence: ${Number(data.confidence||0)}%.</div>`;
+        fireGalviEvent('clinical_followup_submitted',{question_count:answers.length,confidence_after:data.confidence});
+      } catch(err) { showError('Your answers were not saved.',err); }
+      finally { toggleBusy(false); }
+    }
+ 
+    function toggleBusy(busy) { state.busy=busy; ['#submit-followup','#stripe-cta','#fixture-result'].forEach(s=>{if($(s))$(s).disabled=busy;}); }
+ 
+    function startStripe() {
+      localStorage.setItem(STORAGE.SESSION_ID,getSessionId()); setStage('GalviSight Paywall');
+      fireGalviEvent('stripe_click');
+      if(!CONFIG.GALVISIGHT_STRIPE_PAYMENT_LINK || CONFIG.GALVISIGHT_STRIPE_PAYMENT_LINK.includes('REPLACE_ME')) { showError('Stripe Payment Link is not configured.',new Error('Replace CONFIG.GALVISIGHT_STRIPE_PAYMENT_LINK.')); return; }
+      window.location.href=CONFIG.GALVISIGHT_STRIPE_PAYMENT_LINK;
+    }
+ 
+    async function handleSuccessReturn() {
+      const params=new URLSearchParams(location.search); const stripeSessionId=params.get('stripe_session_id')||'';
+      showView('#view-processing'); setStage('GalviSight Processing');
+      try {
+        await api('record_galvisight_payment_success',{paid:'sight_success',stripe_session_id:stripeSessionId});
+        localStorage.setItem(STORAGE.PAYMENT,'paid'); fireGalviEvent('stripe_success',{stripe_session_id:stripeSessionId});
+        await loadResult({stripe_session_id:stripeSessionId});
+      } catch(err) { showError('Payment was returned, but the result could not be retrieved.',err); }
+    }
+ 
+    async function loadResult(extra={}) {
+      showView('#view-processing'); setStage('GalviSight Processing');
+      try {
+        const data=await api('get_or_generate_galvisight',extra); const result=data.result||data;
+        localStorage.setItem(STORAGE.LAST_RESULT,JSON.stringify(result)); renderResult(result,data.source||'stored');
+      } catch(err) {
+        const cached=localStorage.getItem(STORAGE.LAST_RESULT);
+        if(cached && CONFIG.FIXTURE_MODE) { renderResult(JSON.parse(cached),'local_cache'); return; }
+        showError('GalviSight could not be generated or retrieved.',err);
       }
     }
-
-    function renderFindings(findings) {
-      const list = findings && findings.length ? findings : localQaGalviShotResult(getSessionId()).findings;
-      qs('#galvishot-findings').innerHTML = list.map((f, idx) => `
-        <div class="finding">
-          <div class="finding-title">${f.rank || idx + 1}. ${escapeHtml(f.domain || 'Business')} - ${escapeHtml(f.finding || '')}</div>
-          <div class="evidence"><strong>Evidence:</strong> ${escapeHtml(f.evidence || 'Based on available GalviCare inputs.')}</div>
-          <div class="evidence"><strong>Confidence:</strong> ${escapeHtml(f.confidence || 'medium')}</div>
-        </div>
-      `).join('');
+ 
+    function renderResult(result,source='stored') {
+      const confidence=Math.max(0,Math.min(100,Number(result.confidence||0))); const band=safeText(result.confidence_band,confidence>=90?'high':confidence>=80?'medium':'low').toLowerCase();
+      $('#confidence-meter').style.width=confidence+'%'; $('#confidence-value').textContent=confidence+'%';
+      $('#confidence-band').textContent=band.toUpperCase()+' CONFIDENCE'; $('#confidence-band').className='badge '+band;
+      $('#meaning-summary').textContent=safeText(result.meaning_summary); $('#root-cause').textContent=safeText(result.root_cause_hypothesis);
+      $('#urgency').textContent=safeText(result.urgency,'unknown').toUpperCase(); $('#urgency').className='badge '+(result.urgency==='high'||result.urgency==='critical'?'low':result.urgency==='medium'?'medium':'high');
+      $('#result-meta').textContent=`Session ${getSessionId()} • Source: ${source} • Generated ${new Date().toLocaleString()}`;
+      const risks=Array.isArray(result.strategic_risks)?result.strategic_risks:[]; $('#risk-grid').innerHTML=risks.map(r=>`<article class="risk" data-impact="${escapeHtml(r.impact||'medium')}"><h3>${escapeHtml(r.title)}</h3><span class="badge">${escapeHtml(r.impact||'medium')} impact</span><p>${escapeHtml(r.why_it_matters)}</p></article>`).join('')||'<p>No risks supplied.</p>';
+      const opps=Array.isArray(result.opportunities)?result.opportunities:[]; $('#opp-grid').innerHTML=opps.map(o=>`<article class="opp"><h3>${escapeHtml(o.title)}</h3><p class="meta">Impact: ${escapeHtml(o.impact||'unknown')} • Effort: ${escapeHtml(o.effort||'unknown')}</p><p>${escapeHtml(o.rationale)}</p></article>`).join('')||'<p>No opportunities supplied.</p>';
+      const actions=Array.isArray(result.recommended_actions)?result.recommended_actions:[]; $('#actions-list').innerHTML=actions.map(a=>`<li>${escapeHtml(a)}</li>`).join('')||'<li>No actions supplied.</li>';
+      const assumptions=Array.isArray(result.assumptions)?result.assumptions:[]; $('#assumptions-block').classList.toggle('hidden',assumptions.length===0); $('#assumptions-list').innerHTML=assumptions.map(a=>`<li>${escapeHtml(a)}</li>`).join('');
+      showView('#view-result'); setStage('GalviSight Result'); fireGalviEvent('diagnostic_viewed',{confidence,urgency:result.urgency,source});
     }
-    function renderList(selector, items) {
-      const safe = items && items.length ? items : ['No item returned. Review source data or prompt output.'];
-      qs(selector).innerHTML = safe.map(item => `<li>${escapeHtml(String(item))}</li>`).join('');
-    }
-    function escapeHtml(value) {
-      return String(value || '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
-    }
-
-    /**********************************************************************
-     * HUBSPOT RECOVERY / ABANDONMENT SIGNAL
-     **********************************************************************/
-    function scheduleGalviShotAbandonmentCheck(sessionId) {
-      localStorage.setItem('galvishot_paywall_viewed_at', new Date().toISOString());
-      setTimeout(() => {
-        const paid = localStorage.getItem('payment_galvishot') === 'paid';
-        const viewed = Boolean(localStorage.getItem('galvishot_paywall_viewed_at'));
-        if (viewed && !paid) {
-          fireGalviEvent('journey_abandoned', {
-            session_id: sessionId,
-            product_name: 'galvishot',
-            current_stage: 'GalviShot Paywall',
-            recovery_tag: 'Lost patient - GalviShot hesitation'
-          });
-          postToGalviCare({
-            event_name: 'journey_abandoned',
-            action: 'hubspot_recovery_tag',
-            session_id: sessionId,
-            product_name: 'GalviShot',
-            current_stage: 'GalviShot Paywall',
-            recovery_tag: 'Lost patient - GalviShot hesitation'
-          }).catch(() => null);
-        }
-      }, CONFIG.ABANDONMENT_WINDOW_MS);
-    }
-
-    /**********************************************************************
-     * LOCAL QA FALLBACKS - REMOVE ONLY AFTER API IS STABLE
-     **********************************************************************/
-    function localQaResponse(body) {
-      if (body.action === 'evaluate_galvishot_readiness') {
-        const local = calculateLocalGalviShotConfidence();
-        return Promise.resolve({ confidence: local.confidence, weakest_category: local.weakest_category });
-      }
-      if (body.action === 'get_or_generate_galvishot') {
-        return Promise.resolve(localQaGalviShotResult(body.session_id));
-      }
-      return Promise.resolve({ success: true, local_fallback: true });
-    }
-    function localQaGalviShotResult(sessionId) {
-      const weakest = normalizeCategory(localStorage.getItem('galvishot_weakest_category') || 'revenue');
-      return {
-        session_id: sessionId,
-        product: 'GalviShot',
-        confidence: Number(localStorage.getItem('galvishot_confidence') || 84),
-        executive_summary: 'Your GalviShot indicates that the venture has enough signal to identify priority findings, but execution should focus on the bottleneck most connected to growth and care-plan readiness.',
-        findings: [
-          { rank: 1, domain: weakest === 'customers' ? 'Customers' : 'Revenue', finding: 'Customer acquisition is the highest-priority business symptom limiting growth.', evidence: 'GalviScore weakest-category signal and available business context point to acquisition and revenue repeatability as key constraints.', confidence: 'high' },
-          { rank: 2, domain: 'Strategy', finding: 'The next 90-day outcome needs sharper definition before deeper execution.', evidence: 'The system needs a clearer priority outcome to translate findings into GalviSight interpretation.', confidence: 'medium' },
-          { rank: 3, domain: 'Operations', finding: 'Operating cadence may not yet be standardized enough to support consistent execution.', evidence: 'Follow-up and baseline inputs suggest constraints around time, tools, or process discipline.', confidence: 'medium' }
-        ],
-        recommended_actions: [
-          'Clarify the one measurable business outcome that matters most in the next 90 days.',
-          'Identify the acquisition, pricing, or execution bottleneck most directly affecting that outcome.',
-          'Continue to GalviSight to interpret why these findings matter and what they imply for the care pathway.'
-        ],
-        strategic_risks: [
-          'Inconsistent lead generation may create revenue uncertainty.',
-          'Limited execution capacity may prevent the founder from acting on recommendations.',
-          'Unclear success criteria may weaken the next diagnostic layer.'
-        ],
-        assumptions: [
-          'This QA result uses local fallback data if the GalviCare API endpoint is not configured.',
-          'Final production findings should be generated only after Airtable source fields and payment status are verified.'
-        ],
-        next_step: 'GalviSight'
-      };
-    }
-
-    /**********************************************************************
-     * EVENT BINDINGS + ROUTING
-     **********************************************************************/
-    document.addEventListener('DOMContentLoaded', async () => {
-      const params = getUrlParams();
-      const product = (params.get('product') || '').toLowerCase();
-      const paid = (params.get('paid') || '').toLowerCase();
-      const sessionId = getSessionId();
-
-      qs('#continue-galvishot')?.addEventListener('click', showGalviShotPaywall);
-      qs('#galvishot-stripe-cta')?.addEventListener('click', goToGalviShotStripe);
-      qs('#submit-galvishot-followup')?.addEventListener('click', submitGalviShotFollowUp);
-      qs('#skip-galvishot-followup')?.addEventListener('click', () => {
-        qs('#galvishot-followup')?.classList.add('hidden');
-        fireGalviEvent('clinical_followup_skipped', { session_id: getSessionId(), product_name: 'galvishot' });
-      });
-      qs('#galvishot-live-test-override')?.addEventListener('click', () => {
-        localStorage.setItem('payment_galvishot', 'paid');
-        renderGalviShotResult(getSessionId(), { override: true });
-      });
-      qs('#continue-galvisight')?.addEventListener('click', () => {
-        fireGalviEvent('continue_clicked', { session_id: getSessionId(), product_name: 'galvisight', current_stage: 'GalviSight Paywall' });
-        window.location.href = CONFIG.GALVISIGHT_ROUTE;
-      });
-      qs('#book-galviclinic')?.addEventListener('click', () => {
-        fireGalviEvent('clinic_booking_clicked', { session_id: getSessionId(), product_name: 'galvishot' });
-        window.location.href = CONFIG.GALVICLINIC_BOOKING_URL;
-      });
-
-      if (product === 'galvishot' && paid === 'shot_success') {
-        await handleGalviShotSuccessReturn();
-      } else if (window.location.hash === '#galvishot' || localStorage.getItem('galvicare_current_stage') === 'GalviShot Paywall') {
-        await showGalviShotPaywall();
-      } else {
-        // Standalone QA default: show GalviShot paywall.
-        await showGalviShotPaywall();
-      }
+ 
+    function showError(message,err) { $('#error-message').textContent=message; $('#error-detail').textContent=`${err?.message||'Unknown error'} • Session ${getSessionId()}`; showView('#view-error'); setStage('GalviSight Error'); fireGalviEvent('journey_error',{action:state.lastAction?.action||'unknown',message:err?.message||'unknown'}); }
+ 
+    async function showPaywall() { showView('#view-paywall'); setStage('GalviSight Paywall'); $('#session-label').textContent='Session: '+getSessionId(); fireGalviEvent('paywall_viewed'); await evaluateReadiness(); }
+ 
+    $('#submit-followup').addEventListener('click',submitFollowUp);
+    $('#skip-followup').addEventListener('click',()=>{ renderQuestions([]); fireGalviEvent('clinical_followup_skipped'); });
+    $('#stripe-cta').addEventListener('click',startStripe);
+    $('#fixture-result').addEventListener('click',()=>{ if(!CONFIG.ALLOW_TEST_OVERRIDE){alert('QA override is disabled.');return;} localStorage.setItem(STORAGE.PAYMENT,'test_override'); loadResult({test_override:true}); });
+    $('#continue-path').addEventListener('click',()=>{ fireGalviEvent('continue_clicked',{destination:'galvipath'}); window.location.href=CONFIG.GALVIPATH_ROUTE; });
+    $('#book-clinic').addEventListener('click',routeToClinic);
+    document.querySelectorAll('[data-clinic-persona]').forEach(button=>{
+      button.addEventListener('click',()=>openClinicForPersona(button.dataset.clinicPersona,{manual:true}));
+    });
+    $('#close-clinic-dialog').addEventListener('click',()=>$('#clinic-dialog').close());
+    $('#print-result').addEventListener('click',()=>{ fireGalviEvent('galvisight_printed'); window.print(); });
+    $('#retry').addEventListener('click',()=>{ const last=state.lastAction; if(last) api(last.action,last.payload).then(()=>location.reload()).catch(e=>showError('Retry failed.',e)); else showPaywall(); });
+    $('#back-paywall').addEventListener('click',showPaywall);
+ 
+    window.addEventListener('DOMContentLoaded',async()=>{
+      const missingClinicLinks=Object.values(CONFIG.GALVICLINIC_BOOKING_URLS).filter(url=>!clinicUrlIsConfigured(url)).length;
+      $('#qa-ribbon').textContent=(CONFIG.FIXTURE_MODE?'QA • FIXTURE MODE':'QA • BACKEND MODE')+(missingClinicLinks?` • ${missingClinicLinks} CLINIC LINK(S) NEEDED`:'');
+      const params=new URLSearchParams(location.search);
+      if(params.get('product')==='galvisight' && params.get('paid')==='sight_success') await handleSuccessReturn();
+      else if(location.hash==='#galvisight-result' && CONFIG.ALLOW_TEST_OVERRIDE) await loadResult({test_override:true});
+      else await showPaywall();
     });
   </script>
 </body>
