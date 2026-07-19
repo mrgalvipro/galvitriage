@@ -3,435 +3,479 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="GalviSight QA module for GalviCare MVP 0.5" />
-  <title>GalviSight™ | GalviCare 0.5 QA</title>
+  <meta name="description" content="GalviCare 0.5 integrated QA baseline: GalviTriage through GalviSight." />
+  <title>GalviCare™ 0.5 | Integrated QA Baseline</title>
   <style>
-    :root { --navy:#17324d; --blue:#1f4e78; --sky:#d9eaf7; --gold:#c9a227; --ink:#17212b; --muted:#607080; --line:#d6dee6; --panel:#ffffff; --bg:#f4f7fa; --ok:#2e7d32; --warn:#a46300; --danger:#b42318; }
-    * { box-sizing:border-box; }
-    body { margin:0; font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif; color:var(--ink); background:linear-gradient(180deg,#eef5fa 0,#f8fafc 45%,#fff 100%); }
-    button,a { font:inherit; }
-    .app { width:min(980px,calc(100% - 28px)); margin:26px auto 56px; }
-    .brand { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-bottom:18px; }
-    .brand strong { color:var(--navy); letter-spacing:.02em; }
-    .session { font-size:.78rem; color:var(--muted); overflow-wrap:anywhere; }
-    .card { background:var(--panel); border:1px solid var(--line); border-radius:22px; box-shadow:0 14px 40px rgba(23,50,77,.09); padding:clamp(22px,4vw,44px); }
-    .hidden { display:none !important; }
-    .eyebrow { margin:0 0 10px; color:var(--blue); font-size:.78rem; font-weight:800; letter-spacing:.15em; }
-    h1 { margin:.15em 0 .45em; color:var(--navy); font-size:clamp(2rem,5vw,3.4rem); line-height:1.04; }
-    h2 { color:var(--navy); margin:1.2em 0 .45em; }
-    h3 { color:var(--navy); margin:.2em 0 .45em; }
-    p { line-height:1.62; }
-    .lead { font-size:1.08rem; color:#33495e; max-width:760px; }
-    .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; margin:20px 0; }
-    .mini,.result-block,.question { border:1px solid var(--line); border-radius:16px; padding:18px; background:#fff; }
-    .mini { background:#f8fbfd; }
-    .mini strong { color:var(--navy); display:block; margin-bottom:6px; }
-    .preview { border-left:5px solid var(--gold); background:#fffaf0; border-radius:14px; padding:16px 18px; margin:18px 0; }
-    .followup { margin:22px 0; padding:20px; border:1px solid #b9d5e8; border-radius:18px; background:#f2f9fd; }
-    label { display:block; font-weight:700; color:var(--navy); margin-bottom:8px; }
-    textarea,select { width:100%; min-height:48px; padding:12px; border:1px solid #b9c7d4; border-radius:10px; background:white; color:var(--ink); }
-    textarea { min-height:92px; resize:vertical; }
-    .actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:22px; }
-    .btn { display:inline-flex; align-items:center; justify-content:center; min-height:48px; border-radius:999px; padding:12px 20px; border:1px solid transparent; cursor:pointer; text-decoration:none; font-weight:800; }
-    .btn-primary { background:var(--blue); color:white; }
-    .btn-secondary { background:white; color:var(--blue); border-color:var(--blue); }
-    .btn-quiet { background:#eef2f5; color:var(--navy); }
-    .btn:disabled { opacity:.55; cursor:not-allowed; }
-    .status { display:flex; gap:12px; align-items:flex-start; padding:15px 17px; border-radius:14px; margin:16px 0; background:#eef6fb; border:1px solid #c8ddea; }
-    .status.error { background:#fff2f0; border-color:#f0b8b1; color:#7a1b12; }
-    .spinner { width:20px; height:20px; flex:0 0 auto; border:3px solid #c7d8e6; border-top-color:var(--blue); border-radius:50%; animation:spin .8s linear infinite; }
-    @keyframes spin { to { transform:rotate(360deg); } }
-    .confidence { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:12px; margin:18px 0; }
-    .meter { height:12px; background:#e5ebf0; border-radius:99px; overflow:hidden; }
-    .meter > span { display:block; height:100%; background:linear-gradient(90deg,var(--gold),var(--blue)); }
-    .badge { display:inline-flex; border-radius:999px; padding:6px 10px; font-size:.78rem; font-weight:800; background:#eaf2f8; color:var(--blue); }
-    .badge.high { background:#e8f5e9; color:var(--ok); }
-    .badge.medium { background:#fff4df; color:var(--warn); }
-    .badge.low { background:#fff0ef; color:var(--danger); }
-    .risk-grid,.opp-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
-    .risk,.opp { border:1px solid var(--line); border-radius:14px; padding:16px; }
-    .risk[data-impact="high"] { border-left:5px solid var(--danger); }
-    .risk[data-impact="medium"] { border-left:5px solid var(--warn); }
-    .risk[data-impact="low"] { border-left:5px solid var(--ok); }
-    .opp { border-left:5px solid var(--gold); }
-    .meta { color:var(--muted); font-size:.85rem; }
-    ol,ul { padding-left:1.2rem; }
-    li { margin:.5em 0; line-height:1.5; }
-    .disclaimer { margin-top:24px; padding-top:14px; border-top:1px solid var(--line); color:var(--muted); font-size:.82rem; }
-    .qa-ribbon { position:fixed; right:12px; bottom:12px; z-index:10; background:#17212b; color:white; padding:8px 12px; border-radius:999px; font-size:.72rem; }
-    @media (max-width:700px) { .grid,.risk-grid,.opp-grid { grid-template-columns:1fr; } .brand { align-items:flex-start; flex-direction:column; } .card { border-radius:16px; } }
-    @media print { body { background:#fff; } .app { width:100%; margin:0; } .brand,.no-print,.qa-ribbon { display:none !important; } .card { box-shadow:none; border:0; padding:0; } .risk-grid,.opp-grid { grid-template-columns:repeat(2,1fr); } }
-  
-    .clinic-dialog { width:min(720px,calc(100% - 28px)); border:0; border-radius:22px; padding:0; box-shadow:0 24px 70px rgba(23,50,77,.28); }
-    .clinic-dialog::backdrop { background:rgba(15,32,48,.62); }
-    .clinic-dialog-inner { padding:28px; background:#fff; border-radius:22px; }
-    .clinic-options { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:20px 0; }
-    .clinic-option { text-align:left; border:1px solid var(--line); border-radius:16px; padding:18px; background:#fff; cursor:pointer; }
-    .clinic-option:hover,.clinic-option:focus { border-color:var(--blue); box-shadow:0 8px 22px rgba(31,78,120,.12); outline:none; }
-    .clinic-option strong { display:block; color:var(--navy); margin-bottom:6px; }
-    .clinic-option span { color:var(--muted); font-size:.9rem; line-height:1.4; }
-    .clinic-dialog-actions { display:flex; justify-content:flex-end; margin-top:12px; }
-    @media (max-width:720px) { .clinic-options { grid-template-columns:1fr; } }
-
+    :root {
+      --navy:#17324d; --blue:#1f4e78; --blue2:#174a73; --sky:#eaf3f8;
+      --gold:#c9a227; --ink:#17212b; --muted:#607080; --line:#d6dee6;
+      --panel:#fff; --bg:#f4f7fa; --ok:#2e7d32; --warn:#a46300; --danger:#b42318;
+      --shadow:0 14px 40px rgba(23,50,77,.10);
+    }
+    *{box-sizing:border-box}
+    html{scroll-behavior:smooth}
+    body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;color:var(--ink);background:linear-gradient(180deg,#eef5fa 0,#f8fafc 45%,#fff 100%)}
+    button,input,select,textarea{font:inherit}
+    .app{width:min(1040px,calc(100% - 28px));margin:24px auto 56px}
+    .brand{display:flex;justify-content:space-between;align-items:center;gap:18px;margin-bottom:14px}
+    .brand strong{font-size:1.05rem;letter-spacing:.03em;color:var(--navy)}
+    .session{font-size:.78rem;color:var(--muted);overflow-wrap:anywhere}
+    .progress{display:grid;grid-template-columns:repeat(6,1fr);gap:7px;margin:0 0 18px}
+    .progress span{height:7px;border-radius:99px;background:#dbe4eb}
+    .progress span.active{background:var(--blue)}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);padding:clamp(22px,4vw,44px)}
+    .hidden{display:none!important}
+    .eyebrow{margin:0 0 10px;color:var(--blue);font-size:.77rem;font-weight:850;letter-spacing:.15em;text-transform:uppercase}
+    h1{margin:.1em 0 .35em;color:var(--navy);font-size:clamp(2rem,5vw,3.4rem);line-height:1.04}
+    h2{color:var(--navy);margin:1.15em 0 .45em}
+    h3{color:var(--navy);margin:.3em 0 .45em}
+    p{line-height:1.58}
+    .lead{font-size:1.08rem;color:#33495e;max-width:820px}
+    .actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:22px}
+    .btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;border-radius:999px;padding:12px 20px;border:1px solid transparent;cursor:pointer;text-decoration:none;font-weight:800}
+    .btn-primary{background:var(--blue);color:#fff}
+    .btn-secondary{background:#fff;color:var(--blue);border-color:var(--blue)}
+    .btn-quiet{background:#eef2f5;color:var(--navy)}
+    .btn:disabled{opacity:.55;cursor:not-allowed}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;margin:18px 0}
+    .mini,.panel,.question,.result-block{border:1px solid var(--line);border-radius:16px;padding:18px;background:#fff}
+    .mini{background:#f8fbfd}
+    .mini strong{display:block;color:var(--navy);margin-bottom:6px}
+    .notice{border-left:5px solid var(--gold);background:#fffaf0;border-radius:14px;padding:15px 18px;margin:18px 0}
+    .status{padding:14px 16px;border-radius:14px;background:#eef6fb;border:1px solid #c8ddea;margin:16px 0}
+    .status.error{background:#fff2f0;border-color:#f0b8b1;color:#7a1b12}
+    .status.success{background:#edf8ef;border-color:#b8dfbe;color:#185b24}
+    .question{margin:12px 0}
+    label{display:block;font-weight:800;color:var(--navy);margin-bottom:9px}
+    input[type=text],input[type=email],select,textarea{width:100%;padding:12px;border:1px solid #b9c7d4;border-radius:10px;background:#fff;color:var(--ink)}
+    textarea{min-height:92px;resize:vertical}
+    .scale{display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+    .scale label{margin:0;padding:12px 8px;text-align:center;border:1px solid var(--line);border-radius:12px;cursor:pointer;background:#fff}
+    .scale input{display:block;margin:0 auto 7px}
+    .meta{color:var(--muted);font-size:.85rem}
+    .confidence{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;margin:18px 0}
+    .meter{height:12px;background:#e5ebf0;border-radius:99px;overflow:hidden}
+    .meter>span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--gold),var(--blue))}
+    .badge{display:inline-flex;border-radius:999px;padding:6px 10px;font-size:.78rem;font-weight:850;background:#eaf2f8;color:var(--blue)}
+    .badge.high{background:#e8f5e9;color:var(--ok)}
+    .badge.medium{background:#fff4df;color:var(--warn)}
+    .badge.low{background:#fff0ef;color:var(--danger)}
+    .dimension-row{display:grid;grid-template-columns:160px 1fr 56px;gap:12px;align-items:center;margin:10px 0}
+    .result-block{margin:15px 0}
+    .finding{border-left:5px solid var(--blue);background:#f8fbfd;border-radius:14px;padding:16px;margin:12px 0}
+    .risk-grid,.opp-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+    .risk,.opp{border:1px solid var(--line);border-radius:14px;padding:16px}
+    .risk.high{border-left:5px solid var(--danger)} .risk.medium{border-left:5px solid var(--warn)} .risk.low{border-left:5px solid var(--ok)}
+    .opp{border-left:5px solid var(--gold)}
+    ol,ul{padding-left:1.25rem} li{margin:.5em 0;line-height:1.5}
+    .disclaimer{margin-top:24px;padding-top:14px;border-top:1px solid var(--line);color:var(--muted);font-size:.82rem}
+    .qa-ribbon{position:fixed;right:12px;bottom:12px;z-index:10;background:#17212b;color:#fff;padding:8px 12px;border-radius:999px;font-size:.72rem}
+    @media(max-width:720px){
+      .grid,.risk-grid,.opp-grid{grid-template-columns:1fr}
+      .brand{align-items:flex-start;flex-direction:column}
+      .scale{grid-template-columns:1fr}
+      .scale label{display:flex;gap:10px;align-items:center;text-align:left}
+      .scale input{margin:0}
+      .dimension-row{grid-template-columns:1fr}
+      .card{border-radius:16px}
+    }
+    @media print{body{background:#fff}.app{width:100%;margin:0}.brand,.progress,.qa-ribbon,.no-print{display:none!important}.card{box-shadow:none;border:0;padding:0}}
   </style>
 </head>
 <body>
-  <main class="app">
-    <header class="brand no-print">
-      <strong>GalviCare™ 0.5 • GalviSight™ QA</strong>
-      <span id="session-label" class="session"></span>
-    </header>
- 
-    <section id="view-paywall" class="card hidden" aria-labelledby="paywall-title">
-      <p class="eyebrow">GALVISIGHT™</p>
-      <h1 id="paywall-title">Here Is What Your Findings Mean.</h1>
-      <p class="lead">GalviShot identified the symptoms. GalviSight translates those findings into strategic meaning—showing the likely root cause, decision risk, opportunity, urgency, and the next action to prioritize.</p>
-      <div class="preview"><strong>Your executive interpretation is ready.</strong><br />The full meaning, risk heatmap, opportunity matrix, and next-best actions remain locked until checkout is confirmed.</div>
-      <div class="grid">
-        <div class="mini"><strong>What the findings mean</strong><span>Plain-language executive interpretation.</span></div>
-        <div class="mini"><strong>Likely root cause</strong><span>A clearly labeled evidence-based hypothesis.</span></div>
-        <div class="mini"><strong>Strategic risks</strong><span>What becomes more difficult if no action is taken.</span></div>
-        <div class="mini"><strong>Opportunity matrix</strong><span>Where impact and realistic effort intersect.</span></div>
-      </div>
-      <div id="readiness-status" class="status hidden" role="status"></div>
-      <div id="followup-panel" class="followup hidden" aria-live="polite">
-        <h2>GalviEngine Clinical Follow-Up</h2>
-        <p>To improve the accuracy of your interpretation, answer these quick questions.</p>
-        <div id="followup-questions"></div>
-        <div class="actions">
-          <button id="submit-followup" class="btn btn-primary" type="button">Save and Recheck</button>
-          <button id="skip-followup" class="btn btn-quiet" type="button">Skip for Facilitator Review</button>
-        </div>
-      </div>
-      <div class="actions">
-        <button id="stripe-cta" class="btn btn-primary" type="button">Unlock GalviSight™</button>
-        <button id="fixture-result" class="btn btn-secondary" type="button">QA: Preview Result</button>
-      </div>
-      <p class="meta">Secure checkout powered by Stripe. The browser contains no private API credentials.</p>
-    </section>
- 
-    <section id="view-processing" class="card hidden" aria-labelledby="processing-title">
-      <p class="eyebrow">GALVIENGINE™</p>
-      <h1 id="processing-title">Updating Your Founder Health Record…</h1>
-      <div class="status"><span class="spinner" aria-hidden="true"></span><div><strong>Please keep this page open.</strong><br />We are confirming your GalviSight unlock and retrieving your executive interpretation.</div></div>
-    </section>
- 
-    <section id="view-result" class="card hidden" aria-labelledby="result-title">
-      <p class="eyebrow">GALVISIGHT™ EXECUTIVE INTERPRETATION</p>
-      <h1 id="result-title">Here Is What Your Findings Mean.</h1>
-      <p id="result-meta" class="meta"></p>
-      <div class="confidence"><strong>Confidence</strong><div class="meter"><span id="confidence-meter" style="width:0%"></span></div><span id="confidence-value">0%</span></div>
-      <div id="confidence-band" class="badge">Pending</div>
-      <div class="result-block"><h2>1. What the Findings Mean</h2><p id="meaning-summary"></p></div>
-      <div class="result-block"><h2>2. Likely Root Cause</h2><p id="root-cause"></p><p class="meta">This is a hypothesis derived from the available business-health evidence—not a statement of certainty.</p></div>
-      <div class="result-block"><h2>3. Strategic Risk Heatmap</h2><div id="risk-grid" class="risk-grid"></div></div>
-      <div class="result-block"><h2>4. Opportunity Matrix</h2><div id="opp-grid" class="opp-grid"></div></div>
-      <div class="result-block"><h2>5. Urgency</h2><p><span id="urgency" class="badge"></span></p></div>
-      <div class="result-block"><h2>6. Recommended Next-Best Actions</h2><ol id="actions-list"></ol></div>
-      <div id="assumptions-block" class="result-block hidden"><h2>7. Assumptions and Missing Context</h2><ul id="assumptions-list"></ul></div>
-      <div class="actions no-print">
-        <button id="continue-path" class="btn btn-primary" type="button">Continue to Chart Your GalviPath™</button>
-        <button id="book-clinic" class="btn btn-secondary" type="button">Book GalviClinic™</button>
-        <button id="print-result" class="btn btn-quiet" type="button">Print GalviSight</button>
-      </div>
-      <p class="disclaimer">Business guidance only; not legal, financial, medical, tax, or investment advice.</p>
-    </section>
- 
-    <section id="view-error" class="card hidden" aria-labelledby="error-title">
-      <p class="eyebrow">GALVISIGHT™</p>
-      <h1 id="error-title">We Could Not Complete This Step Yet.</h1>
-      <div class="status error"><div><strong id="error-message">A recoverable error occurred.</strong><br /><span id="error-detail"></span></div></div>
-      <div class="actions">
-        <button id="retry" class="btn btn-primary" type="button">Retry</button>
-        <button id="back-paywall" class="btn btn-secondary" type="button">Return to GalviSight</button>
-      </div>
-    </section>
-  </main>
+<main class="app">
+  <header class="brand no-print">
+    <strong>GalviCare™ 0.5 • Integrated QA Baseline</strong>
+    <span id="session-label" class="session"></span>
+  </header>
+  <div id="progress" class="progress no-print" aria-label="Journey progress">
+    <span></span><span></span><span></span><span></span><span></span><span></span>
+  </div>
 
-  <dialog id="clinic-dialog" class="clinic-dialog" aria-labelledby="clinic-dialog-title">
-    <div class="clinic-dialog-inner">
-      <p class="eyebrow">GALVICLINIC™</p>
-      <h2 id="clinic-dialog-title">Choose the clinic designed for your organization.</h2>
-      <p>GalviCare will use the organization type already stored in your health record when available. You may also choose the appropriate clinic below.</p>
-      <div class="clinic-options">
-        <button class="clinic-option" type="button" data-clinic-persona="founder">
-          <strong>Founder Clinic</strong>
-          <span>For founders, startups, entrepreneurs, and venture builders.</span>
-        </button>
-        <button class="clinic-option" type="button" data-clinic-persona="growth">
-          <strong>Growth Clinic</strong>
-          <span>For small and midsize businesses focused on sustainable growth.</span>
-        </button>
-        <button class="clinic-option" type="button" data-clinic-persona="mission">
-          <strong>Mission Impact Clinic</strong>
-          <span>For nonprofits, mission-driven organizations, and social-impact teams.</span>
-        </button>
-      </div>
-      <div id="clinic-dialog-error" class="status error hidden"></div>
-      <div class="clinic-dialog-actions">
-        <button id="close-clinic-dialog" class="btn btn-secondary" type="button">Cancel</button>
-      </div>
+  <section id="view-welcome" class="card">
+    <p class="eyebrow">GALVICARE™</p>
+    <h1>Your Venture Does Not Need Another Business Plan. It Needs a Diagnosis.</h1>
+    <p class="lead">GalviCare helps founders identify the business-health symptoms, constraints, and decision risks that may be slowing growth—then translates them into a focused care pathway.</p>
+    <div class="notice"><strong>QA baseline objective.</strong><br>This integrated file restores a complete browser journey from GalviTriage through GalviSight using deterministic local rules. The QA Worker connection is optional until the Day 1 foundation test is completed.</div>
+    <div class="grid">
+      <div class="mini"><strong>GalviTriage™</strong><span>Capture the founder and venture evidence.</span></div>
+      <div class="mini"><strong>GalviVitals™</strong><span>Summarize the current business-health signals.</span></div>
+      <div class="mini"><strong>GalviScore™</strong><span>Quantify health across eight dimensions.</span></div>
+      <div class="mini"><strong>GalviShot™ + GalviSight™</strong><span>Translate symptoms into findings and strategic meaning.</span></div>
     </div>
-  </dialog>
+    <div class="actions">
+      <button id="start-triage" class="btn btn-primary" type="button">Check In to GalviTriage™</button>
+      <button id="resume-session" class="btn btn-secondary" type="button">Resume Saved QA Session</button>
+    </div>
+  </section>
 
-  <div id="qa-ribbon" class="qa-ribbon">QA MODE</div>
- 
-  <script>
-    'use strict';
-    const CONFIG = Object.freeze({
-      WORKER_API_URL: 'https://YOUR-WORKER.workers.dev',
-      GALVISIGHT_STRIPE_PAYMENT_LINK: 'https://buy.stripe.com/test_eVq3cw3R63YT6O6ahE53O03',
-      GALVIPATH_ROUTE: 'https://YOUR-GALVICARE-APP.example/#galvipath',
-      GALVICLINIC_BOOKING_URLS: Object.freeze({
-        founder: 'PASTE_FOUNDER_CLINIC_CALENDLY_LINK_HERE',
-        growth: 'PASTE_GROWTH_CLINIC_CALENDLY_LINK_HERE',
-        mission: 'PASTE_MISSION_IMPACT_CLINIC_CALENDLY_LINK_HERE'
-      }),
-      GA4_MEASUREMENT_ID: '',
-      FIXTURE_MODE: true,
-      ALLOW_TEST_OVERRIDE: true,
-      REQUEST_TIMEOUT_MS: 20000
+  <section id="view-triage" class="card hidden">
+    <p class="eyebrow">GALVITRIAGE™</p>
+    <h1>Founder and Venture Diagnostic Check-In</h1>
+    <p class="lead">Answer all questions based on the venture as it operates today. This is a diagnostic baseline—not a test of founder worth.</p>
+    <form id="triage-form" novalidate>
+      <div class="grid">
+        <div class="question"><label for="first_name">First name</label><input id="first_name" name="first_name" type="text" required autocomplete="given-name"></div>
+        <div class="question"><label for="email">Email</label><input id="email" name="email" type="email" required autocomplete="email"></div>
+        <div class="question"><label for="venture_name">Venture name</label><input id="venture_name" name="venture_name" type="text" required></div>
+        <div class="question"><label for="stage">Venture stage</label><select id="stage" name="stage" required><option value="">Select one</option><option>Idea / Pre-launch</option><option>Early revenue</option><option>Growth</option><option>Established / scaling</option></select></div>
+      </div>
+      <div id="triage-questions"></div>
+      <div id="triage-error" class="status error hidden"></div>
+      <div class="actions">
+        <button class="btn btn-primary" type="submit">Complete GalviTriage™</button>
+        <button id="save-triage" class="btn btn-quiet" type="button">Save Progress</button>
+        <button class="btn btn-secondary" type="button" data-route="welcome">Back</button>
+      </div>
+    </form>
+  </section>
+
+  <section id="view-vitals" class="card hidden">
+    <p class="eyebrow">GALVIVITALS™</p>
+    <h1>Your Venture Health Signals</h1>
+    <p class="lead">GalviVitals converts your GalviTriage evidence into an immediate health snapshot before deeper scoring and findings.</p>
+    <div id="vitals-summary" class="grid"></div>
+    <div class="result-block"><h2>Initial clinical observation</h2><p id="vitals-observation"></p></div>
+    <div class="actions">
+      <button class="btn btn-primary" type="button" data-route="score">Continue to GalviScore™</button>
+      <button class="btn btn-secondary" type="button" data-route="triage">Review Answers</button>
+    </div>
+  </section>
+
+  <section id="view-score" class="card hidden">
+    <p class="eyebrow">GALVISCORE™</p>
+    <h1>Your Business Health Score</h1>
+    <p class="lead">GalviScore quantifies the venture’s current health across eight connected dimensions. It is a directional diagnostic—not a valuation.</p>
+    <div class="confidence"><strong>Overall score</strong><div class="meter"><span id="score-meter"></span></div><strong id="score-value">0</strong></div>
+    <p><span id="score-band" class="badge">Pending</span></p>
+    <div id="dimension-scores"></div>
+    <div class="result-block"><h2>Highest-priority dimension</h2><p id="lowest-dimension"></p></div>
+    <div class="actions">
+      <button class="btn btn-primary" type="button" data-route="shot">Continue to GalviShot™</button>
+      <button class="btn btn-secondary" type="button" data-route="vitals">Back to GalviVitals</button>
+    </div>
+  </section>
+
+  <section id="view-shot" class="card hidden">
+    <p class="eyebrow">GALVISHOT™ EXECUTIVE FINDINGS</p>
+    <h1>Your Highest-Priority Findings</h1>
+    <p class="lead">GalviShot translates the GalviScore pattern into evidence-linked executive findings, strategic risks, and immediate actions.</p>
+    <div class="confidence"><strong>Finding confidence</strong><div class="meter"><span id="shot-meter"></span></div><strong id="shot-confidence">0%</strong></div>
+    <div id="shot-findings"></div>
+    <div class="result-block"><h2>Recommended next-best actions</h2><ol id="shot-actions"></ol></div>
+    <div class="result-block"><h2>Strategic risks</h2><ul id="shot-risks"></ul></div>
+    <div class="actions">
+      <button class="btn btn-primary" type="button" data-route="sight">Continue to GalviSight™</button>
+      <button class="btn btn-secondary" type="button" data-route="score">Back to GalviScore</button>
+    </div>
+  </section>
+
+  <section id="view-sight" class="card hidden">
+    <p class="eyebrow">GALVISIGHT™ EXECUTIVE INTERPRETATION</p>
+    <h1>Here Is What Your Findings Mean.</h1>
+    <p class="lead">GalviSight translates the findings into strategic meaning—showing the likely root cause, decision risk, opportunity, urgency, and the next action to prioritize.</p>
+    <div class="confidence"><strong>Interpretation confidence</strong><div class="meter"><span id="sight-meter"></span></div><strong id="sight-confidence">0%</strong></div>
+    <div class="result-block"><h2>1. What the findings mean</h2><p id="meaning-summary"></p></div>
+    <div class="result-block"><h2>2. Likely root cause</h2><p id="root-cause"></p><p class="meta">This is an evidence-based hypothesis, not a statement of certainty.</p></div>
+    <div class="result-block"><h2>3. Strategic risk heatmap</h2><div id="risk-grid" class="risk-grid"></div></div>
+    <div class="result-block"><h2>4. Opportunity matrix</h2><div id="opp-grid" class="opp-grid"></div></div>
+    <div class="result-block"><h2>5. Urgency</h2><p><span id="urgency" class="badge"></span></p></div>
+    <div class="result-block"><h2>6. Recommended next-best actions</h2><ol id="sight-actions"></ol></div>
+    <div class="actions no-print">
+      <button id="print-result" class="btn btn-quiet" type="button">Print GalviSight</button>
+      <button id="restart" class="btn btn-secondary" type="button">Start New QA Session</button>
+    </div>
+    <p class="disclaimer">Business guidance only; not legal, financial, medical, tax, or investment advice.</p>
+  </section>
+
+  <section id="view-error" class="card hidden">
+    <p class="eyebrow">GALVICARE™</p>
+    <h1>We Could Not Complete This Step Yet.</h1>
+    <div class="status error"><strong id="error-message">A recoverable error occurred.</strong><br><span id="error-detail"></span></div>
+    <div class="actions"><button class="btn btn-primary" type="button" data-route="welcome">Return to Start</button></div>
+  </section>
+</main>
+<div class="qa-ribbon">QA • LOCAL RULES BASELINE</div>
+
+<script>
+'use strict';
+
+const CONFIG = Object.freeze({
+  // Day 1 QA Worker endpoint. Leave blank during local baseline QA.
+  WORKER_API_URL: '',
+  USE_WORKER_WHEN_AVAILABLE: false,
+  REQUEST_TIMEOUT_MS: 15000,
+  RULES_VERSION: 'galvicare_integrated_qa_v0_5_1'
+});
+
+const STORAGE = Object.freeze({
+  SESSION_ID: 'galvicare_session_id',
+  CURRENT_STAGE: 'galvicare_current_stage',
+  TRIAGE: 'galvicare_triage_answers',
+  RESULTS: 'galvicare_integrated_results'
+});
+
+const DIMENSIONS = ['Problem','Customer','Product','Revenue','Business Model','Distribution','Leadership','Technology'];
+
+const QUESTIONS = [
+  {id:'problem_1',dimension:'Problem',text:'How clearly can you describe the specific problem your venture solves?',low:'Unclear',high:'Very clear'},
+  {id:'problem_2',dimension:'Problem',text:'How strong is the evidence that this problem is important enough for customers to act on?',low:'Little evidence',high:'Strong evidence'},
+  {id:'customer_1',dimension:'Customer',text:'How clearly defined is your ideal customer profile?',low:'Not defined',high:'Precisely defined'},
+  {id:'customer_2',dimension:'Customer',text:'How consistently are you speaking with customers or users?',low:'Rarely',high:'Consistently'},
+  {id:'customer_3',dimension:'Customer',text:'How strong is the evidence that customers understand and value the offer?',low:'Weak',high:'Strong'},
+  {id:'product_1',dimension:'Product',text:'How reliably does the current product or service solve the intended problem?',low:'Unreliably',high:'Reliably'},
+  {id:'product_2',dimension:'Product',text:'How quickly can you convert customer feedback into product improvements?',low:'Very slowly',high:'Very quickly'},
+  {id:'product_3',dimension:'Product',text:'How differentiated is the offer from realistic alternatives?',low:'Not differentiated',high:'Highly differentiated'},
+  {id:'revenue_1',dimension:'Revenue',text:'How strong is your evidence of willingness to pay?',low:'No evidence',high:'Strong evidence'},
+  {id:'revenue_2',dimension:'Revenue',text:'How repeatable is your current lead-to-customer conversion process?',low:'Not repeatable',high:'Repeatable'},
+  {id:'revenue_3',dimension:'Revenue',text:'How predictable is near-term revenue or cash generation?',low:'Unpredictable',high:'Predictable'},
+  {id:'model_1',dimension:'Business Model',text:'How clearly do pricing, costs, and delivery economics work together?',low:'Unclear',high:'Clear'},
+  {id:'model_2',dimension:'Business Model',text:'How confident are you that the venture can deliver value profitably or sustainably?',low:'Low confidence',high:'High confidence'},
+  {id:'distribution_1',dimension:'Distribution',text:'How clearly defined are the channels that bring qualified customers?',low:'Undefined',high:'Well defined'},
+  {id:'distribution_2',dimension:'Distribution',text:'How consistently do those channels produce meaningful engagement?',low:'Inconsistent',high:'Consistent'},
+  {id:'leadership_1',dimension:'Leadership',text:'How clear are the venture’s top three priorities for the next 90 days?',low:'Unclear',high:'Very clear'},
+  {id:'leadership_2',dimension:'Leadership',text:'How effectively are difficult decisions made and followed through?',low:'Ineffectively',high:'Effectively'},
+  {id:'leadership_3',dimension:'Leadership',text:'How sustainable is the founder/team workload?',low:'Unsustainable',high:'Sustainable'},
+  {id:'technology_1',dimension:'Technology',text:'How well do current tools and systems support execution and learning?',low:'Poorly',high:'Very well'},
+  {id:'technology_2',dimension:'Technology',text:'How reliable and secure is the information needed to run the venture?',low:'Unreliable',high:'Reliable'}
+];
+
+const $ = s => document.querySelector(s);
+const $$ = s => Array.from(document.querySelectorAll(s));
+const viewIds = ['welcome','triage','vitals','score','shot','sight','error'];
+const stageIndex = {welcome:0,triage:1,vitals:2,score:3,shot:4,sight:5,error:0};
+
+function makeSessionId(){
+  return 'gc_' + Date.now().toString(36) + '_' + crypto.getRandomValues(new Uint32Array(1))[0].toString(36);
+}
+function getSessionId(){
+  let id = localStorage.getItem(STORAGE.SESSION_ID);
+  if(!id){ id = makeSessionId(); localStorage.setItem(STORAGE.SESSION_ID,id); }
+  return id;
+}
+function setStage(stage){
+  localStorage.setItem(STORAGE.CURRENT_STAGE,stage);
+  $('#session-label').textContent = 'Session: ' + getSessionId() + ' • Stage: ' + stage;
+}
+function showView(name){
+  viewIds.forEach(v => $('#view-'+v)?.classList.add('hidden'));
+  $('#view-'+name)?.classList.remove('hidden');
+  const n = stageIndex[name] ?? 0;
+  $$('#progress span').forEach((el,i)=>el.classList.toggle('active',i<=n));
+  setStage(name);
+  history.replaceState(null,'','#'+name);
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function safeText(v,f='Not available'){ return v===null||v===undefined||String(v).trim()==='' ? f : String(v); }
+function band(score){ return score>=80?'high':score>=60?'medium':'low'; }
+function bandLabel(score){ return score>=80?'Strong / ready':score>=60?'Watch / strengthen':'Priority intervention'; }
+function setMeter(id,value){ const el=$(id); if(el) el.style.width=Math.max(0,Math.min(100,Number(value)||0))+'%'; }
+function listInto(id,items){ const el=$(id); el.innerHTML=''; items.forEach(x=>{const li=document.createElement('li');li.textContent=x;el.appendChild(li);}); }
+function saveTriageDraft(){
+  const fd = new FormData($('#triage-form'));
+  const obj = Object.fromEntries(fd.entries());
+  localStorage.setItem(STORAGE.TRIAGE,JSON.stringify(obj));
+  return obj;
+}
+function restoreTriageDraft(){
+  const data = JSON.parse(localStorage.getItem(STORAGE.TRIAGE)||'{}');
+  Object.entries(data).forEach(([k,v])=>{
+    const els = $$(`[name="${CSS.escape(k)}"]`);
+    els.forEach(el=>{
+      if(el.type==='radio') el.checked=String(el.value)===String(v);
+      else el.value=v;
     });
- 
-    const STORAGE = Object.freeze({
-      SESSION_ID: 'galvicare_session_id',
-      CURRENT_STAGE: 'galvicare_current_stage',
-      PAYMENT: 'payment_galvisight',
-      LAST_RESULT: 'galvisight_last_result',
-      ORG_TYPE: 'galvicare_org_type',
-      CUSTOMER_PERSONA: 'galvicare_customer_persona'
+  });
+}
+function renderTriageQuestions(){
+  const host=$('#triage-questions'); host.innerHTML='';
+  DIMENSIONS.forEach(d=>{
+    const h=document.createElement('h2');h.textContent=d;host.appendChild(h);
+    QUESTIONS.filter(q=>q.dimension===d).forEach((q,idx)=>{
+      const wrap=document.createElement('div');wrap.className='question';
+      const label=document.createElement('label');label.textContent=q.text;wrap.appendChild(label);
+      const scale=document.createElement('div');scale.className='scale';
+      for(let n=1;n<=5;n++){
+        const opt=document.createElement('label');
+        opt.innerHTML=`<input type="radio" name="${q.id}" value="${n}" required><span><strong>${n}</strong>${n===1?' — '+q.low:n===5?' — '+q.high:''}</span>`;
+        scale.appendChild(opt);
+      }
+      wrap.appendChild(scale);host.appendChild(wrap);
     });
-    const THRESHOLD = 80;
-    const state = { readiness:null, lastAction:null, busy:false };
-    const $ = (s) => document.querySelector(s);
-    const views = ['#view-paywall','#view-processing','#view-result','#view-error'];
- 
-    function makeSessionId() { return 'gc_' + Date.now().toString(36) + '_' + crypto.getRandomValues(new Uint32Array(1))[0].toString(36); }
-    function getSessionId() { let id=localStorage.getItem(STORAGE.SESSION_ID); if(!id){ id=makeSessionId(); localStorage.setItem(STORAGE.SESSION_ID,id); } return id; }
-    function setStage(stage) { localStorage.setItem(STORAGE.CURRENT_STAGE,stage); }
-    function showView(selector) { views.forEach(v=>$(v)?.classList.add('hidden')); $(selector)?.classList.remove('hidden'); window.scrollTo({top:0,behavior:'smooth'}); }
-    function safeText(value,fallback='Not available') { return (value===null||value===undefined||String(value).trim()==='') ? fallback : String(value); }
-    function escapeHtml(value) { const d=document.createElement('div'); d.textContent=safeText(value,''); return d.innerHTML; }
- 
+  });
+}
 
-    function normalizePersona(value='') {
-      const v=String(value).trim().toLowerCase();
-      if(!v) return '';
-      if(['mission','nfp','nonprofit','non-profit','not for profit','not-for-profit','charity','foundation','social impact','social-impact'].some(x=>v.includes(x))) return 'mission';
-      if(['growth','smb','small business','small-business','mid-size','midsize','medium business','established business'].some(x=>v.includes(x))) return 'growth';
-      if(['founder','startup','start-up','entrepreneur','venture','pre-seed','seed'].some(x=>v.includes(x))) return 'founder';
-      return '';
-    }
+function validateTriage(){
+  const form=$('#triage-form');
+  if(!form.reportValidity()) return false;
+  const missing=QUESTIONS.filter(q=>!form.querySelector(`[name="${q.id}"]:checked`));
+  if(missing.length){
+    $('#triage-error').textContent='Please answer every GalviTriage question before continuing.';
+    $('#triage-error').classList.remove('hidden');
+    return false;
+  }
+  $('#triage-error').classList.add('hidden');
+  return true;
+}
 
-    function detectClinicPersona() {
-      const params=new URLSearchParams(location.search);
-      const candidates=[
-        params.get('persona'),
-        params.get('customer_persona'),
-        params.get('org_type'),
-        localStorage.getItem(STORAGE.CUSTOMER_PERSONA),
-        localStorage.getItem(STORAGE.ORG_TYPE),
-        localStorage.getItem('organization_type'),
-        localStorage.getItem('org_type'),
-        localStorage.getItem('venture_type'),
-        localStorage.getItem('business_type')
-      ];
-      for(const candidate of candidates) {
-        const persona=normalizePersona(candidate);
-        if(persona) return persona;
-      }
-      return '';
-    }
+function calculateResults(data){
+  const scores={};
+  DIMENSIONS.forEach(d=>{
+    const qs=QUESTIONS.filter(q=>q.dimension===d);
+    scores[d]=Math.round(qs.reduce((s,q)=>s+(Number(data[q.id]||1)-1)*25,0)/qs.length);
+  });
+  const values=Object.values(scores);
+  const overall=Math.round(values.reduce((a,b)=>a+b,0)/values.length);
+  const sorted=Object.entries(scores).sort((a,b)=>a[1]-b[1]);
+  const lowest=sorted[0];
+  const second=sorted[1];
+  const completeness=Math.round((QUESTIONS.filter(q=>data[q.id]).length/QUESTIONS.length)*100);
+  const confidence=Math.min(96,Math.round(68+completeness*.20+(overall>=50?7:3)));
+  return {scores,overall,lowest,second,completeness,confidence,created_at:new Date().toISOString()};
+}
 
-    function clinicUrlIsConfigured(url='') {
-      return /^https:\/\/calendly\.com\//i.test(url) && !/PASTE_|REPLACE_ME/i.test(url);
-    }
+function renderVitals(r){
+  const sorted=Object.entries(r.scores).sort((a,b)=>a[1]-b[1]);
+  const strongest=sorted[sorted.length-1];
+  const host=$('#vitals-summary');host.innerHTML='';
+  [
+    ['Overall health signal',r.overall+'/100'],
+    ['Highest-priority system',r.lowest[0]+' ('+r.lowest[1]+')'],
+    ['Strongest current asset',strongest[0]+' ('+strongest[1]+')'],
+    ['Evidence completeness',r.completeness+'%']
+  ].forEach(([a,b])=>{const d=document.createElement('div');d.className='mini';d.innerHTML=`<strong>${a}</strong><span>${b}</span>`;host.appendChild(d);});
+  $('#vitals-observation').textContent=`The venture shows a ${bandLabel(r.overall).toLowerCase()} overall pattern. The most important immediate signal is ${r.lowest[0]}, with a secondary constraint in ${r.second[0]}. These systems should be treated as connected rather than isolated problems.`;
+}
 
-    function openClinicForPersona(persona,{manual=false}={}) {
-      const url=CONFIG.GALVICLINIC_BOOKING_URLS[persona];
-      if(!clinicUrlIsConfigured(url)) {
-        const error=$('#clinic-dialog-error');
-        error.textContent='This Calendly event link has not been configured yet. Copy the event’s “Copy link” URL from Calendly and paste it into CONFIG.GALVICLINIC_BOOKING_URLS.';
-        error.classList.remove('hidden');
-        if(!$('#clinic-dialog').open) $('#clinic-dialog').showModal();
-        return;
-      }
-      localStorage.setItem(STORAGE.CUSTOMER_PERSONA,persona);
-      fireGalviEvent('clinic_booking_clicked',{source_product:'galvisight',clinic_persona:persona,selection_method:manual?'manual':'automatic'});
-      window.location.href=url;
-    }
+function renderScore(r){
+  setMeter('#score-meter',r.overall);$('#score-value').textContent=r.overall+'/100';
+  const badge=$('#score-band');badge.textContent=bandLabel(r.overall);badge.className='badge '+band(r.overall);
+  const host=$('#dimension-scores');host.innerHTML='';
+  Object.entries(r.scores).sort((a,b)=>a[1]-b[1]).forEach(([d,s])=>{
+    const row=document.createElement('div');row.className='dimension-row';
+    row.innerHTML=`<strong>${d}</strong><div class="meter"><span style="width:${s}%"></span></div><strong>${s}</strong>`;
+    host.appendChild(row);
+  });
+  $('#lowest-dimension').textContent=`${r.lowest[0]} is the lowest-scoring dimension at ${r.lowest[1]}/100. The next diagnostic step should determine whether this is the root constraint or a symptom of a deeper operating issue.`;
+}
 
-    function routeToClinic() {
-      const persona=detectClinicPersona();
-      if(persona && clinicUrlIsConfigured(CONFIG.GALVICLINIC_BOOKING_URLS[persona])) {
-        openClinicForPersona(persona);
-        return;
-      }
-      $('#clinic-dialog-error').classList.add('hidden');
-      $('#clinic-dialog').showModal();
-      fireGalviEvent('clinic_persona_selector_viewed',{detected_persona:persona||'unknown'});
-    }
+function shotContent(r){
+  const [lowName,lowScore]=r.lowest; const [secondName,secondScore]=r.second;
+  return {
+    confidence:r.confidence,
+    findings:[
+      {title:`${lowName} is the primary business-health constraint`,evidence:`This dimension scored ${lowScore}/100, the lowest result in the current GalviTriage evidence.`,meaning:`The venture may be losing momentum because decisions and execution are not adequately resolving this system.`},
+      {title:`${secondName} is reinforcing the primary constraint`,evidence:`This dimension scored ${secondScore}/100 and appears adjacent to the weakest system.`,meaning:`Improving the primary issue without addressing this reinforcing system may produce only temporary gains.`},
+      {title:'The venture needs a narrower 90-day decision system',evidence:`The overall GalviScore is ${r.overall}/100 with ${r.completeness}% evidence completeness.`,meaning:'A smaller set of measurable priorities will improve learning speed and reduce fragmented execution.'}
+    ],
+    actions:[
+      `Define one measurable 90-day outcome for ${lowName}.`,
+      `Identify the customer or operating evidence required to confirm progress in ${secondName}.`,
+      'Stop or defer work that does not directly support the selected outcome.',
+      'Review the evidence weekly and make one explicit next decision.'
+    ],
+    risks:[
+      `Continuing without intervention may deepen the ${lowName} constraint.`,
+      `Fragmented attention may cause ${secondName} to deteriorate further.`,
+      'The founder may mistake activity or growth for health if the evidence loop remains unclear.'
+    ]
+  };
+}
 
-    function fireGalviEvent(eventName,params={}) {
-      const payload={ event_name:eventName, session_id:getSessionId(), product_name:'galvisight', current_stage:localStorage.getItem(STORAGE.CURRENT_STAGE)||'', ...params };
-      if(typeof window.gtag==='function') window.gtag('event',eventName,payload);
-      console.info('[GalviCare event]',payload);
-    }
- 
-    async function api(action,payload={}) {
-      state.lastAction={action,payload};
-      if(CONFIG.FIXTURE_MODE) return fixtureApi(action,payload);
-      const controller=new AbortController(); const timer=setTimeout(()=>controller.abort(),CONFIG.REQUEST_TIMEOUT_MS);
-      try {
-        const response=await fetch(CONFIG.WORKER_API_URL,{ method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({action,session_id:getSessionId(),product_name:'GalviSight',current_stage:localStorage.getItem(STORAGE.CURRENT_STAGE)||'GalviSight',...payload}), signal:controller.signal });
-        const text=await response.text(); let data; try{ data=JSON.parse(text); }catch{ throw new Error('Backend returned non-JSON: '+text.slice(0,180)); }
-        if(!response.ok || data.success===false) { const err=new Error(data.error||data.message||('Request failed: '+response.status)); err.status=response.status; err.data=data; throw err; }
-        return data;
-      } finally { clearTimeout(timer); }
-    }
- 
-    function fixtureApi(action,payload) {
-      const q=[
-        {question_id:'gsight_urgency',question_text:'What happens if this issue is not addressed in the next 30–90 days?',type:'textarea'},
-        {question_id:'gsight_constraint',question_text:'What is the biggest constraint preventing action right now?',type:'select',options:['Time','Budget','Team','Clarity','Systems','Customers']}
-      ];
-      if(action==='evaluate_galvisight_readiness') return Promise.resolve({success:true,confidence:76,confidence_band:'medium',needs_followup:true,questions:q});
-      if(action==='save_galvisight_followup') return Promise.resolve({success:true,confidence:88,confidence_band:'medium',needs_followup:false});
-      if(action==='record_galvisight_payment_success') return Promise.resolve({success:true,payment_status:'paid'});
-      if(action==='get_or_generate_galvisight') return Promise.resolve({success:true,source:'fixture',result:fixtureResult()});
-      return Promise.resolve({success:true});
-    }
- 
-    function fixtureResult() {
-      return {
-        session_id:getSessionId(), product:'GalviSight', confidence:88, confidence_band:'medium',
-        meaning_summary:'The current findings indicate that the venture’s strongest near-term constraint is not a lack of ideas; it is the conversion of strategic intent into a repeatable customer and revenue operating rhythm.',
-        root_cause_hypothesis:'A likely root cause is fragmented prioritization: customer learning, offer refinement, and execution capacity are being managed as separate activities rather than one evidence-driven operating system.',
-        strategic_risks:[
-          {title:'Decision Delay',impact:'high',why_it_matters:'Important choices may continue to be revisited without enough new evidence.'},
-          {title:'Founder Capacity Strain',impact:'medium',why_it_matters:'Too many parallel priorities can weaken follow-through and learning speed.'},
-          {title:'Revenue Signal Ambiguity',impact:'high',why_it_matters:'Without a focused conversion loop, demand and pricing assumptions remain difficult to validate.'}
-        ],
-        opportunities:[
-          {title:'90-Day Decision System',impact:'high',effort:'medium',rationale:'Connect one customer signal, one revenue goal, and one operating cadence.'},
-          {title:'Offer Evidence Sprint',impact:'high',effort:'low',rationale:'Use structured conversations and conversion evidence to refine the offer.'},
-          {title:'Execution Capacity Reset',impact:'medium',effort:'low',rationale:'Reduce work in progress and assign explicit next decisions.'}
-        ],
-        urgency:'high',
-        recommended_actions:['Select one 90-day business-health outcome and the evidence required to confirm progress.','Convert the weakest GalviShot finding into one measurable operating experiment.','Define a weekly founder decision review using GalviScore/GalviSight evidence.','Continue to Chart Your GalviPath to sequence the care pathway.'],
-        assumptions:['The interpretation assumes the GalviShot findings and GalviScore categories stored for this session are current.','Market and customer context is limited to the structured inputs supplied.'],
-        next_step:'Chart Your GalviPath',
-        disclaimer:'Business guidance only; not legal, financial, medical, tax, or investment advice.'
-      };
-    }
- 
-    function renderQuestions(questions=[]) {
-      const host=$('#followup-questions'); host.innerHTML='';
-      questions.slice(0,3).forEach((q,index)=>{
-        const wrap=document.createElement('div'); wrap.className='question';
-        const label=document.createElement('label'); label.htmlFor='q_'+index; label.textContent=q.question_text; wrap.appendChild(label);
-        let input;
-        if(q.type==='select' && Array.isArray(q.options)) { input=document.createElement('select'); input.innerHTML='<option value="">Select one</option>'+q.options.map(o=>`<option>${escapeHtml(o)}</option>`).join(''); }
-        else { input=document.createElement('textarea'); input.placeholder='Your answer'; }
-        input.id='q_'+index; input.dataset.questionId=q.question_id; input.dataset.questionText=q.question_text; wrap.appendChild(input); host.appendChild(wrap);
-      });
-      $('#followup-panel').classList.toggle('hidden',questions.length===0);
-      if(questions.length) fireGalviEvent('clinical_followup_viewed',{question_count:Math.min(questions.length,3),confidence:state.readiness?.confidence});
-    }
- 
-    async function evaluateReadiness() {
-      $('#readiness-status').classList.remove('hidden'); $('#readiness-status').innerHTML='<span class="spinner"></span><div>GalviEngine is checking interpretation readiness…</div>';
-      try {
-        const data=await api('evaluate_galvisight_readiness'); state.readiness=data;
-        $('#readiness-status').innerHTML=`<div><strong>GalviSight readiness: ${Number(data.confidence||0)}%</strong><br>${data.needs_followup?'A few targeted answers will improve accuracy.':'The interpretation has enough structured evidence to proceed.'}</div>`;
-        renderQuestions(data.needs_followup ? (data.questions||[]) : []);
-      } catch(err) { $('#readiness-status').innerHTML='<div>Readiness could not be checked yet. You can retry or continue through the facilitated QA path.</div>'; fireGalviEvent('journey_error',{action:'evaluate_galvisight_readiness',message:err.message}); }
-    }
- 
-    async function submitFollowUp() {
-      const inputs=[...$('#followup-questions').querySelectorAll('textarea,select')];
-      const answers=inputs.map(i=>({question_id:i.dataset.questionId,question_text:i.dataset.questionText,answer:i.value.trim()})).filter(a=>a.answer);
-      if(!answers.length){ alert('Please answer at least one question.'); return; }
-      toggleBusy(true);
-      try {
-        const data=await api('save_galvisight_followup',{follow_up_answers:answers});
-        state.readiness=data; renderQuestions([]); $('#readiness-status').innerHTML=`<div><strong>Clinical follow-up saved.</strong><br>Updated confidence: ${Number(data.confidence||0)}%.</div>`;
-        fireGalviEvent('clinical_followup_submitted',{question_count:answers.length,confidence_after:data.confidence});
-      } catch(err) { showError('Your answers were not saved.',err); }
-      finally { toggleBusy(false); }
-    }
- 
-    function toggleBusy(busy) { state.busy=busy; ['#submit-followup','#stripe-cta','#fixture-result'].forEach(s=>{if($(s))$(s).disabled=busy;}); }
- 
-    function startStripe() {
-      localStorage.setItem(STORAGE.SESSION_ID,getSessionId()); setStage('GalviSight Paywall');
-      fireGalviEvent('stripe_click');
-      if(!CONFIG.GALVISIGHT_STRIPE_PAYMENT_LINK || CONFIG.GALVISIGHT_STRIPE_PAYMENT_LINK.includes('REPLACE_ME')) { showError('Stripe Payment Link is not configured.',new Error('Replace CONFIG.GALVISIGHT_STRIPE_PAYMENT_LINK.')); return; }
-      window.location.href=CONFIG.GALVISIGHT_STRIPE_PAYMENT_LINK;
-    }
- 
-    async function handleSuccessReturn() {
-      const params=new URLSearchParams(location.search); const stripeSessionId=params.get('stripe_session_id')||'';
-      showView('#view-processing'); setStage('GalviSight Processing');
-      try {
-        await api('record_galvisight_payment_success',{paid:'sight_success',stripe_session_id:stripeSessionId});
-        localStorage.setItem(STORAGE.PAYMENT,'paid'); fireGalviEvent('stripe_success',{stripe_session_id:stripeSessionId});
-        await loadResult({stripe_session_id:stripeSessionId});
-      } catch(err) { showError('Payment was returned, but the result could not be retrieved.',err); }
-    }
- 
-    async function loadResult(extra={}) {
-      showView('#view-processing'); setStage('GalviSight Processing');
-      try {
-        const data=await api('get_or_generate_galvisight',extra); const result=data.result||data;
-        localStorage.setItem(STORAGE.LAST_RESULT,JSON.stringify(result)); renderResult(result,data.source||'stored');
-      } catch(err) {
-        const cached=localStorage.getItem(STORAGE.LAST_RESULT);
-        if(cached && CONFIG.FIXTURE_MODE) { renderResult(JSON.parse(cached),'local_cache'); return; }
-        showError('GalviSight could not be generated or retrieved.',err);
-      }
-    }
- 
-    function renderResult(result,source='stored') {
-      const confidence=Math.max(0,Math.min(100,Number(result.confidence||0))); const band=safeText(result.confidence_band,confidence>=90?'high':confidence>=80?'medium':'low').toLowerCase();
-      $('#confidence-meter').style.width=confidence+'%'; $('#confidence-value').textContent=confidence+'%';
-      $('#confidence-band').textContent=band.toUpperCase()+' CONFIDENCE'; $('#confidence-band').className='badge '+band;
-      $('#meaning-summary').textContent=safeText(result.meaning_summary); $('#root-cause').textContent=safeText(result.root_cause_hypothesis);
-      $('#urgency').textContent=safeText(result.urgency,'unknown').toUpperCase(); $('#urgency').className='badge '+(result.urgency==='high'||result.urgency==='critical'?'low':result.urgency==='medium'?'medium':'high');
-      $('#result-meta').textContent=`Session ${getSessionId()} • Source: ${source} • Generated ${new Date().toLocaleString()}`;
-      const risks=Array.isArray(result.strategic_risks)?result.strategic_risks:[]; $('#risk-grid').innerHTML=risks.map(r=>`<article class="risk" data-impact="${escapeHtml(r.impact||'medium')}"><h3>${escapeHtml(r.title)}</h3><span class="badge">${escapeHtml(r.impact||'medium')} impact</span><p>${escapeHtml(r.why_it_matters)}</p></article>`).join('')||'<p>No risks supplied.</p>';
-      const opps=Array.isArray(result.opportunities)?result.opportunities:[]; $('#opp-grid').innerHTML=opps.map(o=>`<article class="opp"><h3>${escapeHtml(o.title)}</h3><p class="meta">Impact: ${escapeHtml(o.impact||'unknown')} • Effort: ${escapeHtml(o.effort||'unknown')}</p><p>${escapeHtml(o.rationale)}</p></article>`).join('')||'<p>No opportunities supplied.</p>';
-      const actions=Array.isArray(result.recommended_actions)?result.recommended_actions:[]; $('#actions-list').innerHTML=actions.map(a=>`<li>${escapeHtml(a)}</li>`).join('')||'<li>No actions supplied.</li>';
-      const assumptions=Array.isArray(result.assumptions)?result.assumptions:[]; $('#assumptions-block').classList.toggle('hidden',assumptions.length===0); $('#assumptions-list').innerHTML=assumptions.map(a=>`<li>${escapeHtml(a)}</li>`).join('');
-      showView('#view-result'); setStage('GalviSight Result'); fireGalviEvent('diagnostic_viewed',{confidence,urgency:result.urgency,source});
-    }
- 
-    function showError(message,err) { $('#error-message').textContent=message; $('#error-detail').textContent=`${err?.message||'Unknown error'} • Session ${getSessionId()}`; showView('#view-error'); setStage('GalviSight Error'); fireGalviEvent('journey_error',{action:state.lastAction?.action||'unknown',message:err?.message||'unknown'}); }
- 
-    async function showPaywall() { showView('#view-paywall'); setStage('GalviSight Paywall'); $('#session-label').textContent='Session: '+getSessionId(); fireGalviEvent('paywall_viewed'); await evaluateReadiness(); }
- 
-    $('#submit-followup').addEventListener('click',submitFollowUp);
-    $('#skip-followup').addEventListener('click',()=>{ renderQuestions([]); fireGalviEvent('clinical_followup_skipped'); });
-    $('#stripe-cta').addEventListener('click',startStripe);
-    $('#fixture-result').addEventListener('click',()=>{ if(!CONFIG.ALLOW_TEST_OVERRIDE){alert('QA override is disabled.');return;} localStorage.setItem(STORAGE.PAYMENT,'test_override'); loadResult({test_override:true}); });
-    $('#continue-path').addEventListener('click',()=>{ fireGalviEvent('continue_clicked',{destination:'galvipath'}); window.location.href=CONFIG.GALVIPATH_ROUTE; });
-    $('#book-clinic').addEventListener('click',routeToClinic);
-    document.querySelectorAll('[data-clinic-persona]').forEach(button=>{
-      button.addEventListener('click',()=>openClinicForPersona(button.dataset.clinicPersona,{manual:true}));
-    });
-    $('#close-clinic-dialog').addEventListener('click',()=>$('#clinic-dialog').close());
-    $('#print-result').addEventListener('click',()=>{ fireGalviEvent('galvisight_printed'); window.print(); });
-    $('#retry').addEventListener('click',()=>{ const last=state.lastAction; if(last) api(last.action,last.payload).then(()=>location.reload()).catch(e=>showError('Retry failed.',e)); else showPaywall(); });
-    $('#back-paywall').addEventListener('click',showPaywall);
- 
-    window.addEventListener('DOMContentLoaded',async()=>{
-      const missingClinicLinks=Object.values(CONFIG.GALVICLINIC_BOOKING_URLS).filter(url=>!clinicUrlIsConfigured(url)).length;
-      $('#qa-ribbon').textContent=(CONFIG.FIXTURE_MODE?'QA • FIXTURE MODE':'QA • BACKEND MODE')+(missingClinicLinks?` • ${missingClinicLinks} CLINIC LINK(S) NEEDED`:'');
-      const params=new URLSearchParams(location.search);
-      if(params.get('product')==='galvisight' && params.get('paid')==='sight_success') await handleSuccessReturn();
-      else if(location.hash==='#galvisight-result' && CONFIG.ALLOW_TEST_OVERRIDE) await loadResult({test_override:true});
-      else await showPaywall();
-    });
-  </script>
+function renderShot(r){
+  const s=shotContent(r); setMeter('#shot-meter',s.confidence);$('#shot-confidence').textContent=s.confidence+'%';
+  const host=$('#shot-findings');host.innerHTML='';
+  s.findings.forEach((f,i)=>{const d=document.createElement('div');d.className='finding';d.innerHTML=`<h3>${i+1}. ${f.title}</h3><p><strong>Evidence:</strong> ${f.evidence}</p><p>${f.meaning}</p>`;host.appendChild(d);});
+  listInto('#shot-actions',s.actions);listInto('#shot-risks',s.risks);
+}
+
+function sightContent(r){
+  const [lowName,lowScore]=r.lowest;const [secondName]=r.second;
+  const urgency=lowScore<40?'critical':lowScore<60?'high':'medium';
+  return {
+    confidence:Math.min(97,r.confidence+2),
+    meaning:`The findings indicate that the venture's near-term challenge is not simply a shortage of ideas or effort. The central issue is the interaction between ${lowName} and ${secondName}. Unless these systems are addressed together, additional activity may increase complexity without creating a repeatable operating rhythm.`,
+    root:`A likely root cause is fragmented prioritization: customer evidence, venture goals, and execution capacity are being managed as separate activities instead of one decision system. This hypothesis is based on the relative score pattern and should be confirmed through the next founder discussion.`,
+    urgency,
+    risks:[
+      {title:'Decision delay',level:'high',text:'Important choices may continue to be revisited without enough new evidence.'},
+      {title:'Founder capacity strain',level:urgency==='critical'?'high':'medium',text:'Parallel priorities can weaken follow-through and increase burnout risk.'},
+      {title:'Revenue and customer ambiguity',level:'high',text:'Weak evidence loops can make demand, pricing, and conversion assumptions difficult to validate.'},
+      {title:'Temporary fixes',level:'medium',text:'Treating symptoms independently may create improvement that does not hold.'}
+    ],
+    opportunities:[
+      {title:'90-Day Decision System',impact:'High',effort:'Medium',text:`Connect one ${lowName} outcome to weekly evidence and decisions.`},
+      {title:'Evidence Sprint',impact:'High',effort:'Low',text:`Run a focused experiment that strengthens ${secondName} while testing the primary hypothesis.`},
+      {title:'Execution Capacity Reset',impact:'Medium',effort:'Low',text:'Reduce work in progress and assign clear ownership to the next decisions.'},
+      {title:'Founder Health Review',impact:'High',effort:'Medium',text:'Use GalviClinic to turn the findings into a sequenced treatment plan.'}
+    ],
+    actions:[
+      `Select one 90-day ${lowName} outcome and define the evidence required to confirm progress.`,
+      `Turn the weakest GalviShot finding into one measurable operating experiment.`,
+      `Create a weekly founder decision review that links ${secondName} evidence to the next action.`,
+      'Use a facilitated review to confirm or reject the root-cause hypothesis before expanding the plan.'
+    ]
+  };
+}
+
+function renderSight(r){
+  const s=sightContent(r);setMeter('#sight-meter',s.confidence);$('#sight-confidence').textContent=s.confidence+'%';
+  $('#meaning-summary').textContent=s.meaning;$('#root-cause').textContent=s.root;
+  const urgency=$('#urgency');urgency.textContent=s.urgency.toUpperCase();urgency.className='badge '+(s.urgency==='critical'?'low':s.urgency==='high'?'medium':'high');
+  const rg=$('#risk-grid');rg.innerHTML='';s.risks.forEach(x=>{const d=document.createElement('div');d.className='risk '+x.level;d.innerHTML=`<h3>${x.title}</h3><p>${x.text}</p>`;rg.appendChild(d);});
+  const og=$('#opp-grid');og.innerHTML='';s.opportunities.forEach(x=>{const d=document.createElement('div');d.className='opp';d.innerHTML=`<h3>${x.title}</h3><p><strong>Impact:</strong> ${x.impact} • <strong>Effort:</strong> ${x.effort}</p><p>${x.text}</p>`;og.appendChild(d);});
+  listInto('#sight-actions',s.actions);
+}
+
+function getResults(){
+  const saved=JSON.parse(localStorage.getItem(STORAGE.RESULTS)||'null');
+  if(saved) return saved;
+  const data=JSON.parse(localStorage.getItem(STORAGE.TRIAGE)||'{}');
+  const r=calculateResults(data);localStorage.setItem(STORAGE.RESULTS,JSON.stringify(r));return r;
+}
+
+async function route(name){
+  try{
+    if(name==='welcome'){showView('welcome');return;}
+    if(name==='triage'){showView('triage');restoreTriageDraft();return;}
+    const r=getResults();
+    if(name==='vitals'){renderVitals(r);showView('vitals');return;}
+    if(name==='score'){renderScore(r);showView('score');return;}
+    if(name==='shot'){renderShot(r);showView('shot');return;}
+    if(name==='sight'){renderSight(r);showView('sight');return;}
+  }catch(err){
+    console.error(err);$('#error-message').textContent='The QA baseline encountered an error.';$('#error-detail').textContent=err.message;showView('error');
+  }
+}
+
+function bindEvents(){
+  $('#start-triage').addEventListener('click',()=>route('triage'));
+  $('#resume-session').addEventListener('click',()=>{
+    const stage=localStorage.getItem(STORAGE.CURRENT_STAGE)||'triage';
+    route(viewIds.includes(stage)?stage:'triage');
+  });
+  $('#save-triage').addEventListener('click',()=>{saveTriageDraft();alert('QA progress saved in this browser.');});
+  $('#triage-form').addEventListener('submit',e=>{
+    e.preventDefault();if(!validateTriage())return;
+    const data=saveTriageDraft();const r=calculateResults(data);
+    localStorage.setItem(STORAGE.RESULTS,JSON.stringify(r));route('vitals');
+  });
+  $$('[data-route]').forEach(btn=>btn.addEventListener('click',()=>route(btn.dataset.route)));
+  $('#print-result').addEventListener('click',()=>window.print());
+  $('#restart').addEventListener('click',()=>{
+    Object.values(STORAGE).forEach(k=>localStorage.removeItem(k));
+    location.hash='';location.reload();
+  });
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  renderTriageQuestions();bindEvents();getSessionId();
+  const hash=location.hash.replace('#','');
+  const allowed=['welcome','triage','vitals','score','shot','sight'];
+  if(allowed.includes(hash) && (hash==='welcome'||hash==='triage'||localStorage.getItem(STORAGE.RESULTS))) route(hash);
+  else route('welcome');
+});
+</script>
 </body>
 </html>
+
