@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GalviCare Day 1 Foundation Test</title>
+<style>
+body{font-family:Arial,sans-serif;max-width:850px;margin:32px auto;padding:0 18px;color:#17212b}
+button{padding:12px 16px;margin:6px;border:0;border-radius:8px;background:#1f4e78;color:white;font-weight:700;cursor:pointer}
+pre{background:#f1f3f5;padding:16px;border-radius:10px;white-space:pre-wrap;overflow-wrap:anywhere}
+.ok{border-left:6px solid #2e7d32}.bad{border-left:6px solid #b42318}
+</style>
+</head>
+<body>
+<h1>GalviCare 0.5 — Day 1 Foundation Test</h1>
+<p>This temporary page proves browser → Worker → D1 without Make or OpenAI.</p>
+<button id="health">1. Health Check</button>
+<button id="session">2. Create/Resume Session</button>
+<button id="event">3. Write Event</button>
+<button id="fixture">4. Get Fixture</button>
+<pre id="output">Ready.</pre>
+<script>
+const WORKER_API_URL='https://REPLACE-WITH-QA-WORKER.workers.dev/api';
+const KEY='galvicare_day1_qa_session_id';
+const out=document.querySelector('#output');
+
+async function call(action,payload={}){
+  out.className='';
+  out.textContent='Calling '+action+'...';
+  try{
+    const r=await fetch(WORKER_API_URL,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action,...payload})
+    });
+    const text=await r.text();
+    let data;
+    try{
+      data=JSON.parse(text);
+    }catch{
+      throw new Error('Non-JSON response: '+text.slice(0,250));
+    }
+    if(!r.ok||data.success===false){
+      throw new Error(data.message||data.error||('HTTP '+r.status));
+    }
+    out.className='ok';
+    out.textContent=JSON.stringify(data,null,2);
+    return data;
+  }catch(e){
+    out.className='bad';
+    out.textContent=e.stack||e.message;
+    throw e;
+  }
+}
+
+document.querySelector('#health').onclick=()=>call('health_check');
+
+document.querySelector('#session').onclick=async()=>{
+  const saved=localStorage.getItem(KEY);
+  const d=await call('create_or_resume_session',{
+    session_id:saved||undefined,
+    current_stage:'Day 1 Browser QA',
+    source:'day1_test_page'
+  });
+  localStorage.setItem(KEY,d.session_id);
+};
+
+document.querySelector('#event').onclick=()=>call('journey_event',{
+  session_id:localStorage.getItem(KEY),
+  event_name:'day1_browser_event',
+  product:'GalviCare',
+  current_stage:'Day 1 Browser QA',
+  event_data:{make_used:false,openai_used:false}
+});
+
+document.querySelector('#fixture').onclick=()=>call('get_fixture_result',{
+  session_id:localStorage.getItem(KEY),
+  product:'GalviVitals'
+});
+</script>
+</body>
+</html>
