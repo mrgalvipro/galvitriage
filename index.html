@@ -72,7 +72,7 @@
     .clinic-option span { color:var(--muted); font-size:.9rem; line-height:1.4; }
     .clinic-dialog-actions { display:flex; justify-content:flex-end; margin-top:12px; }
     @media (max-width:720px) { .clinic-options { grid-template-columns:1fr; } }
- 
+
   </style>
 </head>
 <body>
@@ -147,7 +147,7 @@
       </div>
     </section>
   </main>
- 
+
   <dialog id="clinic-dialog" class="clinic-dialog" aria-labelledby="clinic-dialog-title">
     <div class="clinic-dialog-inner">
       <p class="eyebrow">GALVICLINIC™</p>
@@ -173,14 +173,13 @@
       </div>
     </div>
   </dialog>
- 
+
   <div id="qa-ribbon" class="qa-ribbon">QA MODE</div>
  
   <script>
     'use strict';
     const CONFIG = Object.freeze({
       WORKER_API_URL: 'https://YOUR-WORKER.workers.dev',
-      GALVITRIAGE_ROUTE: './galvitriage/',
       GALVISIGHT_STRIPE_PAYMENT_LINK: 'https://buy.stripe.com/test_eVq3cw3R63YT6O6ahE53O03',
       GALVIPATH_ROUTE: 'https://YOUR-GALVICARE-APP.example/#galvipath',
       GALVICLINIC_BOOKING_URLS: Object.freeze({
@@ -214,7 +213,7 @@
     function safeText(value,fallback='Not available') { return (value===null||value===undefined||String(value).trim()==='') ? fallback : String(value); }
     function escapeHtml(value) { const d=document.createElement('div'); d.textContent=safeText(value,''); return d.innerHTML; }
  
- 
+
     function normalizePersona(value='') {
       const v=String(value).trim().toLowerCase();
       if(!v) return '';
@@ -223,7 +222,7 @@
       if(['founder','startup','start-up','entrepreneur','venture','pre-seed','seed'].some(x=>v.includes(x))) return 'founder';
       return '';
     }
- 
+
     function detectClinicPersona() {
       const params=new URLSearchParams(location.search);
       const candidates=[
@@ -243,11 +242,11 @@
       }
       return '';
     }
- 
+
     function clinicUrlIsConfigured(url='') {
       return /^https:\/\/calendly\.com\//i.test(url) && !/PASTE_|REPLACE_ME/i.test(url);
     }
- 
+
     function openClinicForPersona(persona,{manual=false}={}) {
       const url=CONFIG.GALVICLINIC_BOOKING_URLS[persona];
       if(!clinicUrlIsConfigured(url)) {
@@ -261,7 +260,7 @@
       fireGalviEvent('clinic_booking_clicked',{source_product:'galvisight',clinic_persona:persona,selection_method:manual?'manual':'automatic'});
       window.location.href=url;
     }
- 
+
     function routeToClinic() {
       const persona=detectClinicPersona();
       if(persona && clinicUrlIsConfigured(CONFIG.GALVICLINIC_BOOKING_URLS[persona])) {
@@ -272,7 +271,7 @@
       $('#clinic-dialog').showModal();
       fireGalviEvent('clinic_persona_selector_viewed',{detected_persona:persona||'unknown'});
     }
- 
+
     function fireGalviEvent(eventName,params={}) {
       const payload={ event_name:eventName, session_id:getSessionId(), product_name:'galvisight', current_stage:localStorage.getItem(STORAGE.CURRENT_STAGE)||'', ...params };
       if(typeof window.gtag==='function') window.gtag('event',eventName,payload);
@@ -429,21 +428,9 @@
       const missingClinicLinks=Object.values(CONFIG.GALVICLINIC_BOOKING_URLS).filter(url=>!clinicUrlIsConfigured(url)).length;
       $('#qa-ribbon').textContent=(CONFIG.FIXTURE_MODE?'QA • FIXTURE MODE':'QA • BACKEND MODE')+(missingClinicLinks?` • ${missingClinicLinks} CLINIC LINK(S) NEEDED`:'');
       const params=new URLSearchParams(location.search);
-      const explicitGalviSight =
-        params.get('product') === 'galvisight' ||
-        location.hash === '#galvisight' ||
-        location.hash === '#galvisight-result';
- 
-      if(params.get('product')==='galvisight' && params.get('paid')==='sight_success') {
-        await handleSuccessReturn();
-      } else if(location.hash==='#galvisight-result' && CONFIG.ALLOW_TEST_OVERRIDE) {
-        await loadResult({test_override:true});
-      } else if(explicitGalviSight) {
-        await showPaywall();
-      } else {
-        // Default entry from the GalviCare landing page must begin at GalviTriage.
-        window.location.replace(CONFIG.GALVITRIAGE_ROUTE);
-      }
+      if(params.get('product')==='galvisight' && params.get('paid')==='sight_success') await handleSuccessReturn();
+      else if(location.hash==='#galvisight-result' && CONFIG.ALLOW_TEST_OVERRIDE) await loadResult({test_override:true});
+      else await showPaywall();
     });
   </script>
 </body>
