@@ -1105,10 +1105,18 @@ async function evaluateGalviShot(db, sessionId) {
   const eligibleCount = findingLibrary().filter(f => f.eligible(score.dimension_scores)).length;
   return { success:true, status:eligibleCount ? 'eligible' : 'facilitator_review', session_id:sessionId, confidence:score.confidence, confidence_language:score.confidence >= 90 ? 'Strong evidence is available in the current record.' : 'Sufficient evidence is available with stated assumptions.', rules_version:GALVISHOT_RULES_VERSION };
 }
+function stableGalviShotEvidenceLinkId(sessionId, findingCode, sourceField, rulesVersion) {
+  return `gshot_ev_${[sessionId, findingCode, sourceField, rulesVersion].map(value => encodeURIComponent(String(value))).join('__')}`;
+}
 async function writeGalviShot(db, sessionId, result) {
   const ts = nowIso();
   await dbRun(db, `INSERT INTO product_results(result_id,session_id,product,status,confidence,confidence_band,result_json,generation_source,rules_version,content_version,generated_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product) DO NOTHING`, `result_${sessionId}_GalviShot`, sessionId, 'GalviShot', result.status, result.confidence, result.confidence_band, JSON.stringify(result), 'rules', GALVISHOT_RULES_VERSION, GALVISHOT_CONTENT_VERSION, ts, ts);
-  for (const f of result.findings) await dbRun(db, `INSERT INTO clinical_findings(finding_id,session_id,product,finding_code,finding_text,evidence_ids_json,severity,confidence,confidence_band,status,rules_version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,finding_code) DO UPDATE SET finding_text=excluded.finding_text,evidence_ids_json=excluded.evidence_ids_json,confidence=excluded.confidence,confidence_band=excluded.confidence_band,updated_at=excluded.updated_at`, `finding_${sessionId}_${f.finding_code}`, sessionId, 'GalviShot', f.finding_code, f.finding_text, JSON.stringify(f.evidence.map(e=>e.source_id)), f.domain, f.confidence, f.confidence_language, 'supported', GALVISHOT_RULES_VERSION, ts, ts);
+  for (const f of result.findings) {
+    await dbRun(db, `INSERT INTO clinical_findings(finding_id,session_id,product,finding_code,finding_text,evidence_ids_json,severity,confidence,confidence_band,status,rules_version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,finding_code) DO UPDATE SET finding_text=excluded.finding_text,evidence_ids_json=excluded.evidence_ids_json,confidence=excluded.confidence,confidence_band=excluded.confidence_band,updated_at=excluded.updated_at`, `finding_${sessionId}_${f.finding_code}`, sessionId, 'GalviShot', f.finding_code, f.finding_text, JSON.stringify(f.evidence.map(e=>e.source_id)), f.domain, f.confidence, f.confidence_language, 'supported', GALVISHOT_RULES_VERSION, ts, ts);
+    for (const evidence of f.evidence || []) {
+      await dbRun(db, `INSERT INTO galvishot_evidence_links(evidence_link_id,session_id,product,finding_code,source_type,source_field,display_value,used_for,rules_version,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,finding_code,source_field,rules_version) DO UPDATE SET source_type=excluded.source_type,display_value=excluded.display_value,used_for=excluded.used_for`, stableGalviShotEvidenceLinkId(sessionId, f.finding_code, evidence.source_field, GALVISHOT_RULES_VERSION), sessionId, 'GalviShot', f.finding_code, evidence.source_type, evidence.source_field, evidence.display_value, evidence.used_for, GALVISHOT_RULES_VERSION, ts);
+    }
+  }
 }
 async function handleDay3GalviShotAction(env, payload, action) {
   const db = requireDb(env); const sid = normalizeSessionId(safe(payload, 'session_id') || safe(payload, 'session.session_id'));
