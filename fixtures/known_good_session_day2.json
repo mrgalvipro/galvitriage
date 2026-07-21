@@ -1,0 +1,52 @@
+{
+  "session_id": "fixture_known_good_day2",
+  "source_system": "Airtable GalviVault 0.5",
+  "founder": {
+    "first_name": "Known",
+    "last_name": "Good",
+    "email": "known-good-day2@example.test",
+    "consent_status": "accepted"
+  },
+  "venture": {
+    "venture_name": "GalviTest",
+    "organization_stage": "Idea",
+    "organization_type": "Startup",
+    "industry": "tech",
+    "revenue_range": "Pre-Revenue",
+    "team_size": "Just me",
+    "highest_impact_area": "Customer Growth & Sales",
+    "biggest_challenge": "Customer Acquisition",
+    "primary_goal": "Digital Product Development",
+    "primary_challenge": "Customer Journey Automation via Digital Product Development"
+  },
+  "answers": {
+    "q01_business_clarity": 1,
+    "q02_stage_signal": 2,
+    "q03_real_problem": 1,
+    "q04_ideal_customer": 2,
+    "q05_attract_customers": 1,
+    "q06_customer_conversations": 2,
+    "q07_predictable_revenue": 1,
+    "q08_revenue_growth_confidence": 2,
+    "q09_revenue_driver_clarity": 1,
+    "q10_customer_satisfaction": 2,
+    "q11_feedback_improvement": 1,
+    "q12_organized_operations": 2,
+    "q13_founder_dependency": 1,
+    "q14_systems_support_growth": 2,
+    "q15_technology_effectiveness": 1,
+    "q16_ai_readiness": 2,
+    "q17_leadership_confidence": 1,
+    "q18_vision_clarity": 2,
+    "q19_decision_information": 1,
+    "q20_execution_action": 2
+  },
+  "previous_result": {
+    "total_score": 30,
+    "health_band": "Critical",
+    "lowest_domain": "revenue_health",
+    "confidence_percent": 100,
+    "scoring_version": "galvitriage_0_5_final_worker_ga4_clarity_v2_fetch_required"
+  },
+  "migration_use": "Known-good comparison only. Do not treat the old formula as automatically authoritative."
+}
