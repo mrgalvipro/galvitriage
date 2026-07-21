@@ -1,0 +1,43 @@
+name: GalviCare QA Stabilization
+
+on:
+  pull_request:
+    branches:
+      - qa-revamped-galvicare-0-5
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+
+permissions:
+  contents: read
+
+jobs:
+  stabilization:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Run Worker syntax and QA tests
+        run: npm run stabilization:gate
+
+      - name: Reject committed secret files
+        shell: bash
+        run: |
+          if find . -type f \
+            \( -name ".env" -o -name ".dev.vars" -o -name "*.pem" -o -name "*.key" \) \
+            -not -path "./node_modules/*" | grep -q .; then
+            echo "Sensitive configuration file detected."
+            exit 1
+          fi
