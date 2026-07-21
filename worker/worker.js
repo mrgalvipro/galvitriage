@@ -157,7 +157,14 @@ async function handleDay2Action(env, payload, action) {
   return jsonResponse({ success: true, action, session_id: sid, product, stored: false, result }, 200, env);
 }
 
+const GALVISHOT_RULES_VERSION = 'galvishot_rules_v0_5_1';
+const GALVISHOT_CONTENT_VERSION = 'galvishot_content_v0_5_1';
+
 const GALVISHOT_ACTIONS = new Set([
+  'evaluate_galvishot',
+  'save_galvishot_followup',
+  'get_or_create_galvishot',
+  'get_galvishot',
   'generate_galvishot'
 ]);
 
@@ -1029,6 +1036,93 @@ async function upsertHubSpotContact(
  * actions to Make before the request
  * reaches GalviTriage validation.
  */
+
+function galviShotConfidence(scoreResult, responseCount, followupCount = 0) {
+  const scores = scoreResult.dimension_scores || {};
+  const completeness = Math.round((responseCount / TRIAGE_QUESTIONS.length) * 100);
+  const spread = Object.values(scores).filter(v => Number.isFinite(v)).length;
+  return Math.max(0, Math.min(100, Math.round(completeness - (spread < 8 ? 20 : 0) + Math.min(10, followupCount * 5))));
+}
+
+function isQaEnvironment(env) { return !['production', 'prod'].includes(String(env.ENVIRONMENT || env.APP_ENV || 'qa').toLowerCase()); }
+function hasQaOverride(env, payload) {
+  const token = safe(payload, 'payload.qa_override_token') || safe(payload, 'qa_override_token');
+  if (!isQaEnvironment(env) || !env.GALVISHOT_QA_OVERRIDE_TOKEN || !required(token)) return false;
+  return String(token) === String(env.GALVISHOT_QA_OVERRIDE_TOKEN);
+}
+async function hasGalviShotEntitlement(db, sessionId) {
+  const entitlement = await dbFirst(db, `SELECT * FROM entitlements WHERE session_id=? AND product=?`, sessionId, 'GalviShot');
+  if (entitlement && ['active', 'paid', 'granted', 'test_override'].includes(String(entitlement.entitlement_status || '').toLowerCase())) return true;
+  const payment = await dbFirst(db, `SELECT * FROM payments WHERE session_id=? AND product=?`, sessionId, 'GalviShot');
+  return Boolean(payment && ['paid', 'succeeded', 'complete'].includes(String(payment.payment_status || '').toLowerCase()));
+}
+async function galviShotFollowups(db, sessionId) {
+  const rows = await db.prepare(`SELECT question_id,question_text,answer,confidence_impact FROM clinical_followups WHERE session_id=? AND product=? ORDER BY question_id`).bind(sessionId, 'GalviShot').all();
+  return rows.results || [];
+}
+async function storedGalviShot(db, sessionId) {
+  return dbFirst(db, `SELECT * FROM product_results WHERE session_id=? AND product=? AND rules_version=?`, sessionId, 'GalviShot', GALVISHOT_RULES_VERSION);
+}
+function findingLibrary() { return [
+  { code:'PRODUCT_MARKET_EVIDENCE_CONTRADICTION', family:'Cross-dimension contradiction', domain:'customer', priority:5, eligible:s=>s.product>=70&&(s.customer<55||s.revenue<55), suppress:['PRODUCT_VALIDATION_GAP'], title:'Product strength is ahead of customer or revenue evidence.', text:'The current record shows a stronger product signal than the customer or revenue evidence around it.', risk:'Build effort may continue ahead of proof that the offer is repeatable.', action:'Rebalance the next sprint toward customer and revenue evidence before adding product scope.' },
+  { code:'BROAD_FOCUS_DILUTION', family:'Broad weakness', domain:'strategy', priority:10, eligible:s=>Object.values(s).filter(v=>v<60).length>=3, title:'Multiple constraints are competing for attention.', text:'The current assessment has at least three dimensions below 60, so the useful next step is sequencing rather than treating every signal at once.', risk:'Trying to improve every weak area at the same time may dilute execution.', action:'Choose one 90-day constraint and sequence two evidence sprints behind it.' },
+  { code:'REVENUE_SIGNAL_WEAK', family:'Revenue weakness', domain:'revenue', priority:20, eligible:s=>s.revenue<55, title:'Revenue evidence is the clearest weak signal.', text:'The current assessment shows limited evidence that revenue or funding is predictable and understood.', risk:'Growth activity may increase without a clear conversion or funding signal.', action:'Define the conversion, funding, or retention signal that would prove improvement.' },
+  { code:'CUSTOMER_EVIDENCE_GAP', family:'Customer evidence', domain:'customer', priority:30, eligible:s=>s.customer<55, title:'Customer evidence needs tightening.', text:'The current record shows limited evidence about the ideal customer and satisfaction signal.', risk:'Priorities may be based on assumed demand rather than observed customer evidence.', action:'Run a focused customer signal test with a defined ideal customer profile.' },
+  { code:'PRODUCT_VALIDATION_GAP', family:'Product validation', domain:'product', priority:40, eligible:s=>s.product<55, title:'Product validation evidence is thin.', text:'The current assessment shows limited evidence that feedback is consistently improving the offer.', risk:'The offer may be refined without enough proof of customer outcome.', action:'Define one proof-of-value test tied to customer feedback.' },
+  { code:'LEADERSHIP_CAPACITY_STRAIN', family:'Leadership capacity', domain:'leadership', priority:50, eligible:s=>s.leadership<55, title:'Leadership capacity is a material constraint.', text:'The current assessment shows strain in leadership confidence, decision information, or follow-through.', risk:'Decision load may slow action if it remains unmanaged.', action:'Reduce decision load by naming the next three owner-level decisions and review cadence.' },
+  { code:'OPERATIONS_FRAGILITY', family:'Operations', domain:'technology_operations', priority:60, eligible:s=>s.technology_operations<55, title:'Operating systems may not be supporting execution.', text:'The current record shows limited evidence that operations and technology are supporting growth consistently.', risk:'Manual or unclear workflows may make improvements harder to sustain.', action:'Identify the process most likely to break and standardize its critical steps.' },
+  { code:'PROBLEM_CLARITY_GAP', family:'Problem clarity', domain:'problem', priority:70, eligible:s=>s.problem<55, title:'Problem clarity is not yet strong enough.', text:'The current assessment shows limited evidence that the customer problem is clearly proven.', risk:'The venture may spend effort on solutions before urgency is established.', action:'Write the customer problem statement and test urgency with direct evidence.' },
+  { code:'BUSINESS_MODEL_STRAIN', family:'Business model', domain:'business_model', priority:80, eligible:s=>s.business_model<55, title:'Business model clarity needs focus.', text:'The current assessment shows limited clarity around model, stage, or founder dependency.', risk:'Planning may rely on assumptions that have not been made explicit.', action:'Name the business model assumption that most needs validation.' },
+  { code:'DISTRIBUTION_BOTTLENECK', family:'Distribution', domain:'distribution', priority:90, eligible:s=>s.distribution<55, title:'Distribution repeatability is constrained.', text:'The current assessment shows limited evidence of consistently attracting or learning from customers.', risk:'Demand generation may remain episodic rather than repeatable.', action:'Test one channel signal and connect it to direct customer conversations.' }
+]; }
+function buildEvidenceForFinding(f, scores) {
+  const dimScores = Object.entries(scores).sort((a,b)=>a[1]-b[1]);
+  const direct = dimScores.find(([dim]) => dim === f.domain) || dimScores[0];
+  const ids = direct ? [`evidence_${direct[0]}`] : ['evidence_galviscore'];
+  return ids.map(source_id => ({ source_id, source_type:'assessment_response', source_field:direct ? direct[0] : 'dimension_scores', display_value:direct ? `${dimensionLabel(direct[0])}: ${direct[1]}/100` : 'Stored GalviScore dimension scores', used_for:f.code }));
+}
+function composeGalviShot(scoreResult, followups) {
+  const scores = scoreResult.dimension_scores || {};
+  let candidates = findingLibrary().filter(f => f.eligible(scores)).sort((a,b)=>a.priority-b.priority || a.code.localeCompare(b.code));
+  const suppressed = new Set(candidates.flatMap(f => f.suppress || []));
+  candidates = candidates.filter(f => !suppressed.has(f.code));
+  if (!candidates.length) candidates = [{ code:'FACILITATOR_REVIEW', family:'Facilitator review', domain:'review', priority:999, title:'A facilitator should review this record.', text:'The stored evidence does not support a deterministic finding set without human review.', risk:'A generic automated interpretation could overstate the record.', action:'Review the Day 2 record with a facilitator before generating paid findings.' }];
+  const selected = [];
+  const usedDomains = new Set();
+  for (const f of candidates) { if (selected.length >= (scoreResult.confidence >= 90 ? 5 : 3)) break; if (!usedDomains.has(f.domain) || selected.length < 3) { selected.push(f); usedDomains.add(f.domain); } }
+  const findings = selected.slice(0, scoreResult.confidence >= 90 ? 5 : 3).map((f, i) => ({ rank:i+1, finding_code:f.code, family:f.family, domain:f.domain, title:f.title, finding_text:f.text, evidence:buildEvidenceForFinding(f, scores), confidence:scoreResult.confidence, confidence_language:scoreResult.confidence >= 90 ? 'strong evidence in the current record' : 'sufficient evidence with stated assumptions', action:f.action, risk:f.risk }));
+  return { session_id:scoreResult.session_id, product:'GalviShot', status:'ok', rules_version:GALVISHOT_RULES_VERSION, content_version:GALVISHOT_CONTENT_VERSION, generation_source:'rules', confidence:scoreResult.confidence, confidence_band:scoreResult.confidence >= 90 ? 'high' : 'standard', executive_summary:`The strongest pattern in the current GalviCare record is ${findings[0].title.toLowerCase()} This GalviShot uses only stored Day 2 evidence${followups.length ? ' and approved follow-up answers' : ''}, so each finding is constrained to what the record supports.`, findings, strategic_risks:[...new Set(findings.map(f=>f.risk))].slice(0,3), recommended_actions:[...new Set(findings.map(f=>f.action))].slice(0,3), assumptions:['This result is based on the stored Day 2 assessment and any saved GalviShot follow-up answers.', 'No revenue amounts, market conditions, or founder biography are inferred beyond the stored record.'], next_step:{ label:'Continue to GalviSight', route:'GalviSight Handoff' } };
+}
+async function evaluateGalviShot(db, sessionId) {
+  const triage = await getStoredTriage(db, sessionId);
+  if (!triage) return { success:false, status:'not_found', message:'Complete GalviTriage before requesting GalviShot.', session_id:sessionId };
+  const resultPayload = { session:{ session_id:sessionId }, scored_answers:triage.answers };
+  const score = calculateDeterministicScore(resultPayload);
+  const followups = await galviShotFollowups(db, sessionId);
+  score.confidence = galviShotConfidence(score, Object.keys(triage.answers).length, followups.filter(f=>required(f.answer)).length);
+  if (score.confidence < 60) return { success:true, status:'needs_followup', session_id:sessionId, confidence:score.confidence, confidence_language:'More evidence is needed before GalviShot can produce a paid finding set.', followup_questions:[{ question_code:'PRIMARY_CONSTRAINT_CLARITY', question_text:'What is the clearest business constraint you want GalviShot to interpret?' }] };
+  if (score.confidence < 80) return { success:true, status:'needs_followup', session_id:sessionId, confidence:score.confidence, confidence_language:'The record is close but needs targeted follow-up before final GalviShot findings.', followup_questions:[{ question_code:'EVIDENCE_PRIORITY', question_text:'Which evidence signal is strongest right now: customers, revenue, product feedback, operations, or leadership capacity?' }] };
+  const eligibleCount = findingLibrary().filter(f => f.eligible(score.dimension_scores)).length;
+  return { success:true, status:eligibleCount ? 'eligible' : 'facilitator_review', session_id:sessionId, confidence:score.confidence, confidence_language:score.confidence >= 90 ? 'Strong evidence is available in the current record.' : 'Sufficient evidence is available with stated assumptions.', rules_version:GALVISHOT_RULES_VERSION };
+}
+async function writeGalviShot(db, sessionId, result) {
+  const ts = nowIso();
+  await dbRun(db, `INSERT INTO product_results(result_id,session_id,product,status,confidence,confidence_band,result_json,generation_source,rules_version,content_version,generated_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product) DO NOTHING`, `result_${sessionId}_GalviShot`, sessionId, 'GalviShot', result.status, result.confidence, result.confidence_band, JSON.stringify(result), 'rules', GALVISHOT_RULES_VERSION, GALVISHOT_CONTENT_VERSION, ts, ts);
+  for (const f of result.findings) await dbRun(db, `INSERT INTO clinical_findings(finding_id,session_id,product,finding_code,finding_text,evidence_ids_json,severity,confidence,confidence_band,status,rules_version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,finding_code) DO UPDATE SET finding_text=excluded.finding_text,evidence_ids_json=excluded.evidence_ids_json,confidence=excluded.confidence,confidence_band=excluded.confidence_band,updated_at=excluded.updated_at`, `finding_${sessionId}_${f.finding_code}`, sessionId, 'GalviShot', f.finding_code, f.finding_text, JSON.stringify(f.evidence.map(e=>e.source_id)), f.domain, f.confidence, f.confidence_language, 'supported', GALVISHOT_RULES_VERSION, ts, ts);
+}
+async function handleDay3GalviShotAction(env, payload, action) {
+  const db = requireDb(env); const sid = normalizeSessionId(safe(payload, 'session_id') || safe(payload, 'session.session_id'));
+  if (!required(sid)) return jsonResponse({ success:false, action, status:'error', message:'Missing session_id' }, 400, env);
+  if (action === 'get_galvishot') { const stored = await storedGalviShot(db, sid); if (!stored) return jsonResponse({ success:false, action, status:'not_found', session_id:sid }, 404, env); return jsonResponse({ success:true, action, status:'ok', stored:true, session_id:sid, result:JSON.parse(stored.result_json) }, 200, env); }
+  if (action === 'evaluate_galvishot') return jsonResponse({ action, ...(await evaluateGalviShot(db, sid)) }, 200, env);
+  if (action === 'save_galvishot_followup') { const answers = safe(payload, 'payload.answers', []); if (!Array.isArray(answers)) return jsonResponse({ success:false, action, status:'error', message:'answers must be an array' }, 400, env); const ts = nowIso(); for (const a of answers.slice(0, 5)) { const code = String(a.question_code || a.question_id || '').slice(0,64); const text = String(a.question_text || code).slice(0,500); const ans = String(a.answer_text || a.answer || '').trim().slice(0,1000); if (required(code) && required(ans)) await dbRun(db, `INSERT INTO clinical_followups(followup_id,session_id,current_stage,product,question_id,question_text,answer,confidence_impact,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,question_id) DO UPDATE SET question_text=excluded.question_text,answer=excluded.answer,confidence_impact=excluded.confidence_impact,updated_at=excluded.updated_at`, `followup_${sid}_${code}`, sid, 'GalviShot', 'GalviShot', code, text, ans, Number(a.confidence_impact || 5), ts, ts); } return jsonResponse({ success:true, action, status:'ok', session_id:sid, evaluation:await evaluateGalviShot(db, sid) }, 200, env); }
+  const entitled = await hasGalviShotEntitlement(db, sid) || hasQaOverride(env, payload);
+  if (!entitled) return jsonResponse({ success:false, action, status:'locked', message:'GalviShot is locked until server-side entitlement is verified.', session_id:sid, payment_required:true }, 402, env);
+  const stored = await storedGalviShot(db, sid); if (stored) return jsonResponse({ success:true, action, status:'ok', stored:true, session_id:sid, result:JSON.parse(stored.result_json) }, 200, env);
+  const evaluation = await evaluateGalviShot(db, sid); if (!evaluation.success || evaluation.status !== 'eligible') return jsonResponse({ action, ...evaluation }, evaluation.status === 'not_found' ? 404 : 200, env);
+  const triage = await getStoredTriage(db, sid); const score = calculateDeterministicScore({ session:{ session_id:sid }, scored_answers:triage.answers }); const followups = await galviShotFollowups(db, sid); score.confidence = galviShotConfidence(score, Object.keys(triage.answers).length, followups.filter(f=>required(f.answer)).length); const result = composeGalviShot(score, followups); await writeGalviShot(db, sid, result); return jsonResponse({ success:true, action, status:'ok', stored:false, session_id:sid, result }, 200, env);
+}
+
 async function handleDiagnosticAction(
   env,
   payload,
@@ -1222,6 +1316,10 @@ export default {
 
       if (pathname === '/api' && DAY2_ACTIONS.has(action)) {
         return await handleDay2Action(env, payload, action);
+      }
+
+      if (pathname === '/api' && GALVISHOT_ACTIONS.has(action)) {
+        return await handleDay3GalviShotAction(env, payload, action);
       }
 
       /*

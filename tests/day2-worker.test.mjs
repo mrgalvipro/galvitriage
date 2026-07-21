@@ -12,7 +12,7 @@ class MockStmt {
   async all() { return { results: this.db.all(this.sql, this.params) }; }
 }
 class MockD1 {
-  constructor() { this.sessions = new Map(); this.responses = new Map(); this.results = new Map(); this.events = []; this.founders = new Map(); this.ventures = new Map(); }
+  constructor() { this.sessions = new Map(); this.responses = new Map(); this.results = new Map(); this.events = []; this.findings = new Map(); this.followups = new Map(); this.entitlements = new Map(); this.payments = new Map(); this.founders = new Map(); this.ventures = new Map(); }
   prepare(sql) { return new MockStmt(this, sql); }
   async run(sql, p) {
     if (sql.includes('INSERT INTO sessions')) { this.sessions.set(p[0], { session_id:p[0], current_stage:p[1], status:p[2], source:p[3], utm_source:p[4], utm_campaign:p[5], created_at:p[6], updated_at:p[7], last_seen_at:p[8] }); return { success:true }; }
@@ -20,16 +20,21 @@ class MockD1 {
     if (sql.includes('INSERT INTO ventures')) { this.ventures.set(p[0], { venture_id:p[0], session_id:p[1], founder_id:p[2], venture_name:p[3] }); return { success:true }; }
     if (sql.includes('INSERT INTO assessment_responses')) { this.responses.set(`${p[1]}:${p[2]}:${p[3]}`, { response_id:p[0], session_id:p[1], product:p[2], question_id:p[3], dimension:p[4], answer_number:p[5], rules_version:p[6] }); return { success:true }; }
     if (sql.includes('INSERT INTO journey_events')) { this.events.push({ event_id:p[0], session_id:p[1], event_name:p[2], product:p[3], current_stage:p[4], event_json:p[5], created_at:p[6] }); return { success:true }; }
-    if (sql.includes('INSERT INTO product_results')) { this.results.set(`${p[1]}:${p[2]}`, { result_id:p[0], session_id:p[1], product:p[2], status:p[3], confidence:p[4], confidence_band:p[5], result_json:p[6], generation_source:p[7], rules_version:p[8], content_version:p[9] }); return { success:true }; }
+    if (sql.includes('INSERT INTO product_results')) { if (sql.includes('DO NOTHING') && this.results.has(`${p[1]}:${p[2]}`)) return { success:true }; this.results.set(`${p[1]}:${p[2]}`, { result_id:p[0], session_id:p[1], product:p[2], status:p[3], confidence:p[4], confidence_band:p[5], result_json:p[6], generation_source:p[7], rules_version:p[8], content_version:p[9] }); return { success:true }; }
+    if (sql.includes('INSERT INTO clinical_followups')) { this.followups.set(`${p[1]}:${p[3]}:${p[5]}`, { followup_id:p[0], session_id:p[1], current_stage:p[2], product:p[3], question_id:p[5], question_text:p[6], answer:p[7], confidence_impact:p[8] }); return { success:true }; }
+    if (sql.includes('INSERT INTO clinical_findings')) { this.findings.set(`${p[1]}:${p[2]}:${p[3]}`, { finding_id:p[0], session_id:p[1], product:p[2], finding_code:p[3], finding_text:p[4], evidence_ids_json:p[5] }); return { success:true }; }
     throw new Error(`Unhandled SQL run: ${sql}`);
   }
   async first(sql, p) {
     if (sql.includes('FROM product_results')) return this.results.get(`${p[0]}:${p[1]}`) || null;
+    if (sql.includes('FROM entitlements')) return this.entitlements.get(`${p[0]}:${p[1]}`) || null;
+    if (sql.includes('FROM payments')) return this.payments.get(`${p[0]}:${p[1]}`) || null;
     if (sql.includes('FROM sessions')) return this.sessions.get(p[0]) || null;
     throw new Error(`Unhandled SQL first: ${sql}`);
   }
   all(sql, p) {
     if (sql.includes('FROM assessment_responses')) return [...this.responses.values()].filter(x => x.session_id === p[0] && x.product === 'GalviTriage').sort((a,b) => a.question_id.localeCompare(b.question_id));
+    if (sql.includes('FROM clinical_followups')) return [...this.followups.values()].filter(x => x.session_id === p[0] && x.product === p[1]).sort((a,b) => a.question_id.localeCompare(b.question_id));
     throw new Error(`Unhandled SQL all: ${sql}`);
   }
 }
