@@ -1,0 +1,9 @@
+{
+  "name": "galvicare-day2-qa",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/day2-worker.test.mjs",
+    "check": "node --check worker/worker.js"
+  }
+}
