@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/day2-worker.test.mjs",
-    "check": "node --check worker/worker.js"
+    "test": "node --test tests/day2-worker.test.mjs tests/day3-worker.test.mjs",
+    "check": "node --check worker/worker.js",
+    "test:day2": "node --test tests/day2-worker.test.mjs",
+    "test:day3": "node --test tests/day3-worker.test.mjs"
   }
 }

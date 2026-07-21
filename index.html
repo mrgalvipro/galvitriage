@@ -543,189 +543,95 @@ document.addEventListener('DOMContentLoaded',async function(){ await routeGalviC
   'use strict';
   const GSHOT = Object.freeze({
     PAYMENT_LINK: 'https://buy.stripe.com/test_00w14odrG1QLdcu9dA53O02',
-    CONFIDENCE_THRESHOLD: 80,
-    FOLLOWUP_KEY: 'galvishot_followups',
-    PAYMENT_KEY: 'payment_galvishot',
-    RESULT_KEY: 'galvishot_last_result'
+    QA_OVERRIDE_TOKEN_KEY: 'galvishot_qa_override_token'
   });
 
   function el(id){ return document.getElementById(id); }
+  function sessionId(){ return localStorage.getItem('galvicare_session_id') || ''; }
+  async function postShot(action, payload){
+    return callGalviCareApi({ action, session_id: sessionId(), current_stage: 'GalviShot', payload: payload || {} });
+  }
   function hideUpstream(){
     ['assessmentForm','result','galviscore-paywall','galviscore-followup','galviscore-result','galviscore-repair','galvishot-paywall','galvishot-result','galvisight-handoff']
-      .forEach(id=>{
-        const node = el(id);
-        if(!node) return;
-        node.classList.add('hidden');
-        if(id === 'result') node.style.display = 'none';
-      });
+      .forEach(id=>{ const node=el(id); if(!node) return; node.classList.add('hidden'); if(id==='result') node.style.display='none'; });
   }
   function setShotStage(stage){
     localStorage.setItem('galvicare_current_stage', stage);
-    const sid = localStorage.getItem('galvicare_session_id') || '';
-    try {
-      if(typeof updateJourneyStage === 'function'){
-        Promise.resolve(updateJourneyStage(sid, stage)).catch(()=>null);
-      }
-    } catch (error) {
-      console.warn('Non-blocking journey-stage update failed.', error);
-    }
+    try { if(typeof updateJourneyStage === 'function') Promise.resolve(updateJourneyStage(sessionId(), stage)).catch(()=>null); } catch (error) { console.warn('Non-blocking journey-stage update failed.', error); }
   }
-  function normalizeCategory(value){
-    const c=String(value||'').toLowerCase();
-    if(c.includes('revenue')||c.includes('cash')||c.includes('pricing')) return 'revenue';
-    if(c.includes('customer')||c.includes('market')||c.includes('acquisition')) return 'customers';
-    if(c.includes('operation')||c.includes('execution')||c.includes('process')) return 'operations';
-    if(c.includes('leadership')||c.includes('founder')||c.includes('team')) return 'leadership';
-    return 'strategy';
-  }
-  function getScoreResult(){
-    try{
-      return JSON.parse(localStorage.getItem('galviscore_last_result')||localStorage.getItem('galviscore_result_json')||'{}');
-    }catch{return {};}
-  }
-  function readiness(){
-    const score=getScoreResult();
-    const hasScore=Boolean(score.galviscore_score||localStorage.getItem('galviscore_score'));
-    const weakest=score.galviscore_lowest_category||localStorage.getItem('galviscore_lowest_category')||'revenue';
-    const followups=JSON.parse(localStorage.getItem(GSHOT.FOLLOWUP_KEY)||'[]');
-    let confidence=55;
-    if(hasScore) confidence+=20;
-    if(weakest) confidence+=8;
-    confidence+=Math.min(15,followups.length*6);
-    confidence=Math.min(95,confidence);
-    localStorage.setItem('galvishot_confidence',String(confidence));
-    localStorage.setItem('galvishot_weakest_category',weakest);
-    return {confidence,weakest_category:weakest};
-  }
-  function setMeter(id,value){
-    const node=el(id); if(node) node.style.width=Math.max(0,Math.min(100,Number(value)||0))+'%';
-  }
-  function renderFollowup(weakest){
-    const bank={
-      revenue:['Which KPI concerns you most: leads, conversion, pricing, retention, or cash flow?','What have you already tried to improve revenue?'],
-      customers:['Who is your ideal customer today?','How do customers currently discover you?'],
-      operations:['What process breaks down most often?','What constraint most limits execution: budget, team, time, or tools?'],
-      leadership:['Where do you personally feel least confident leading the business right now?'],
-      strategy:['What business outcome matters most in the next 90 days?','What strategic decision feels most unclear right now?']
-    };
-    const questions=bank[normalizeCategory(weakest)]||bank.strategy;
-    const host=el('galvishot-followup-questions'); host.innerHTML='';
-    questions.slice(0,3).forEach((q,i)=>{
+  function setMeter(id,value){ const node=el(id); if(node) node.style.width=Math.max(0,Math.min(100,Number(value)||0))+'%'; }
+  function showError(targetId, error){ const target=el(targetId); if(target) target.textContent=`${error.message || 'GalviShot is temporarily unavailable.'} Session ID: ${sessionId()}`; }
+  function clearErrors(){ ['galvishot-paywall-error','galvishot-result-error','galvishot-followup-status'].forEach(id=>{ if(el(id)) el(id).textContent=''; }); }
+  function renderFollowup(questions){
+    const host=el('galvishot-followup-questions'); if(!host) return;
+    host.innerHTML='';
+    (questions||[]).slice(0,3).forEach((q,i)=>{
+      const code=q.question_code||q.question_id||`FOLLOWUP_${i+1}`;
       const wrap=document.createElement('div');
-      wrap.innerHTML=`<label for="gshot-followup-${i}">${q}</label><textarea id="gshot-followup-${i}" data-question="${q}" required></textarea>`;
-      host.appendChild(wrap);
+      const label=document.createElement('label'); label.setAttribute('for',`gshot-followup-${i}`); label.textContent=q.question_text||'Add the missing business evidence.';
+      const textarea=document.createElement('textarea'); textarea.id=`gshot-followup-${i}`; textarea.dataset.questionCode=code; textarea.dataset.questionText=label.textContent; textarea.required=true;
+      wrap.appendChild(label); wrap.appendChild(textarea); host.appendChild(wrap);
     });
     el('galvishot-followup')?.classList.remove('hidden');
   }
-  window.showIntegratedGalviShotPaywall=function(){
-    const r=readiness();
-    hideUpstream();
-    const paywall = el('galvishot-paywall');
-    if(!paywall) throw new Error('GalviShot paywall container is missing.');
-    paywall.classList.remove('hidden');
-    paywall.style.display = 'block';
-    setShotStage('GalviShot Paywall');
-    setMeter('galvishot-confidence-meter',r.confidence);
-    if(el('galvishot-confidence-label')) el('galvishot-confidence-label').textContent=r.confidence+'%';
-    if(r.confidence<GSHOT.CONFIDENCE_THRESHOLD) renderFollowup(r.weakest_category);
-    else el('galvishot-followup')?.classList.add('hidden');
-    if(typeof fireGalviEvent==='function') fireGalviEvent('paywall_viewed',{product:'galvishot',session_id:localStorage.getItem('galvicare_session_id'),stage:'GalviShot Paywall',confidence:r.confidence});
+  window.showIntegratedGalviShotPaywall=async function(){
+    clearErrors(); hideUpstream();
+    const paywall=el('galvishot-paywall'); if(!paywall) throw new Error('GalviShot paywall container is missing.');
+    paywall.classList.remove('hidden'); paywall.style.display='block'; setShotStage('GalviShot Paywall');
+    try {
+      const response=await postShot('evaluate_galvishot');
+      setMeter('galvishot-confidence-meter',response.confidence);
+      if(el('galvishot-confidence-label')) el('galvishot-confidence-label').textContent=(response.confidence ?? '--')+'%';
+      if(response.status==='needs_followup') renderFollowup(response.followup_questions||[]); else el('galvishot-followup')?.classList.add('hidden');
+      if(typeof fireGalviEvent==='function') fireGalviEvent('paywall_viewed',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Paywall',status:response.status,confidence:response.confidence});
+    } catch (error) { showError('galvishot-paywall-error', error); }
     window.scrollTo({top:0,behavior:'smooth'});
   };
-  function buildResult(){
-    const score=getScoreResult();
-    const scoreValue=Number(score.galviscore_score||localStorage.getItem('galviscore_score')||72);
-    const weakest=score.galviscore_lowest_category||localStorage.getItem('galviscore_lowest_category')||'Revenue';
-    const confidence=Number(localStorage.getItem('galvishot_confidence')||84);
-    return {
-      confidence,
-      executive_summary:`Your GalviShot indicates that ${weakest} is the highest-priority business-health signal requiring focused attention. The current GalviScore of ${scoreValue}/100 provides enough structured evidence for an initial rules-first finding set.`,
-      findings:[
-        {domain:weakest,finding:`${weakest} is the primary constraint in the current venture-health pattern.`,evidence:`It is the lowest GalviScore category in the current stored result.`,confidence:'high'},
-        {domain:'Strategy',finding:'The next 90-day outcome needs sharper definition and sequencing.',evidence:'The venture needs one measurable outcome that connects the weakest category to execution.',confidence:'medium'},
-        {domain:'Operations',finding:'Execution capacity and operating cadence may be reinforcing the primary constraint.',evidence:'The current result pattern indicates that isolated fixes may not hold without a repeatable review rhythm.',confidence:'medium'}
-      ],
-      recommended_actions:[
-        `Define one measurable 90-day outcome for ${weakest}.`,
-        'Identify the evidence that will confirm whether the primary constraint is improving.',
-        'Reduce work in progress and establish one weekly decision review.',
-        'Continue to GalviSight for strategic interpretation and pathway planning.'
-      ],
-      strategic_risks:[
-        `The ${weakest} constraint may deepen if activity increases without clearer evidence.`,
-        'Fragmented priorities may delay decisions and strain founder capacity.',
-        'Treating symptoms independently may create temporary rather than durable improvement.'
-      ],
-      assumptions:[
-        'This baseline result uses the passed browser GalviScore record and governed local QA rules.',
-        'The Revamp will move source-of-truth scoring and findings behind the QA Worker and D1.'
-      ]
-    };
-  }
-  function renderResult(){
-    const result=buildResult();
-    localStorage.setItem(GSHOT.RESULT_KEY,JSON.stringify(result));
+  function renderResultPayload(result){
     hideUpstream();
-    const resultView = el('galvishot-result');
-    if(!resultView) throw new Error('GalviShot result container is missing.');
-    resultView.classList.remove('hidden');
-    resultView.style.display = 'block';
-    setShotStage('GalviShot Result');
-    el('galvishot-executive-summary').textContent=result.executive_summary;
+    const resultView=el('galvishot-result'); if(!resultView) throw new Error('GalviShot result container is missing.');
+    resultView.classList.remove('hidden'); resultView.style.display='block'; setShotStage('GalviShot Result');
+    el('galvishot-executive-summary').textContent=result.executive_summary||'';
     setMeter('galvishot-result-confidence-meter',result.confidence);
-    el('galvishot-result-confidence-label').textContent=result.confidence+'%';
+    el('galvishot-result-confidence-label').textContent=(result.confidence ?? '--')+'%';
     const findings=el('galvishot-findings'); findings.innerHTML='';
-    result.findings.forEach((f,i)=>{
+    (result.findings||[]).forEach((f,i)=>{
       const node=document.createElement('div'); node.className='gshot-finding';
-      node.innerHTML=`<div class="gshot-finding-title">${i+1}. ${f.domain}: ${f.finding}</div><div class="gshot-evidence"><strong>Evidence:</strong> ${f.evidence}<br><strong>Confidence:</strong> ${f.confidence}</div>`;
+      const evidence=(f.evidence||[]).map(e=>e.display_value).filter(Boolean).join('; ');
+      node.innerHTML=`<div class="gshot-finding-title">${i+1}. ${f.title || f.finding_code}</div><div class="gshot-evidence"><strong>Evidence:</strong> ${evidence}<br><strong>Confidence:</strong> ${f.confidence_language || ''}</div>`;
       findings.appendChild(node);
     });
-    const fill=(id,items)=>{const host=el(id);host.innerHTML='';items.forEach(x=>{const li=document.createElement('li');li.textContent=x;host.appendChild(li);});};
-    fill('galvishot-actions',result.recommended_actions);fill('galvishot-risks',result.strategic_risks);fill('galvishot-assumptions',result.assumptions);
-    if(typeof fireGalviEvent==='function') fireGalviEvent('diagnostic_viewed',{product:'galvishot',session_id:localStorage.getItem('galvicare_session_id'),stage:'GalviShot Result',confidence:result.confidence});
+    const fill=(id,items)=>{ const host=el(id); host.innerHTML=''; (items||[]).forEach(x=>{ const li=document.createElement('li'); li.textContent=x; host.appendChild(li); }); };
+    fill('galvishot-actions', result.recommended_actions); fill('galvishot-risks', result.strategic_risks); fill('galvishot-assumptions', result.assumptions);
+    if(typeof fireGalviEvent==='function') fireGalviEvent('diagnostic_viewed',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Result',confidence:result.confidence});
     window.scrollTo({top:0,behavior:'smooth'});
   }
-  function returnToScore(){
-    hideUpstream();
-    const cached=typeof getCachedGalviScoreResult==='function'?getCachedGalviScoreResult():getScoreResult();
-    if(cached&&typeof renderGalviScoreResult==='function') renderGalviScoreResult(cached);
-    else el('galviscore-result')?.classList.remove('hidden');
-    setShotStage('GalviScore');
-    window.scrollTo({top:0,behavior:'smooth'});
+  async function requestResult(){
+    clearErrors();
+    try {
+      const token=localStorage.getItem(GSHOT.QA_OVERRIDE_TOKEN_KEY) || '';
+      const response=await postShot('get_or_create_galvishot', token ? { qa_override_token: token } : {});
+      if(response.status==='ok' && response.result) renderResultPayload(response.result);
+      else if(response.status==='needs_followup') { await window.showIntegratedGalviShotPaywall(); renderFollowup(response.followup_questions||[]); }
+      else showError('galvishot-paywall-error', new Error(response.message || 'GalviShot is not ready.'));
+    } catch (error) { showError('galvishot-paywall-error', error); }
   }
+  function returnToScore(){ hideUpstream(); const cached=typeof getCachedGalviScoreResult==='function'?getCachedGalviScoreResult():{}; if(cached&&typeof renderGalviScoreResult==='function') renderGalviScoreResult(cached); else el('galviscore-result')?.classList.remove('hidden'); setShotStage('GalviScore'); window.scrollTo({top:0,behavior:'smooth'}); }
   document.addEventListener('DOMContentLoaded',function(){
-    el('submit-galvishot-followup')?.addEventListener('click',function(){
+    el('submit-galvishot-followup')?.addEventListener('click',async function(){
       const fields=Array.from(document.querySelectorAll('#galvishot-followup-questions textarea'));
-      if(fields.some(x=>!x.value.trim())){fields.find(x=>!x.value.trim())?.focus();return;}
-      const answers=fields.map(x=>({question_text:x.dataset.question,answer:x.value.trim(),confidence_impact:6}));
-      localStorage.setItem(GSHOT.FOLLOWUP_KEY,JSON.stringify(answers));
-      el('galvishot-followup-status').textContent='Follow-up saved. Confidence updated.';
-      showIntegratedGalviShotPaywall();
+      if(fields.some(x=>!x.value.trim())){ fields.find(x=>!x.value.trim())?.focus(); return; }
+      try { await postShot('save_galvishot_followup',{ answers: fields.map(x=>({ question_code:x.dataset.questionCode, question_text:x.dataset.questionText, answer_text:x.value.trim() })) }); el('galvishot-followup-status').textContent='Follow-up saved. GalviShot readiness refreshed.'; await window.showIntegratedGalviShotPaywall(); } catch (error) { showError('galvishot-paywall-error', error); }
     });
     el('skip-galvishot-followup')?.addEventListener('click',()=>el('galvishot-followup')?.classList.add('hidden'));
-    el('galvishot-live-test-override')?.addEventListener('click',function(){localStorage.setItem(GSHOT.PAYMENT_KEY,'test_override');renderResult();});
-    el('galvishot-stripe-cta')?.addEventListener('click',function(){
-      localStorage.setItem('galvicare_session_id',localStorage.getItem('galvicare_session_id')||'');
-      if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvishot',session_id:localStorage.getItem('galvicare_session_id'),stage:'GalviShot Paywall'});
-      window.location.href=GSHOT.PAYMENT_LINK;
-    });
+    el('galvishot-live-test-override')?.addEventListener('click',async function(){ const token=window.prompt('Enter the QA GalviShot override token.'); if(token) localStorage.setItem(GSHOT.QA_OVERRIDE_TOKEN_KEY, token.trim()); await requestResult(); });
+    el('galvishot-stripe-cta')?.addEventListener('click',function(){ if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Paywall'}); window.location.href=GSHOT.PAYMENT_LINK; });
     el('galvishot-back-score')?.addEventListener('click',returnToScore);
-    el('galvishot-back-paywall')?.addEventListener('click',showIntegratedGalviShotPaywall);
-    el('continue-galvisight')?.addEventListener('click',function(){
-      hideUpstream();
-      const sight = el('galvisight-handoff');
-      if(!sight) throw new Error('GalviSight handoff container is missing.');
-      sight.classList.remove('hidden');
-      sight.style.display = 'block';
-      setShotStage('GalviSight Handoff');
-      window.scrollTo({top:0,behavior:'smooth'});
-    });
-    el('return-galvishot-result')?.addEventListener('click',renderResult);
-    el('book-galviclinic')?.addEventListener('click',function(){alert('GalviClinic booking remains unchanged and will be reconnected during the Revamp transaction/integration day.');});
-    const params=new URLSearchParams(location.search);
-    if((params.get('product')||'').toLowerCase()==='galvishot'&&(params.get('paid')||'').toLowerCase()==='shot_success'){
-      localStorage.setItem(GSHOT.PAYMENT_KEY,'paid');renderResult();
-    }
+    el('galvishot-back-paywall')?.addEventListener('click',window.showIntegratedGalviShotPaywall);
+    el('continue-galvisight')?.addEventListener('click',function(){ hideUpstream(); const sight=el('galvisight-handoff'); if(!sight) throw new Error('GalviSight handoff container is missing.'); sight.classList.remove('hidden'); sight.style.display='block'; setShotStage('GalviSight Handoff'); window.scrollTo({top:0,behavior:'smooth'}); });
+    el('return-galvishot-result')?.addEventListener('click',requestResult);
+    el('book-galviclinic')?.addEventListener('click',function(){ alert('GalviClinic booking remains unchanged and will be reconnected during the Revamp transaction/integration day.'); });
+    const params=new URLSearchParams(location.search); if((params.get('product')||'').toLowerCase()==='galvishot') window.showIntegratedGalviShotPaywall();
   });
 })();
 </script>
