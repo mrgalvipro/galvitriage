@@ -21,7 +21,7 @@ class MockD1 {
     if (sql.includes('INSERT INTO assessment_responses')) { this.responses.set(`${p[1]}:${p[2]}:${p[3]}`, { response_id:p[0], session_id:p[1], product:p[2], question_id:p[3], dimension:p[4], answer_number:p[5], rules_version:p[6] }); return { success:true }; }
     if (sql.includes('INSERT INTO journey_events')) { this.events.push({ event_id:p[0], session_id:p[1], event_name:p[2], product:p[3], current_stage:p[4], event_json:p[5], created_at:p[6] }); return { success:true }; }
     if (sql.includes('INSERT INTO product_results')) { if (sql.includes('DO NOTHING') && this.results.has(`${p[1]}:${p[2]}`)) return { success:true }; this.results.set(`${p[1]}:${p[2]}`, { result_id:p[0], session_id:p[1], product:p[2], status:p[3], confidence:p[4], confidence_band:p[5], result_json:p[6], generation_source:p[7], rules_version:p[8], content_version:p[9] }); return { success:true }; }
-    if (sql.includes('INSERT INTO clinical_followups')) { this.followups.set(`${p[1]}:${p[3]}:${p[5]}`, { followup_id:p[0], session_id:p[1], current_stage:p[2], product:p[3], question_id:p[5], question_text:p[6], answer:p[7], confidence_impact:p[8] }); return { success:true }; }
+    if (sql.includes('INSERT INTO clinical_followups')) { this.followups.set(`${p[1]}:${p[3]}:${p[4]}`, { followup_id:p[0], session_id:p[1], current_stage:p[2], product:p[3], question_id:p[4], question_text:p[5], answer:p[6], confidence_impact:p[7] }); return { success:true }; }
     if (sql.includes('INSERT INTO clinical_findings')) { this.findings.set(`${p[1]}:${p[2]}:${p[3]}`, { finding_id:p[0], session_id:p[1], product:p[2], finding_code:p[3], finding_text:p[4], evidence_ids_json:p[5] }); return { success:true }; }
     throw new Error(`Unhandled SQL run: ${sql}`);
   }
@@ -218,3 +218,32 @@ test('Root submit_triage remains legacy and isolated from the /api D1 submit han
   assert.equal(legacyRootEnv.DB.responses.size, 0);
   assert.equal(legacyRootEnv.DB.results.size, 0);
 }));
+
+test('Worker returns authoritative GalviScore routing and follow-up contract', async () => {
+  const testEnv = env();
+  const submitted = await json(await worker.fetch(req('/api', payload()), testEnv));
+  assert.equal(submitted.score.result_state, 'unlocked');
+  assert.equal(submitted.score.next_screen, 'GalviScore');
+
+  const evaluated = await json(await worker.fetch(req('/api', { action:'evaluate_galviscore', session_id:fixture.session_id }), testEnv));
+  assert.equal(evaluated.result.result_state, 'unlocked');
+  assert.equal(Array.isArray(evaluated.result.followup_questions), true);
+
+  const lowSession = 'gt_low_followup_contract';
+  const lowPayload = payload({ session:{ session_id:lowSession, source:'test' }, scored_answers:Object.fromEntries(Object.keys(fixture.answers).slice(0, 12).map((key) => [key, fixture.answers[key]])) });
+  await worker.fetch(req('/api', { action:'create_or_resume_session', session_id:lowSession }), testEnv);
+  const db = testEnv.DB;
+  for (const [questionId, answer] of Object.entries(lowPayload.scored_answers)) {
+    db.responses.set(`${lowSession}:GalviTriage:${questionId}`, { session_id:lowSession, product:'GalviTriage', question_id:questionId, answer_number:answer });
+  }
+  const low = await json(await worker.fetch(req('/api', { action:'evaluate_galviscore', session_id:lowSession }), testEnv));
+  assert.equal(low.result.result_state, 'clinical_followup');
+  assert.equal(low.result.followup_questions.length, 1);
+  assert.equal(low.result.followup_questions[0].submission_action, 'save_galviscore_followup');
+  assert.equal('confidence_impact' in low.result.followup_questions[0], false);
+
+  const saved = await json(await worker.fetch(req('/api', { action:'save_galviscore_followup', session_id:lowSession, payload:{ answers:[{ question_id:low.result.followup_questions[0].question_id, answer_text:'Focus the next evidence sprint on the strongest customer signal.' }] } }), testEnv));
+  assert.equal(saved.status, 'ok');
+  assert.equal(['clinical_followup','unlocked'].includes(saved.result.result_state), true);
+  assert.ok(Number(saved.result.galviscore_confidence || saved.result.confidence) >= Number(low.result.galviscore_confidence || low.result.confidence));
+});
