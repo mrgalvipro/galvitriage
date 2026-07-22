@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "galvicare-triage-intake",
+  "main": "worker/worker.js",
+  "compatibility_date": "2026-07-22",
+  "keep_vars": true,
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "galvivault-0-5-qa",
+      "database_id": "cdf9042b-ab09-498a-ac66-010b6cce47d4"
+    }
+  ]
+}
