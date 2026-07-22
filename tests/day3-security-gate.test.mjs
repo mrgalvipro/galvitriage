@@ -46,3 +46,39 @@ test('no literal QA override secret is committed to browser source', () => {
   assert.equal(/GalviShot-QA-\d{4}/.test(browser), false, 'QA override secret must not be committed to public browser code');
   assert.equal(/YOUR_QA_OVERRIDE_SECRET/.test(browser), false, 'Placeholder QA secret must not ship in public browser code');
 });
+
+test('browser delegates GalviScore routing, follow-up, and QA override authority to Worker', () => {
+  const forbiddenBrowserAuthority = [
+    'routeByGalviScoreConfidence',
+    'confidence>=70',
+    'confidence >= 70',
+    'confidence>=60',
+    'confidence >= 60',
+    'GALVISCORE_FOLLOWUP_QUESTIONS',
+    'confidence_impact',
+    "payment_galviscore = 'test_override'",
+    'payment_galviscore = "test_override"',
+    "payment_galviscore:'test_override'",
+    'payment_galviscore:"test_override"',
+    'Math.max(80',
+    'Math.min(100,Number(cached.galviscore_confidence',
+    'cached.galviscore_confidence',
+    'galviscore-qa-override'
+  ];
+  for (const token of forbiddenBrowserAuthority) {
+    assert.equal(browser.includes(token), false, `Browser must not contain GalviScore authority token: ${token}`);
+  }
+  assert.equal(/galviscore_confidence\s*=/.test(browser), false, 'Browser must not assign GalviScore confidence');
+  assert.match(browser, /renderGalviScoreState/);
+  assert.match(browser, /save_galviscore_followup/);
+});
+
+test('Worker exposes authoritative GalviScore state and follow-up contract', () => {
+  assert.match(worker, /function galviScoreState/);
+  assert.match(worker, /result_state:\s*'unlocked'/);
+  assert.match(worker, /result_state:\s*'clinical_followup'/);
+  assert.match(worker, /result_state:\s*'triage_repair'/);
+  assert.match(worker, /function galviScoreFollowupCatalog/);
+  assert.match(worker, /submission_action:\s*'save_galviscore_followup'/);
+  assert.match(worker, /action === 'save_galviscore_followup'/);
+});

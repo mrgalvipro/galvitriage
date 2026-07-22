@@ -57,7 +57,9 @@ const DAY2_ACTIONS = new Set([
   'get_triage',
   'triage_completeness',
   'get_or_create_vitals',
-  'get_or_create_score'
+  'get_or_create_score',
+  'evaluate_galviscore',
+  'save_galviscore_followup'
 ]);
 
 const TRIAGE_QUESTIONS = Object.freeze([
@@ -125,6 +127,50 @@ function calculateCompleteness(payload) {
   const answered = TRIAGE_QUESTIONS.length - missing_questions.length - invalid_questions.length;
   return { complete: missing_fields.length === 0 && missing_questions.length === 0 && invalid_questions.length === 0, answered_questions: answered, total_questions: TRIAGE_QUESTIONS.length, completion_percent: Math.round((answered / TRIAGE_QUESTIONS.length) * 100), missing_fields, missing_questions, invalid_questions, question_contract_version: DAY2_QUESTION_CONTRACT_VERSION };
 }
+function galviScoreState(confidence) {
+  if (confidence >= 70) return { result_state: 'unlocked', next_screen: 'GalviScore' };
+  if (confidence >= 60) return { result_state: 'clinical_followup', next_screen: 'GalviScore Clinical Follow-Up' };
+  return { result_state: 'triage_repair', next_screen: 'GalviTriage Repair' };
+}
+function galviScoreFollowupCatalog() {
+  return {
+    revenue: { question_id:'gs_revenue_range', question_text:'What annual revenue range best describes your business today?', display_order:1, answer_contract:'free_text', confidence_impact:12 },
+    distribution: { question_id:'gs_customer_discovery', question_text:'How do customers currently discover you?', display_order:1, answer_contract:'free_text', confidence_impact:10 },
+    business_model: { question_id:'gs_90_day_outcome', question_text:'What single business outcome matters most in the next 90 days?', display_order:1, answer_contract:'free_text', confidence_impact:8 },
+    technology_operations: { question_id:'gs_growth_bottleneck', question_text:'Which operational bottleneck most limits growth right now?', display_order:1, answer_contract:'free_text', confidence_impact:8 },
+    leadership: { question_id:'gs_leadership_constraint', question_text:'Which leadership decision most needs clearer evidence or follow-through?', display_order:1, answer_contract:'free_text', confidence_impact:8 },
+    customer: { question_id:'gs_customer_signal', question_text:'What customer signal would most increase your confidence in the next decision?', display_order:1, answer_contract:'free_text', confidence_impact:8 },
+    product: { question_id:'gs_product_feedback', question_text:'What product or service feedback should be validated next?', display_order:1, answer_contract:'free_text', confidence_impact:8 },
+    problem: { question_id:'gs_problem_urgency', question_text:'What evidence best proves the customer problem is urgent?', display_order:1, answer_contract:'free_text', confidence_impact:8 }
+  };
+}
+function publicGalviScoreFollowupQuestion(question) {
+  return { question_id: question.question_id, question_text: question.question_text, display_order: question.display_order, answer_contract: question.answer_contract, submission_action: 'save_galviscore_followup' };
+}
+function galviScoreFollowupQuestions(scoreResult) {
+  const catalog = galviScoreFollowupCatalog();
+  const lowest = scoreResult.weakest_dimensions?.[0]?.key;
+  return [publicGalviScoreFollowupQuestion(catalog[lowest] || catalog.business_model)];
+}
+function applyGalviScoreAuthority(result) {
+  const state = galviScoreState(Number(result.confidence || 0));
+  return { ...result, ...state, followup_questions: state.result_state === 'clinical_followup' ? galviScoreFollowupQuestions(result) : [] };
+}
+async function galviScoreFollowups(db, sessionId) {
+  const rows = await db.prepare(`SELECT question_id,question_text,answer,confidence_impact FROM clinical_followups WHERE session_id=? AND product=? ORDER BY question_id`).bind(sessionId, 'GalviScore').all();
+  return rows.results || [];
+}
+async function buildStoredGalviScore(db, sessionId) {
+  const triage = await getStoredTriage(db, sessionId);
+  if (!triage) return null;
+  const resultPayload = { session:{ session_id:sessionId }, scored_answers:triage.answers };
+  const result = calculateDeterministicScore(resultPayload);
+  const followups = await galviScoreFollowups(db, sessionId);
+  const impact = followups.filter(f => required(f.answer)).reduce((sum, f) => sum + Number(f.confidence_impact || 0), 0);
+  result.confidence = Math.max(0, Math.min(100, Math.round(Number(result.confidence || 0) + impact)));
+  result.confidence_band = confidenceBand(result.confidence);
+  return applyGalviScoreAuthority(result);
+}
 function calculateDeterministicScore(payload) {
   const answers = answersFromPayload(payload);
   const buckets = {};
@@ -135,7 +181,7 @@ function calculateDeterministicScore(payload) {
   const score = Math.round(Object.entries(DIMENSION_WEIGHTS).reduce((sum, [dim, weight]) => sum + dimension_scores[dim] * weight, 0));
   const sorted = Object.entries(dimension_scores).sort((a,b) => a[1] - b[1]);
   const confidence = calculateCompleteness(payload).completion_percent;
-  return { session_id: getPayloadSessionId(payload), product: 'GalviScore', score, classification: scoreClassification(score), health_band: scoreBand(score), dimension_scores, strongest_dimensions: sorted.slice(-2).reverse().map(([key, value]) => ({ key, label: dimensionLabel(key), score: value })), weakest_dimensions: sorted.slice(0, 2).map(([key, value]) => ({ key, label: dimensionLabel(key), score: value, insight: insightForDimension(key) })), confidence, confidence_band: confidenceBand(confidence), rules_version: DAY2_RULES_VERSION, question_contract_version: DAY2_QUESTION_CONTRACT_VERSION, generation_source: DAY2_GENERATION_SOURCE };
+  return applyGalviScoreAuthority({ session_id: getPayloadSessionId(payload), product: 'GalviScore', score, classification: scoreClassification(score), health_band: scoreBand(score), dimension_scores, strongest_dimensions: sorted.slice(-2).reverse().map(([key, value]) => ({ key, label: dimensionLabel(key), score: value })), weakest_dimensions: sorted.slice(0, 2).map(([key, value]) => ({ key, label: dimensionLabel(key), score: value, insight: insightForDimension(key) })), confidence, confidence_band: confidenceBand(confidence), rules_version: DAY2_RULES_VERSION, question_contract_version: DAY2_QUESTION_CONTRACT_VERSION, generation_source: DAY2_GENERATION_SOURCE });
 }
 function buildVitalsResult(payload) {
   const scoreResult = calculateDeterministicScore(payload);
@@ -179,6 +225,8 @@ async function handleDay2Action(env, payload, action) {
   if (action === 'submit_triage') { const completeness = calculateCompleteness(payload); if (!completeness.complete) return jsonResponse({ success: false, action, message: 'GalviTriage intake is incomplete or invalid.', ...completeness }, 422, env); const session_id = await persistTriage(db, payload); const vitals = await writeProductResult(db, session_id, 'GalviVitals', buildVitalsResult(payload)); const score = await writeProductResult(db, session_id, 'GalviScore', calculateDeterministicScore(payload)); return jsonResponse({ success: true, action, session_id, next_screen: 'GalviVitals', triage: { session_id, question_contract_version: DAY2_QUESTION_CONTRACT_VERSION }, vitals, score }, 200, env); }
   if (!required(sid)) return jsonResponse({ success: false, action, message: 'Missing session_id' }, 400, env);
   if (action === 'get_triage') { const triage = await getStoredTriage(db, sid); if (!triage) return jsonResponse({ success: false, action, message: 'GalviTriage session not found', session_id: sid }, 404, env); return jsonResponse({ success: true, action, session_id: sid, triage }, 200, env); }
+  if (action === 'evaluate_galviscore') { const result = await buildStoredGalviScore(db, sid); if (!result) return jsonResponse({ success:false, action, message:'GalviTriage session not found', session_id:sid }, 404, env); return jsonResponse({ success:true, action, session_id:sid, product:'GalviScore', result }, 200, env); }
+  if (action === 'save_galviscore_followup') { const answers = safe(payload, 'payload.answers', []); if (!Array.isArray(answers)) return jsonResponse({ success:false, action, status:'error', message:'answers must be an array' }, 400, env); const catalog = Object.values(galviScoreFollowupCatalog()); const ts = nowIso(); for (const a of answers.slice(0, 3)) { const code = String(a.question_id || a.question_code || '').slice(0,64); const approved = catalog.find(q => q.question_id === code); const ans = String(a.answer_text || a.answer || '').trim().slice(0,1000); if (approved && required(ans)) await dbRun(db, `INSERT INTO clinical_followups(followup_id,session_id,current_stage,product,question_id,question_text,answer,confidence_impact,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,question_id) DO UPDATE SET question_text=excluded.question_text,answer=excluded.answer,confidence_impact=excluded.confidence_impact,updated_at=excluded.updated_at`, `followup_${sid}_${code}`, sid, 'GalviScore', 'GalviScore', approved.question_id, approved.question_text, ans, approved.confidence_impact, ts, ts); } const result = await buildStoredGalviScore(db, sid); return jsonResponse({ success:true, action, status:'ok', session_id:sid, product:'GalviScore', result }, 200, env); }
   const product = action === 'get_or_create_vitals' ? 'GalviVitals' : 'GalviScore';
   const stored = await storedProductResult(db, sid, product); if (stored) return jsonResponse({ success: true, action, session_id: sid, product, stored: true, result: JSON.parse(stored.result_json) }, 200, env);
   const triage = await getStoredTriage(db, sid); if (!triage) return jsonResponse({ success: false, action, message: 'GalviTriage session not found', session_id: sid }, 404, env);
