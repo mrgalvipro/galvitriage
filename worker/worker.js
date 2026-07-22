@@ -14,6 +14,19 @@ const DAY2_QUESTION_CONTRACT_VERSION = 'galvitriage_questions_v0_5_1';
 const DAY2_RULES_VERSION = 'galviengine_score_v0_5_1';
 const DAY2_GENERATION_SOURCE = 'rules';
 
+const GALVISHOT_RULES_VERSION = 'galvishot_rules_v0_5_1';
+const GALVISHOT_CONTENT_VERSION = 'galvishot_content_v0_5_1';
+
+const GALVICARE_BUILD = Object.freeze({
+  environment: 'qa',
+  branch: 'qa-revamped-galvicare-0-5',
+  stabilization_version: 'day3_stabilization_v1',
+  score_rules_version: DAY2_RULES_VERSION,
+  galvishot_rules_version: GALVISHOT_RULES_VERSION,
+  galvishot_content_version: GALVISHOT_CONTENT_VERSION,
+  legacy_make_api_enabled: false
+});
+
 const DAY1_ACTIONS = new Set([
   'health_check',
   'create_or_resume_session',
@@ -157,9 +170,6 @@ async function handleDay2Action(env, payload, action) {
   return jsonResponse({ success: true, action, session_id: sid, product, stored: false, result }, 200, env);
 }
 
-const GALVISHOT_RULES_VERSION = 'galvishot_rules_v0_5_1';
-const GALVISHOT_CONTENT_VERSION = 'galvishot_content_v0_5_1';
-
 const GALVISHOT_ACTIONS = new Set([
   'evaluate_galvishot',
   'save_galvishot_followup',
@@ -193,16 +203,63 @@ function corsHeaders(env) {
   };
 }
 
+function securityHeaders() {
+  return {
+    'X-Content-Type-Options':
+      'nosniff',
+
+    'Referrer-Policy':
+      'strict-origin-when-cross-origin',
+
+    'Permissions-Policy':
+      'camera=(), microphone=(), geolocation=(), payment=()',
+
+    'Cross-Origin-Opener-Policy':
+      'same-origin',
+
+    'Cross-Origin-Resource-Policy':
+      'cross-origin',
+
+    'X-Frame-Options':
+      'DENY'
+  };
+}
+
+function buildIdentityHeaders() {
+  return {
+    'X-Galvi-Environment':
+      GALVICARE_BUILD.environment,
+
+    'X-Galvi-Stabilization':
+      GALVICARE_BUILD.stabilization_version,
+
+    'X-Galvi-Score-Rules':
+      GALVICARE_BUILD.score_rules_version,
+
+    'X-GalviShot-Rules':
+      GALVICARE_BUILD.galvishot_rules_version
+  };
+}
+
+function responseHeaders(env, extraHeaders = {}) {
+  return {
+    ...corsHeaders(env),
+    ...securityHeaders(),
+    ...extraHeaders
+  };
+}
+
 function jsonResponse(
   body,
   status = 200,
-  env = {}
+  env = {},
+  extraHeaders = {}
 ) {
   return new Response(
     JSON.stringify(body),
     {
       status,
-      headers: corsHeaders(env)
+      headers: responseHeaders(env, extraHeaders)
     }
   );
 }
@@ -1245,7 +1302,7 @@ export default {
         {
           status: 204,
           headers:
-            corsHeaders(env)
+            responseHeaders(env)
         }
       );
     }
@@ -1267,10 +1324,14 @@ export default {
           supported_actions: [
             ...GALVISHOT_ACTIONS,
             ...GALVISIGHT_ACTIONS
-          ]
+          ],
+
+          build:
+            GALVICARE_BUILD
         },
         200,
-        env
+        env,
+        buildIdentityHeaders()
       );
     }
 
@@ -1332,20 +1393,48 @@ export default {
         return await handleDay3GalviShotAction(env, payload, action);
       }
 
+      if (pathname === '/api') {
+        return jsonResponse(
+          {
+            success: false,
+
+            code:
+              'UNSUPPORTED_API_ACTION',
+
+            action,
+
+            message:
+              'Unsupported /api action'
+          },
+          404,
+          env
+        );
+      }
+
       /*
        * GALVISHOT ACTION ROUTE
        *
-       * Runs before GalviTriage
-       * required-field validation.
+       * The legacy diagnostic route is disabled for
+       * GalviShot. Day 3 actions must use /api so they
+       * stay on the D1-only router.
        */
       if (
         GALVISHOT_ACTIONS.has(action)
       ) {
-        return await handleDiagnosticAction(
-          env,
-          payload,
-          action,
-          'GalviShot'
+        return jsonResponse(
+          {
+            success: false,
+
+            code:
+              'LEGACY_DIAGNOSTIC_ROUTE_DISABLED',
+
+            action,
+
+            message:
+              'GalviShot legacy diagnostic route is disabled; use /api.'
+          },
+          410,
+          env
         );
       }
 
