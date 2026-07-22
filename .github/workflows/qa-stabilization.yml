@@ -1,27 +1,3 @@
-name: QA Stabilization Gate
-
-on:
-  push:
-    branches:
-      - qa-revamped-galvicare-0-5
-  pull_request:
-    branches:
-      - qa-revamped-galvicare-0-5
-
-jobs:
-  stabilization-gate:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-
-      - name: Run QA stabilization gate
-        run: npm run stabilization:gate
 name: GalviCare QA Stabilization
 
 on:
@@ -48,7 +24,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
 
       - name: Install dependencies
         run: npm install --ignore-scripts
