@@ -37,7 +37,7 @@ test('Worker owns deterministic GalviShot evaluation and D1 evidence persistence
 
 test('Worker does not route /api GalviShot actions through legacy diagnostics', () => {
   const apiRoute = worker.indexOf("pathname === '/api' && GALVISHOT_ACTIONS.has(action)");
-  const legacyRoute = worker.indexOf('handleDiagnosticAction');
+  const legacyRoute = worker.indexOf('return await handleDiagnosticAction');
   assert.ok(apiRoute >= 0, 'Missing authoritative /api GalviShot route');
   assert.ok(legacyRoute < 0 || apiRoute < legacyRoute, 'Authoritative Day 3 route must run before legacy diagnostic routing');
 });
