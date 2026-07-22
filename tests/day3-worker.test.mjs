@@ -107,7 +107,13 @@ test('Worker health exposes non-sensitive Day 3 build identity and headers', asy
     score_rules_version: 'galviengine_score_v0_5_1',
     galvishot_rules_version: 'galvishot_rules_v0_5_1',
     galvishot_content_version: 'galvishot_content_v0_5_1',
-    legacy_make_api_enabled: false
+    galvisight_rules_version: 'galvisight_rules_v0_5_1',
+    galvisight_content_version: 'galvisight_content_v0_5_1',
+    galvipath_rules_version: 'galvipath_rules_v0_5_1',
+    galvipath_content_version: 'galvipath_content_v0_5_1',
+    unified_worker_version: 'day4_unified_worker_v0_5_1',
+    legacy_make_api_enabled: false,
+    day4_deterministic_actions: ['get_or_generate_galvisight', 'get_galvisight', 'get_or_generate_galvipath', 'get_galvipath']
   });
   assert.equal(body.build.legacy_make_api_enabled, false);
   assert.equal(res.headers.get('X-Galvi-Environment'), 'qa');
@@ -123,6 +129,9 @@ test('Worker health exposes non-sensitive Day 3 build identity and headers', asy
 test('Day 3 locks unpaid GalviShot and omits paid result content', async () => { const e=env(); await seed(e, 'shot_locked', { q07_predictable_revenue:1 }); const res=await worker.fetch(req({ action:'get_or_create_galvishot', session_id:'shot_locked' }), e); const body=await json(res); assert.equal(res.status, 402); assert.equal(body.status, 'locked'); assert.equal(body.result, undefined); });
 
 test('Day 3 QA override is environment scoped and production rejects it', async () => { const e=env({ ENVIRONMENT:'production' }); await seed(e, 'shot_prod', { q07_predictable_revenue:1 }); const res=await worker.fetch(req({ action:'get_or_create_galvishot', session_id:'shot_prod', payload:{ qa_override_token:'qa-ok' } }), e); assert.equal(res.status, 402); });
+
+
+test('Day 3 stored GalviShot retrieval requires entitlement or QA override', async () => { const e=env(); await seed(e, 'shot_stored_auth', { q07_predictable_revenue:1, q08_revenue_growth_confidence:1, q09_revenue_driver_clarity:1 }); await worker.fetch(req({ action:'get_or_create_galvishot', session_id:'shot_stored_auth', payload:{ qa_override_token:'qa-ok' } }), e); let res=await worker.fetch(req({ action:'get_galvishot', session_id:'shot_stored_auth' }), e); assert.equal(res.status, 402); res=await worker.fetch(req({ action:'get_galvishot', session_id:'shot_stored_auth', payload:{ qa_override_token:'qa-ok' } }), e); const body=await json(res); assert.equal(res.status, 200); assert.equal(body.stored, true); assert.equal(body.result.product, 'GalviShot'); });
 
 test('Day 3 creates deterministic stored evidence-linked GalviShot once', async () => { const e=env(); await seed(e, 'shot_revenue', { q07_predictable_revenue:1, q08_revenue_growth_confidence:1, q09_revenue_driver_clarity:1, q04_ideal_customer:1, q10_customer_satisfaction:1 }); let res=await worker.fetch(req({ action:'evaluate_galvishot', session_id:'shot_revenue' }), e); assert.equal((await json(res)).status, 'eligible'); res=await worker.fetch(req({ action:'get_or_create_galvishot', session_id:'shot_revenue', payload:{ qa_override_token:'qa-ok' } }), e); const first=await json(res); assert.equal(first.status, 'ok'); assert.equal(first.result.rules_version, 'galvishot_rules_v0_5_1'); assert.ok(first.result.findings.length >= 3); assert.ok(first.result.findings.every(f => f.evidence.length > 0)); for (const finding of first.result.findings) { const persisted = [...e.DB.evidenceLinks.values()].filter(row => row.session_id === 'shot_revenue' && row.product === 'GalviShot' && row.finding_code === finding.finding_code); assert.ok(persisted.length >= 1); assert.equal(persisted.length, finding.evidence.length); for (const evidence of finding.evidence) { const row = persisted.find(x => x.source_field === evidence.source_field); assert.ok(row); assert.equal(row.source_type, evidence.source_type); assert.equal(row.display_value, evidence.display_value); assert.equal(row.used_for, evidence.used_for); assert.equal(row.rules_version, 'galvishot_rules_v0_5_1'); assert.equal(row.evidence_link_id, `evidence_link_shot_revenue_GalviShot_${finding.finding_code}_${evidence.source_field}_galvishot_rules_v0_5_1`); } } const firstEvidenceCount = e.DB.evidenceLinks.size; assert.equal(firstEvidenceCount, first.result.findings.reduce((count, finding) => count + finding.evidence.length, 0)); assert.equal(e.DB.results.size, 3); res=await worker.fetch(req({ action:'get_or_create_galvishot', session_id:'shot_revenue', payload:{ qa_override_token:'qa-ok' } }), e); const second=await json(res); assert.equal(second.stored, true); assert.deepEqual(second.result, first.result); assert.equal(e.DB.evidenceLinks.size, firstEvidenceCount); assert.equal(e.DB.results.size, 3); });
 

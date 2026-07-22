@@ -16,6 +16,10 @@ const DAY2_GENERATION_SOURCE = 'rules';
 
 const GALVISHOT_RULES_VERSION = 'galvishot_rules_v0_5_1';
 const GALVISHOT_CONTENT_VERSION = 'galvishot_content_v0_5_1';
+const GALVISIGHT_RULES_VERSION = 'galvisight_rules_v0_5_1';
+const GALVISIGHT_CONTENT_VERSION = 'galvisight_content_v0_5_1';
+const GALVIPATH_RULES_VERSION = 'galvipath_rules_v0_5_1';
+const GALVIPATH_CONTENT_VERSION = 'galvipath_content_v0_5_1';
 
 const GALVICARE_BUILD = Object.freeze({
   environment: 'qa',
@@ -24,6 +28,11 @@ const GALVICARE_BUILD = Object.freeze({
   score_rules_version: DAY2_RULES_VERSION,
   galvishot_rules_version: GALVISHOT_RULES_VERSION,
   galvishot_content_version: GALVISHOT_CONTENT_VERSION,
+  galvisight_rules_version: GALVISIGHT_RULES_VERSION,
+  galvisight_content_version: GALVISIGHT_CONTENT_VERSION,
+  galvipath_rules_version: GALVIPATH_RULES_VERSION,
+  galvipath_content_version: GALVIPATH_CONTENT_VERSION,
+  unified_worker_version: 'day4_unified_worker_v0_5_1',
   legacy_make_api_enabled: false
 });
 
@@ -186,6 +195,18 @@ const GALVISIGHT_ACTIONS = new Set([
   'hubspot_recovery_tag',
   'journey_event'
 ]);
+
+const GALVIPATH_ACTIONS = new Set([
+  'get_or_generate_galvipath',
+  'get_galvipath'
+]);
+
+const DAY4_DETERMINISTIC_ACTIONS = Object.freeze(new Set([
+  'get_or_generate_galvisight',
+  'get_galvisight',
+  'get_or_generate_galvipath',
+  'get_galvipath'
+]));
 
 function corsHeaders(env) {
   return {
@@ -1180,7 +1201,7 @@ async function writeGalviShot(db, sessionId, result) {
 async function handleDay3GalviShotAction(env, payload, action) {
   const db = requireDb(env); const sid = normalizeSessionId(safe(payload, 'session_id') || safe(payload, 'session.session_id'));
   if (!required(sid)) return jsonResponse({ success:false, action, status:'error', message:'Missing session_id' }, 400, env);
-  if (action === 'get_galvishot') { const stored = await storedGalviShot(db, sid); if (!stored) return jsonResponse({ success:false, action, status:'not_found', session_id:sid }, 404, env); return jsonResponse({ success:true, action, status:'ok', stored:true, session_id:sid, result:JSON.parse(stored.result_json) }, 200, env); }
+  if (action === 'get_galvishot') { const entitled = await hasGalviShotEntitlement(db, sid) || hasQaOverride(env, payload); if (!entitled) return jsonResponse({ success:false, action, status:'locked', message:'GalviShot is locked until server-side entitlement is verified.', session_id:sid, payment_required:true }, 402, env); const stored = await storedGalviShot(db, sid); if (!stored) return jsonResponse({ success:false, action, status:'not_found', session_id:sid }, 404, env); return jsonResponse({ success:true, action, status:'ok', stored:true, session_id:sid, result:JSON.parse(stored.result_json) }, 200, env); }
   if (action === 'evaluate_galvishot') return jsonResponse({ action, ...(await evaluateGalviShot(db, sid)) }, 200, env);
   if (action === 'save_galvishot_followup') { const answers = safe(payload, 'payload.answers', []); if (!Array.isArray(answers)) return jsonResponse({ success:false, action, status:'error', message:'answers must be an array' }, 400, env); const ts = nowIso(); for (const a of answers.slice(0, 5)) { const code = String(a.question_code || a.question_id || '').slice(0,64); const text = String(a.question_text || code).slice(0,500); const ans = String(a.answer_text || a.answer || '').trim().slice(0,1000); if (required(code) && required(ans)) await dbRun(db, `INSERT INTO clinical_followups(followup_id,session_id,current_stage,product,question_id,question_text,answer,confidence_impact,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,question_id) DO UPDATE SET question_text=excluded.question_text,answer=excluded.answer,confidence_impact=excluded.confidence_impact,updated_at=excluded.updated_at`, `followup_${sid}_${code}`, sid, 'GalviShot', 'GalviShot', code, text, ans, Number(a.confidence_impact || 5), ts, ts); } return jsonResponse({ success:true, action, status:'ok', session_id:sid, evaluation:await evaluateGalviShot(db, sid) }, 200, env); }
   const entitled = await hasGalviShotEntitlement(db, sid) || hasQaOverride(env, payload);
@@ -1188,6 +1209,71 @@ async function handleDay3GalviShotAction(env, payload, action) {
   const stored = await storedGalviShot(db, sid); if (stored) return jsonResponse({ success:true, action, status:'ok', stored:true, session_id:sid, result:JSON.parse(stored.result_json) }, 200, env);
   const evaluation = await evaluateGalviShot(db, sid); if (!evaluation.success || evaluation.status !== 'eligible') return jsonResponse({ action, ...evaluation }, evaluation.status === 'not_found' ? 404 : 200, env);
   const triage = await getStoredTriage(db, sid); const score = calculateDeterministicScore({ session:{ session_id:sid }, scored_answers:triage.answers }); const followups = await galviShotFollowups(db, sid); score.confidence = galviShotConfidence(score, Object.keys(triage.answers).length, followups.filter(f=>required(f.answer)).length); const result = composeGalviShot(score, followups); await writeGalviShot(db, sid, result); return jsonResponse({ success:true, action, status:'ok', stored:false, session_id:sid, result }, 200, env);
+}
+
+
+function day4ProductVersion(product) {
+  return product === 'GalviPath'
+    ? { rules: GALVIPATH_RULES_VERSION, content: GALVIPATH_CONTENT_VERSION }
+    : { rules: GALVISIGHT_RULES_VERSION, content: GALVISIGHT_CONTENT_VERSION };
+}
+async function hasProductEntitlement(db, sessionId, product) {
+  const entitlement = await dbFirst(db, `SELECT * FROM entitlements WHERE session_id=? AND product=?`, sessionId, product);
+  if (entitlement && ['active', 'paid', 'granted', 'test_override'].includes(String(entitlement.entitlement_status || '').toLowerCase())) return true;
+  const payment = await dbFirst(db, `SELECT * FROM payments WHERE session_id=? AND product=?`, sessionId, product);
+  return Boolean(payment && ['paid', 'succeeded', 'complete'].includes(String(payment.payment_status || '').toLowerCase()));
+}
+async function storedDay4Result(db, sessionId, product) {
+  const v = day4ProductVersion(product);
+  return dbFirst(db, `SELECT * FROM product_results WHERE session_id=? AND product=? AND rules_version=?`, sessionId, product, v.rules);
+}
+async function writeDay4Result(db, sessionId, product, result) {
+  const ts = nowIso(); const v = day4ProductVersion(product);
+  await dbRun(db, `INSERT INTO product_results(result_id,session_id,product,status,confidence,confidence_band,result_json,generation_source,rules_version,content_version,generated_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product) DO NOTHING`, `result_${sessionId}_${product}`, sessionId, product, result.status, result.confidence || 0, result.confidence_band || confidenceBand(result.confidence || 0), JSON.stringify(result), 'rules', v.rules, v.content, ts, ts);
+  return result;
+}
+async function getPaidGalviShotForDay4(db, env, payload, sessionId) {
+  const entitled = await hasGalviShotEntitlement(db, sessionId) || hasQaOverride(env, payload);
+  if (!entitled) return { locked:true, response:{ success:false, status:'locked', message:'GalviShot is locked until server-side entitlement is verified.', session_id:sessionId, payment_required:true } };
+  const stored = await storedGalviShot(db, sessionId);
+  if (!stored) return { missing:true, response:{ success:false, status:'not_found', message:'Generate GalviShot before requesting Day 4.', session_id:sessionId } };
+  return { shot: JSON.parse(stored.result_json) };
+}
+function shotFindingEvidence(shot) {
+  return (shot.findings || []).flatMap(f => (f.evidence || []).map(e => ({ finding_code:f.finding_code, title:f.title, source_id:e.source_id, source_field:e.source_field, display_value:e.display_value, used_for:e.used_for })));
+}
+function buildGalviSight(shot) {
+  const findings = shot.findings || []; const confidence = Number(shot.confidence || 0);
+  if (confidence < 70) return { session_id:shot.session_id, product:'GalviSight', status:'needs_followup', confidence, confidence_band:confidenceBand(confidence), rules_version:GALVISIGHT_RULES_VERSION, content_version:GALVISIGHT_CONTENT_VERSION, followup_questions:[{ question_code:'DAY4_EVIDENCE_GAP', question_text:'Which stored evidence signal should a facilitator validate first?' }], assumptions:['GalviSight withholds interpretation until the stored clinical file has enough confidence.'] };
+  if (!findings.length || findings.some(f => f.finding_code === 'FACILITATOR_REVIEW')) return { session_id:shot.session_id, product:'GalviSight', status:'facilitator_review', confidence, confidence_band:confidenceBand(confidence), rules_version:GALVISIGHT_RULES_VERSION, content_version:GALVISIGHT_CONTENT_VERSION, message:'A facilitator should review this record before automated interpretation.', assumptions:['The stored findings do not support a deterministic interpretation.'] };
+  const top = findings[0];
+  return { session_id:shot.session_id, product:'GalviSight', status:'ready', rules_version:GALVISIGHT_RULES_VERSION, content_version:GALVISIGHT_CONTENT_VERSION, generation_source:'rules', confidence, confidence_band:confidenceBand(confidence), interpretation:`GalviSight interprets the strongest supported pattern as: ${top.title}`, hypotheses:findings.map(f=>({ label:'Hypothesis', finding_code:f.finding_code, statement:`Hypothesis: ${f.title}`, support:f.evidence || [] })), risks:[...new Set(findings.map(f=>f.risk))], opportunities:findings.map(f=>({ finding_code:f.finding_code, statement:`Opportunity: ${f.action}` })), urgency:findings.length >= 3 ? 'High — multiple supported constraints need sequencing.' : 'Standard — address the strongest supported constraint first.', assumptions:['All meaning statements are constrained to the stored GalviShot findings and evidence references.', 'Root-cause language is labeled as hypothesis unless directly supported by stored evidence.'], recommended_actions:findings.map((f,i)=>({ priority:i+1, finding_code:f.finding_code, action:f.action, evidence_refs:(f.evidence||[]).map(e=>e.source_id) })), evidence_trace:shotFindingEvidence(shot), next_step:{ label:'Continue to Chart Your GalviPath', route:'GalviPath' } };
+}
+function selectPathway(shot) {
+  const codes=(shot.findings||[]).map(f=>f.finding_code);
+  if (codes.includes('BROAD_FOCUS_DILUTION') || codes.includes('LEADERSHIP_CAPACITY_STRAIN') || codes.includes('OPERATIONS_FRAGILITY')) return 'stabilize';
+  if (Number(shot.confidence||0) < 80) return 'diagnose';
+  if (codes.includes('CUSTOMER_EVIDENCE_GAP') || codes.includes('PRODUCT_VALIDATION_GAP') || codes.includes('PROBLEM_CLARITY_GAP')) return 'validate';
+  if (codes.includes('REVENUE_SIGNAL_WEAK') || codes.includes('DISTRIBUTION_BOTTLENECK')) return 'grow';
+  return 'build';
+}
+function buildGalviPath(shot, sight) {
+  const pathway = selectPathway(shot); const evidence = shotFindingEvidence(shot);
+  return { session_id:shot.session_id, product:'GalviPath', status:'ready', rules_version:GALVIPATH_RULES_VERSION, content_version:GALVIPATH_CONTENT_VERSION, generation_source:'rules', confidence:shot.confidence, confidence_band:confidenceBand(shot.confidence), primary_pathway:pathway, primary_pathway_count:1, clinical_rationale:`${pathway} is selected from stored GalviShot findings and GalviSight interpretation, not browser rules.`, sequence:[{ window:'30 days', order:1, actions:['Name the single operating constraint and baseline evidence.'] },{ window:'60 days', order:2, actions:['Run the focused evidence sprint and review measured signals.'] },{ window:'90 days', order:3, actions:['Decide whether to continue, escalate, or change pathway based on collected evidence.'] }], evidence_to_collect:['Customer or stakeholder signal tied to the primary constraint.','Revenue, funding, delivery, or capacity signal affected by the selected pathway.'], operating_cadence:'Weekly owner review with one monthly facilitator checkpoint.', support_recommendation:'Book GalviClinic if the primary constraint remains unresolved after the first evidence sprint.', escalation_triggers:['Confidence drops below 70.', 'New evidence contradicts the primary finding.', 'More than two constraints require simultaneous intervention.'], assumptions:[...(sight.assumptions || []), 'GalviPath sequences care from stored Day 3 and Day 4 records only.'], evidence_trace:evidence, source_references:evidence.map(e=>e.source_id), ctas:{ print:'Print GalviPath', clinic:'Book GalviClinic' } };
+}
+async function handleDay4Action(env, payload, action) {
+  const db = requireDb(env); const sid = normalizeSessionId(safe(payload,'session_id') || safe(payload,'session.session_id'));
+  if (!required(sid)) return jsonResponse({ success:false, action, status:'error', message:'Missing session_id' }, 400, env);
+  const product = action.includes('galvipath') ? 'GalviPath' : 'GalviSight';
+  const entitled = await hasProductEntitlement(db, sid, product) || hasQaOverride(env, payload);
+  if (!entitled) return jsonResponse({ success:false, action, status:'locked', product, session_id:sid, payment_required:true, message:`${product} is locked until server-side entitlement is verified.` }, 402, env);
+  const stored = await storedDay4Result(db, sid, product); if (stored) return jsonResponse({ success:true, action, status:'ok', stored:true, product, session_id:sid, result:JSON.parse(stored.result_json) }, 200, env);
+  const shotState = await getPaidGalviShotForDay4(db, env, payload, sid); if (!shotState.shot) return jsonResponse({ action, ...shotState.response }, shotState.locked ? 402 : 404, env);
+  const sightStored = product === 'GalviPath' ? await storedDay4Result(db, sid, 'GalviSight') : null;
+  const sight = sightStored ? JSON.parse(sightStored.result_json) : buildGalviSight(shotState.shot);
+  if (product === 'GalviSight') { if (sight.status === 'ready') await writeDay4Result(db, sid, 'GalviSight', sight); return jsonResponse({ success:true, action, status:sight.status, stored:false, product, session_id:sid, result:sight }, 200, env); }
+  if (sight.status !== 'ready') return jsonResponse({ success:true, action, status:sight.status, product, session_id:sid, result:sight }, 200, env);
+  const path = buildGalviPath(shotState.shot, sight); await writeDay4Result(db, sid, 'GalviPath', path); return jsonResponse({ success:true, action, status:'ok', stored:false, product, session_id:sid, result:path }, 200, env);
 }
 
 async function handleDiagnosticAction(
@@ -1323,11 +1409,23 @@ export default {
 
           supported_actions: [
             ...GALVISHOT_ACTIONS,
-            ...GALVISIGHT_ACTIONS
+            ...GALVISIGHT_ACTIONS,
+            ...DAY4_DETERMINISTIC_ACTIONS
           ],
 
+          day4_deterministic_actions:
+            Array.from(DAY4_DETERMINISTIC_ACTIONS),
+
+          unified_worker_version:
+            GALVICARE_BUILD.unified_worker_version,
+
           build:
-            GALVICARE_BUILD
+            {
+              ...GALVICARE_BUILD,
+
+              day4_deterministic_actions:
+                Array.from(DAY4_DETERMINISTIC_ACTIONS)
+            }
         },
         200,
         env,
@@ -1391,6 +1489,17 @@ export default {
 
       if (pathname === '/api' && GALVISHOT_ACTIONS.has(action)) {
         return await handleDay3GalviShotAction(env, payload, action);
+      }
+
+      if (
+        pathname === '/api' &&
+        DAY4_DETERMINISTIC_ACTIONS.has(action)
+      ) {
+        return await handleDay4Action(
+          env,
+          payload,
+          action
+        );
       }
 
       if (pathname === '/api') {
