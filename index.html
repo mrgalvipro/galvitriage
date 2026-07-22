@@ -347,6 +347,7 @@ const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-triage-intake.mrgalvipro.wo
 const GALVICARE_API_ENDPOINT = GALVICARE_INTAKE_ENDPOINT + '/api';
 const GALVICARE_SCORE_ENDPOINT = ''; // Preserved for legacy later-product event hooks only.
 const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01';
+function navigateToTopLevelCheckout(checkoutUrl){ const url=String(checkoutUrl||'').trim(); if(!url.startsWith('https://buy.stripe.com/')) throw new Error('Invalid Stripe checkout URL'); try{ if(window.top&&window.top!==window.self){ window.top.location.assign(url); return; } }catch(error){} window.location.assign(url); }
 const SCORING_VERSION = 'galviengine_score_v0_5_1';
 const QUESTION_CONTRACT_VERSION = 'galvitriage_questions_v0_5_1';
 const GALVI_ANALYTICS_VERSION = 'galvianalytics_0_5';
@@ -504,7 +505,7 @@ assessmentForm.addEventListener('submit', async function(e){
 });
 
 document.getElementById('continue-to-galviscore')?.addEventListener('click',function(){ const sessionId=getStoredSessionId()||getOrCreateSessionId(); showGalviScorePaywall(sessionId); });
-document.getElementById('galviscore-stripe-cta')?.addEventListener('click',function(){ const sessionId=persistSessionId(getStoredSessionId()||getOrCreateSessionId()); fireGalviEvent('stripe_click',{product:'galviscore',session_id:sessionId,stage:'GalviScore Paywall'}); window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK; });
+document.getElementById('galviscore-stripe-cta')?.addEventListener('click',function(){ const sessionId=persistSessionId(getStoredSessionId()||getOrCreateSessionId()); fireGalviEvent('stripe_click',{product:'galviscore',session_id:sessionId,stage:'GalviScore Paywall'}); navigateToTopLevelCheckout(GALVISCORE_STRIPE_PAYMENT_LINK); });
 document.getElementById('galviscore-qa-override')?.addEventListener('click', function(){
   const cached = getCachedGalviScoreResult();
   if(!cached){
@@ -648,7 +649,7 @@ document.addEventListener('DOMContentLoaded',async function(){ await routeGalviC
     });
     el('skip-galvishot-followup')?.addEventListener('click',()=>el('galvishot-followup')?.classList.add('hidden'));
     el('galvishot-live-test-override')?.addEventListener('click',async function(){ const token=window.prompt('Enter the QA GalviShot override token.'); if(token) localStorage.setItem(GSHOT.QA_OVERRIDE_TOKEN_KEY, token.trim()); await requestResult(); });
-    el('galvishot-stripe-cta')?.addEventListener('click',function(){ if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Paywall'}); window.location.href=GSHOT.PAYMENT_LINK; });
+    el('galvishot-stripe-cta')?.addEventListener('click',function(){ if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Paywall'}); navigateToTopLevelCheckout(GSHOT.PAYMENT_LINK); });
     el('galvishot-back-score')?.addEventListener('click',returnToScore);
     el('galvishot-back-paywall')?.addEventListener('click',window.showIntegratedGalviShotPaywall);
     async function showSight(){ hideUpstream(); const sight=el('galvisight-handoff'); if(!sight) throw new Error('GalviSight handoff container is missing.'); sight.classList.remove('hidden'); sight.style.display='block'; setShotStage('GalviSight Handoff'); try{ const token=localStorage.getItem(GSHOT.QA_OVERRIDE_TOKEN_KEY)||''; const response=await postShot('get_or_generate_galvisight', token?{qa_override_token:token}:{}); const result=response.result||{}; ['galvisight-locked','galvisight-followup','galvisight-review','galvisight-result-panel','galvisight-error'].forEach(id=>el(id)?.classList.add('hidden')); if(response.status==='locked') el('galvisight-locked')?.classList.remove('hidden'); else if(result.status==='needs_followup') el('galvisight-followup')?.classList.remove('hidden'); else if(result.status==='facilitator_review') el('galvisight-review')?.classList.remove('hidden'); else { el('galvisight-result-panel')?.classList.remove('hidden'); if(el('galvisight-interpretation')) el('galvisight-interpretation').textContent=result.interpretation||''; fill('galvisight-actions',(result.recommended_actions||[]).map(a=>a.action||a)); } }catch(error){ el('galvisight-error')?.classList.remove('hidden'); } window.scrollTo({top:0,behavior:'smooth'}); }
@@ -656,7 +657,9 @@ document.addEventListener('DOMContentLoaded',async function(){ await routeGalviC
     el('continue-galvisight')?.addEventListener('click',showSight);
     el('continue-galvipath')?.addEventListener('click',async function(){ hideUpstream(); const path=el('galvipath-result'); path?.classList.remove('hidden'); try{ const token=localStorage.getItem(GSHOT.QA_OVERRIDE_TOKEN_KEY)||''; const response=await postShot('get_or_generate_galvipath', token?{qa_override_token:token}:{}); const result=response.result||{}; ['galvipath-locked','galvipath-result-panel','galvipath-error'].forEach(id=>el(id)?.classList.add('hidden')); if(response.status==='locked') el('galvipath-locked')?.classList.remove('hidden'); else { el('galvipath-result-panel')?.classList.remove('hidden'); if(el('galvipath-primary')) el('galvipath-primary').textContent=result.primary_pathway||''; fill('galvipath-sequence',(result.sequence||[]).map(x=>`${x.window}: ${(x.actions||[]).join(' ')}`)); } }catch(error){ el('galvipath-error')?.classList.remove('hidden'); } });
     el('return-galvishot-result')?.addEventListener('click',requestResult);
-    el('book-galviclinic')?.addEventListener('click',function(){ alert('GalviClinic booking remains unchanged and will be reconnected during the Revamp transaction/integration day.'); });
+    async function verifyDay5ClinicReturn(){ const params=new URLSearchParams(location.search); const stripeSessionId=params.get('stripe_session_id')||params.get('session_id'); const paid=(params.get('paid')||'').toLowerCase(); if(!stripeSessionId || !['clinic_success','galviclinic_success'].includes(paid)) return; try{ await postShot('verify_clinic_payment_return',{ stripe_session_id:stripeSessionId, expected_product:'galviclinic' }); await postShot('get_clinic_entitlement',{}); await postShot('get_or_create_clinic',{}); if(typeof fireGalviEvent==='function') fireGalviEvent('clinic_entitlement_active',{product:'galviclinic',session_id:sessionId(),stage:'GalviClinic'}); }catch(error){ showError('galvipath-error', error); } }
+    el('book-galviclinic')?.addEventListener('click',async function(){ try{ await postShot('get_clinic_entitlement',{}); await postShot('get_or_create_clinic',{}); const response=await postShot('record_booking_click',{}); const destination=response.destination_url||'https://www.galvipro.com/#contact'; if(typeof fireGalviEvent==='function') fireGalviEvent('clinic_booking_clicked',{product:'galviclinic',session_id:sessionId(),stage:'GalviClinic Booking'}); window.open(destination,'_blank','noopener'); }catch(error){ window.open('https://www.galvipro.com/#contact','_blank','noopener'); } });
+    verifyDay5ClinicReturn();
     const params=new URLSearchParams(location.search); if((params.get('product')||'').toLowerCase()==='galvishot') window.showIntegratedGalviShotPaywall();
   });
 })();

@@ -20,6 +20,9 @@ const GALVISIGHT_RULES_VERSION = 'galvisight_rules_v0_5_1';
 const GALVISIGHT_CONTENT_VERSION = 'galvisight_content_v0_5_1';
 const GALVIPATH_RULES_VERSION = 'galvipath_rules_v0_5_1';
 const GALVIPATH_CONTENT_VERSION = 'galvipath_content_v0_5_1';
+const GALVICLINIC_RULES_VERSION = 'galviclinic_v0_5_1';
+const GALVICLINIC_PRODUCT = 'galviclinic';
+const GALVICLINIC_BOOKING_FALLBACK_URL = 'https://www.galvipro.com/#contact';
 
 const GALVICARE_BUILD = Object.freeze({
   environment: 'qa',
@@ -40,6 +43,13 @@ const DAY1_ACTIONS = new Set([
   'create_or_resume_session',
   'journey_event',
   'get_fixture_result'
+]);
+
+const DAY5_ACTIONS = new Set([
+  'verify_clinic_payment_return',
+  'get_clinic_entitlement',
+  'get_or_create_clinic',
+  'record_booking_click'
 ]);
 
 const DAY2_ACTIONS = new Set([
@@ -1369,6 +1379,101 @@ async function handleDiagnosticAction(
   );
 }
 
+function normalizeStripePaymentStatus(session) {
+  const status = String(session?.payment_status || session?.status || '').toLowerCase();
+  if (status === 'paid' || status === 'complete' || status === 'succeeded') return 'paid';
+  if (status === 'unpaid' || status === 'open' || status === 'requires_payment_method') return 'pending';
+  if (status === 'failed' || status === 'expired' || status === 'canceled' || status === 'cancelled') return 'failed';
+  return 'pending';
+}
+function parseStripeProductMap(env) {
+  const map = {};
+  if (env.STRIPE_GALVICLINIC_PRICE_ID) map[env.STRIPE_GALVICLINIC_PRICE_ID] = { product:GALVICLINIC_PRODUCT, entitlement:GALVICLINIC_PRODUCT };
+  if (env.STRIPE_PRODUCT_MAP_JSON) {
+    try { Object.assign(map, JSON.parse(env.STRIPE_PRODUCT_MAP_JSON)); } catch { return {}; }
+  }
+  return map;
+}
+function stripeSessionPriceId(session) {
+  return session?.line_items?.data?.[0]?.price?.id || session?.metadata?.price_id || session?.price_id || session?.display_items?.[0]?.price?.id || '';
+}
+function mapStripeSessionToProduct(session, env) {
+  const map = parseStripeProductMap(env);
+  const byPrice = map[stripeSessionPriceId(session)] || null;
+  const byMetadata = session?.metadata?.galvicare_product ? { product: session.metadata.galvicare_product, entitlement: session.metadata.galvicare_product } : null;
+  const mapped = byPrice || byMetadata;
+  if (!mapped || String(mapped.product).toLowerCase() !== GALVICLINIC_PRODUCT) return null;
+  return { product:GALVICLINIC_PRODUCT, entitlement:GALVICLINIC_PRODUCT };
+}
+function stripeSessionOwner(session) { return normalizeSessionId(session?.client_reference_id || session?.metadata?.galvicare_session_id || session?.metadata?.session_id); }
+async function retrieveStripeCheckoutSession(env, stripeSessionId) {
+  if (!env.STRIPE_SECRET_KEY) throw new Error('STRIPE_SECRET_KEY is not configured');
+  const url = `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(stripeSessionId)}?expand[]=line_items.data.price`;
+  const response = await fetch(url, { headers:{ Authorization:`Bearer ${env.STRIPE_SECRET_KEY}` } });
+  const data = await response.json().catch(()=>({}));
+  if (!response.ok) throw new Error(`Stripe session retrieval failed: ${data.error?.type || response.status}`);
+  return data;
+}
+async function persistClinicPayment(db, sessionId, stripeSession, mapped, source) {
+  const ts = nowIso(); const paymentStatus = normalizeStripePaymentStatus(stripeSession);
+  const intent = typeof stripeSession.payment_intent === 'string' ? stripeSession.payment_intent : stripeSession.payment_intent?.id || null;
+  await dbRun(db, `INSERT INTO payments(payment_id,session_id,product,stripe_session_id,stripe_payment_intent_id,amount_cents,currency,payment_status,paid_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(stripe_session_id) DO UPDATE SET payment_status=excluded.payment_status, paid_at=COALESCE(payments.paid_at, excluded.paid_at), updated_at=excluded.updated_at`, `pay_${stripeSession.id}`, sessionId, mapped.product, stripeSession.id, intent, stripeSession.amount_total || null, stripeSession.currency || 'usd', paymentStatus, paymentStatus === 'paid' ? ts : null, ts, ts);
+  if (paymentStatus === 'paid') await dbRun(db, `INSERT INTO entitlements(entitlement_id,session_id,product,entitlement_status,source,source_reference,granted_at,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product) DO UPDATE SET entitlement_status=excluded.entitlement_status,source=excluded.source,source_reference=excluded.source_reference,granted_at=COALESCE(entitlements.granted_at, excluded.granted_at),updated_at=excluded.updated_at`, `ent_${sessionId}_${mapped.entitlement}`, sessionId, mapped.entitlement, 'active', source, stripeSession.id, ts, ts);
+  return { payment_status:paymentStatus, entitlement_status: paymentStatus === 'paid' ? 'active' : 'locked' };
+}
+async function logDay5Recovery(db, sessionId, action, code, message, details={}) {
+  await dbRun(db, `INSERT INTO system_errors(error_id,session_id,action,error_code,error_message,error_json,environment,created_at) VALUES(?,?,?,?,?,?,?,?)`, id('err'), sessionId || null, String(action).slice(0,80), String(code).slice(0,80), String(message).slice(0,240), JSON.stringify(details).slice(0,1000), 'qa', nowIso());
+}
+async function attemptHubSpotClinicRecovery(env, db, sessionId, eventName) {
+  if (env.HUBSPOT_ENABLED !== 'true') return { attempted:false, success:false };
+  const controller = new AbortController(); const timeout = Number(env.HUBSPOT_TIMEOUT_MS || 1200);
+  const timer = setTimeout(()=>controller.abort(), Math.max(250, Math.min(timeout, 3000)));
+  try {
+    const response = await fetch('https://api.hubapi.com/crm/v3/objects/contacts/search', { method:'POST', signal:controller.signal, headers:{ Authorization:`Bearer ${env.HUBSPOT_PRIVATE_APP_TOKEN || ''}`, 'Content-Type':'application/json' }, body:JSON.stringify({ filterGroups:[], properties:['email'], limit:1 }) });
+    clearTimeout(timer); if (!response.ok) throw new Error(`HubSpot ${response.status}`); return { attempted:true, success:true };
+  } catch (error) { clearTimeout(timer); await logDay5Recovery(db, sessionId, 'hubspot_recovery', 'HUBSPOT_NON_BLOCKING_FAILURE', error.name || error.message, { eventName }); return { attempted:true, success:false }; }
+}
+async function activeClinicEntitlement(db, sessionId) { return dbFirst(db, `SELECT * FROM entitlements WHERE session_id=? AND product=? AND entitlement_status='active'`, sessionId, GALVICLINIC_PRODUCT); }
+async function storedClinicRecord(db, sessionId) { return dbFirst(db, `SELECT * FROM clinic_records WHERE session_id=? AND product=? AND clinic_status='active'`, sessionId, GALVICLINIC_PRODUCT); }
+async function createClinicRecordFromDay4(db, sessionId) {
+  const path = await dbFirst(db, `SELECT * FROM product_results WHERE session_id=? AND product=?`, sessionId, 'GalviPath');
+  if (!path) return { status:'facilitator_review', message:'Stored GalviPath evidence is required before GalviClinic.' };
+  const result = JSON.parse(path.result_json || '{}'); const confidence = Number(path.confidence || result.confidence || 0);
+  if (confidence < 70 || result.status === 'needs_followup') return { status:'facilitator_review', message:'Insufficient stored evidence for automatic GalviClinic conversion.' };
+  const ts = nowIso(); const clinicId = `gclinic_${sessionId}`;
+  await dbRun(db, `INSERT INTO clinic_records(clinic_record_id,session_id,product,source_product,source_result_id,pathway_code,indication_codes_json,evidence_refs_json,clinic_status,booking_status,rules_version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product) WHERE clinic_status='active' DO UPDATE SET updated_at=excluded.updated_at`, clinicId, sessionId, GALVICLINIC_PRODUCT, 'GalviPath', path.result_id || `result_${sessionId}_GalviPath`, result.primary_pathway || result.pathway_code || 'facilitator_review', JSON.stringify(result.recommended_actions || []), JSON.stringify(result.source_references || result.evidence_trace || []), 'active', 'not_started', GALVICLINIC_RULES_VERSION, ts, ts);
+  return { status:'active', clinic_record_id:clinicId, product:GALVICLINIC_PRODUCT, booking_status:'not_started', pathway_code:result.primary_pathway || result.pathway_code || 'facilitator_review', evidence_refs:result.source_references || [] };
+}
+async function handleDay5Action(env, payload, action) {
+  const db = requireDb(env); const sid = normalizeSessionId(payload.session_id || safe(payload,'session.session_id'));
+  if (!required(sid)) return jsonResponse({ success:false, action, message:'Missing session_id' }, 400, env);
+  if (action === 'verify_clinic_payment_return') {
+    const stripeSessionId = String(payload.stripe_session_id || '').trim(); if (!stripeSessionId) return jsonResponse({ success:false, action, message:'Missing stripe_session_id' }, 400, env);
+    try { const stripeSession = await retrieveStripeCheckoutSession(env, stripeSessionId); const mapped = mapStripeSessionToProduct(stripeSession, env); if (!mapped) return jsonResponse({ success:false, action, status:'denied', code:'UNKNOWN_PRODUCT' }, 403, env); if (payload.expected_product && String(payload.expected_product).toLowerCase() !== mapped.product) return jsonResponse({ success:false, action, status:'denied', code:'PRODUCT_MISMATCH' }, 403, env); if (stripeSessionOwner(stripeSession) !== sid) return jsonResponse({ success:false, action, status:'denied', code:'WRONG_SESSION' }, 403, env); const persisted = await persistClinicPayment(db, sid, stripeSession, mapped, 'stripe_return'); await dbRun(db, `INSERT INTO journey_events(event_id,session_id,event_name,product,current_stage,event_json,created_at) VALUES(?,?,?,?,?,?,?)`, id('evt'), sid, 'clinic_payment_returned', GALVICLINIC_PRODUCT, 'GalviClinic Payment Return', JSON.stringify({ stripe_session_id:stripeSession.id, payment_status:persisted.payment_status }), nowIso()); const hubspot = persisted.entitlement_status === 'active' ? await attemptHubSpotClinicRecovery(env, db, sid, 'clinic_entitlement_active') : { attempted:false, success:false }; return jsonResponse({ success:persisted.payment_status === 'paid', action, session_id:sid, product:mapped.product, ...persisted, next_screen:persisted.payment_status === 'paid' ? 'GalviClinic' : 'Payment Pending', hubspot }, persisted.payment_status === 'failed' ? 402 : 200, env); } catch (error) { await logDay5Recovery(db, sid, action, 'PAYMENT_RETURN_FAILED', error.message); return jsonResponse({ success:false, action, status:'error', message:'Payment verification failed' }, 502, env); }
+  }
+  if (action === 'get_clinic_entitlement') { const entitlement = await activeClinicEntitlement(db, sid); return jsonResponse({ success:!!entitlement, action, session_id:sid, product:GALVICLINIC_PRODUCT, entitlement_status: entitlement ? 'active' : 'locked' }, entitlement ? 200 : 402, env); }
+  const entitlement = await activeClinicEntitlement(db, sid); if (!entitlement) return jsonResponse({ success:false, action, session_id:sid, product:GALVICLINIC_PRODUCT, status:'locked', payment_required:true }, 402, env);
+  if (action === 'get_or_create_clinic') { const stored = await storedClinicRecord(db, sid); if (stored) return jsonResponse({ success:true, action, stored:true, session_id:sid, clinic_record:{ clinic_record_id:stored.clinic_record_id, product:stored.product, booking_status:stored.booking_status, pathway_code:stored.pathway_code } }, 200, env); const clinic = await createClinicRecordFromDay4(db, sid); return jsonResponse({ success:clinic.status === 'active', action, session_id:sid, clinic_record:clinic, status:clinic.status }, clinic.status === 'active' ? 200 : 202, env); }
+  if (action === 'record_booking_click') { const stored = await storedClinicRecord(db, sid) || (await createClinicRecordFromDay4(db, sid)); if (!stored.clinic_record_id) return jsonResponse({ success:false, action, status:'facilitator_review' }, 202, env); const ts = nowIso(); await dbRun(db, `INSERT INTO clinic_bookings(booking_id,session_id,clinic_record_id,provider,provider_booking_id,booking_status,booking_url,source_product,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,clinic_record_id,booking_status) WHERE provider_booking_id IS NULL DO UPDATE SET booking_url=excluded.booking_url,updated_at=excluded.updated_at`, `booking_${sid}_${stored.clinic_record_id}_manual_followup`, sid, stored.clinic_record_id, 'manual_followup', null, 'manual_followup', GALVICLINIC_BOOKING_FALLBACK_URL, 'GalviClinic', ts, ts); await dbRun(db, `UPDATE clinic_records SET booking_status=?, updated_at=? WHERE clinic_record_id=?`, 'manual_followup', ts, stored.clinic_record_id); await dbRun(db, `INSERT INTO journey_events(event_id,session_id,event_name,product,current_stage,event_json,created_at) VALUES(?,?,?,?,?,?,?)`, id('evt'), sid, 'clinic_booking_clicked', GALVICLINIC_PRODUCT, 'GalviClinic Booking', JSON.stringify({ booking_status:'manual_followup' }), ts); return jsonResponse({ success:true, action, session_id:sid, booking_status:'manual_followup', destination_url:GALVICLINIC_BOOKING_FALLBACK_URL }, 200, env); }
+}
+async function verifyStripeWebhookSignature(raw, signatureHeader, secret) {
+  const parts = Object.fromEntries(signatureHeader.split(',').map(x => x.split('=')));
+  const signedPayload = `${parts.t}.${raw}`;
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(secret), { name:'HMAC', hash:'SHA-256' }, false, ['sign']);
+  const digest = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(signedPayload));
+  const expected = [...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  return Boolean(parts.t && parts.v1 && expected === parts.v1);
+}
+async function handleStripeWebhook(request, env) {
+  const db = requireDb(env); if (!env.STRIPE_WEBHOOK_SECRET) return jsonResponse({ success:false, message:'Webhook secret missing' }, 500, env);
+  const raw = await request.text(); const sig = request.headers.get('stripe-signature') || '';
+  if (!sig || !(await verifyStripeWebhookSignature(raw, sig, env.STRIPE_WEBHOOK_SECRET))) return jsonResponse({ success:false, message:'Invalid Stripe signature' }, 400, env);
+  const event = JSON.parse(raw); const session = event.data?.object || {}; const mapped = mapStripeSessionToProduct(session, env); const owner = stripeSessionOwner(session);
+  await dbRun(db, `INSERT OR IGNORE INTO stripe_events(stripe_event_id,event_type,stripe_session_id,payment_status,processed_at,payload_json) VALUES(?,?,?,?,?,?)`, event.id, event.type, session.id || null, normalizeStripePaymentStatus(session), nowIso(), raw.slice(0,4000));
+  if (mapped && owner && ['checkout.session.completed','checkout.session.async_payment_succeeded','checkout.session.async_payment_failed'].includes(event.type)) await persistClinicPayment(db, owner, session, mapped, 'stripe_webhook');
+  return jsonResponse({ success:true, received:true }, 200, env);
+}
+
 export default {
   async fetch(request, env) {
     /*
@@ -1400,6 +1505,7 @@ export default {
             'available',
 
           supported_actions: [
+            ...DAY5_ACTIONS,
             ...GALVISHOT_ACTIONS,
             ...GALVISIGHT_ACTIONS
           ],
@@ -1411,6 +1517,10 @@ export default {
         env,
         buildIdentityHeaders()
       );
+    }
+
+    if (request.method === 'POST' && new URL(request.url).pathname === '/stripe/webhook') {
+      return await handleStripeWebhook(request, env);
     }
 
     if (request.method !== 'POST') {
@@ -1465,6 +1575,10 @@ export default {
 
       if (pathname === '/api' && DAY2_ACTIONS.has(action)) {
         return await handleDay2Action(env, payload, action);
+      }
+
+      if (pathname === '/api' && DAY5_ACTIONS.has(action)) {
+        return await handleDay5Action(env, payload, action);
       }
 
       if (pathname === '/api' && GALVISHOT_ACTIONS.has(action)) {
