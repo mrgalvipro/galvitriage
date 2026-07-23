@@ -52,6 +52,9 @@ test('Day 5 HubSpot failure is non-blocking and browser has no secret or entitle
 test('Day 5 browser uses top-level or new-tab Stripe checkout navigation and query-before-hash return URL',()=>{const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');const publicHtml=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');const fix=readFileSync(new URL('../public/embedded-checkout-fix.js',import.meta.url),'utf8');for (const candidate of [html, publicHtml]) assert.ok(candidate.includes('<script src="/embedded-checkout-fix.js"></script>'));assert.ok(fix.includes('function navigateToTopLevelCheckout(checkoutUrl)'));assert.ok(fix.includes("url.startsWith('https://buy.stripe.com/')"));assert.ok(fix.includes('window.location.assign(url)'));assert.equal(fix.includes('window.top.location.assign'),false);assert.ok(fix.includes("window.open("));assert.ok(fix.includes("'about:blank'"));assert.ok(fix.includes("'_blank'"));assert.ok(fix.includes("'noopener,noreferrer'"));assert.ok(fix.includes('checkoutWindow.location.replace(url)'));assert.ok(fix.includes("navigation: 'top_navigation'"));assert.ok(fix.includes("navigation: 'new_tab'"));assert.ok(fix.includes('Checkout could not open. Please allow pop-ups and try again.'));assert.equal(html.includes('window.location.href=GSHOT.PAYMENT_LINK'),false);assert.equal(html.includes('window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK'),false);assert.ok(html.includes('new URLSearchParams(location.search)'));assert.ok(html.includes('verify_clinic_payment_return'));const successUrl='https://galvipro.com/?paid=clinic_success&stripe_session_id={CHECKOUT_SESSION_ID}#galvitriage';assert.equal(new URL(successUrl).searchParams.get('paid'),'clinic_success');assert.equal(new URL(successUrl).searchParams.get('stripe_session_id'),'{CHECKOUT_SESSION_ID}');assert.equal(new URL(successUrl).hash,'#galvitriage');});
 
 test('Day 5 checkout navigation uses top-level navigation outside frames and blank-tab navigation inside frames',()=>{
+test('Day 5 browser uses new-tab Stripe checkout navigation and query-before-hash return URL',()=>{const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');const publicHtml=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');const fix=readFileSync(new URL('../public/embedded-checkout-fix.js',import.meta.url),'utf8');for (const candidate of [html, publicHtml]) assert.ok(candidate.includes('<script src="/embedded-checkout-fix.js"></script>'));assert.ok(fix.includes('function navigateToTopLevelCheckout(checkoutUrl)'));assert.ok(fix.includes("url.startsWith('https://buy.stripe.com/')"));assert.equal(fix.includes('window.location.assign'),false);assert.equal(fix.includes('window.top.location.assign'),false);assert.ok(fix.includes("window.open('about:blank', '_blank')"));assert.ok(fix.includes('checkoutWindow.location.replace(url)'));assert.ok(fix.includes("navigation: 'new_tab'"));assert.ok(fix.includes('Stripe Checkout was blocked. Please allow pop-ups for GalviCare and try again.'));assert.equal(html.includes('window.location.href=GSHOT.PAYMENT_LINK'),false);assert.equal(html.includes('window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK'),false);assert.ok(html.includes('new URLSearchParams(location.search)'));assert.ok(html.includes('verify_clinic_payment_return'));const successUrl='https://galvipro.com/?paid=clinic_success&stripe_session_id={CHECKOUT_SESSION_ID}#galvitriage';assert.equal(new URL(successUrl).searchParams.get('paid'),'clinic_success');assert.equal(new URL(successUrl).searchParams.get('stripe_session_id'),'{CHECKOUT_SESSION_ID}');assert.equal(new URL(successUrl).hash,'#galvitriage');});
+
+test('Day 5 checkout navigation opens a blank tab synchronously before redirecting',()=>{
   const makeHelper = checkoutNavigationHelper();
   assert.throws(() => makeHelper({}).call(null, 'https://example.com/checkout'), /Invalid Stripe Checkout URL/);
 
@@ -76,12 +79,21 @@ test('Day 5 checkout navigation uses top-level navigation outside frames and bla
   assert.deepEqual(makeHelper(iframeWindow)('https://buy.stripe.com/test_safe'), { navigation: 'new_tab' });
   assert.deepEqual(calls, [
     ['open', 'about:blank', '_blank', 'noopener,noreferrer'],
+  };
+  const mockWindow = {
+    open: (url, target) => { calls.push(['open', url, target]); return openedWindow; }
+  };
+  assert.deepEqual(makeHelper(mockWindow)('https://buy.stripe.com/test_safe'), { success: true, navigation: 'new_tab' });
+  assert.deepEqual(calls, [
+    ['open', 'about:blank', '_blank'],
     ['opener', null],
     ['replace', 'https://buy.stripe.com/test_safe']
   ]);
 
   const blockedWindow = { self: {}, top: {}, open: () => null };
   assert.throws(() => makeHelper(blockedWindow)('https://buy.stripe.com/test_blocked'), /Checkout could not open/);
+  const blockedWindow = { open: () => null };
+  assert.throws(() => makeHelper(blockedWindow)('https://buy.stripe.com/test_blocked'), /Stripe Checkout was blocked/);
 });
 
 test('Day 5 Cloudflare static assets are configured and frontend copies stay QA-safe',()=>{
@@ -123,6 +135,7 @@ test('Day 5 Stripe CTAs use the checkout navigation helper before analytics with
     assert.match(candidate, /galviscore-stripe-cta[\s\S]*?const checkoutUrl=GALVISCORE_STRIPE_PAYMENT_LINK; navigateToTopLevelCheckout\(checkoutUrl\);[\s\S]*?fireGalviEvent\('stripe_click'/);
     assert.match(candidate, /galvishot-stripe-cta[\s\S]*?const checkoutUrl=GSHOT\.PAYMENT_LINK; navigateToTopLevelCheckout\(checkoutUrl\);[\s\S]*?fireGalviEvent\('stripe_click'/);
     for (const forbidden of ['window.top.location.assign', 'window.location.href=GSHOT.PAYMENT_LINK', 'window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK', 'location.assign(GSHOT.PAYMENT_LINK)', 'location.assign(GALVISCORE_STRIPE_PAYMENT_LINK)', 'iframe.src']) assert.equal(candidate.includes(forbidden),false);
+    for (const forbidden of ['window.location.assign', 'window.top.location.assign', 'window.location.href=GSHOT.PAYMENT_LINK', 'window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK', 'location.assign(GSHOT.PAYMENT_LINK)', 'location.assign(GALVISCORE_STRIPE_PAYMENT_LINK)', 'iframe.src']) assert.equal(candidate.includes(forbidden),false);
     assert.equal(candidate.includes('<iframe'),false);
   }
   for(const forbidden of ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','HUBSPOT_PRIVATE_APP_TOKEN','STRIPE_PRODUCT_MAP_JSON','DIMENSION_WEIGHTS'])assert.equal(html.includes(forbidden),false);
