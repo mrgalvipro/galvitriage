@@ -3,7 +3,7 @@
   "name": "galvicare-triage-intake",
   "main": "worker/worker.js",
   "compatibility_date": "2026-07-22",
-  "keep_vars": true,
+  "keep_vars": false,
   "vars": {
     "ALLOWED_ORIGIN": "*"
   },
