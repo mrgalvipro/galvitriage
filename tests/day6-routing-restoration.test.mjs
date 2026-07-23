@@ -46,7 +46,7 @@ test('Day 6 P0 Stripe success restores GalviScore from Worker before normal jour
   assert.match(html, /async function restoreGalviScoreFromWorker\(sessionId\)[\s\S]*action:'get_or_create_score'[\s\S]*normalizeScoreResult/);
   assert.match(html, /async function renderGalviScoreAfterPayment\(sessionId\)[\s\S]*persistSessionId\(sessionId\)[\s\S]*restoreGalviScoreFromWorker\(canonicalSessionId\)[\s\S]*cacheGalviScoreResult\(restored\)[\s\S]*renderUnlockedGalviScore\(restored\)/);
   assert.doesNotMatch(html, /renderGalviScoreAfterPayment\(sessionId\)[\s\S]*!GALVICARE_SCORE_ENDPOINT[\s\S]*renderTriageRepair/);
-  assert.match(html, /product==='galviscore'&&paid==='score_success'[\s\S]*hideInitialJourneyForPaidReturn\(\)[\s\S]*renderGalviScoreAfterPayment\(galviSessionId\)[\s\S]*return true/);
+  assert.match(html, /product==='galviscore'&&paid==='score_success'[\s\S]*hideInitialJourneyForPaidReturn\(\)[\s\S]*resolveStripePaymentReturn\(stripeSessionId,'galviscore'\)[\s\S]*persistSessionId\(resolved\.session_id\)[\s\S]*renderGalviScoreAfterPayment\(paidSessionId\)[\s\S]*return true/);
 });
 
 test('Day 6 P0 non-success queries keep normal routing path', () => {
