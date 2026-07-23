@@ -1,6 +1,34 @@
 (function () {
   'use strict';
 
+  const PRODUCTION_WORKER_ORIGIN = 'https://galvicare-triage-intake.mrgalvipro.workers.dev';
+  const IS_WORKER_PREVIEW =
+    window.location.hostname.endsWith('.workers.dev') &&
+    window.location.origin !== PRODUCTION_WORKER_ORIGIN;
+
+  const nativeFetch = window.fetch.bind(window);
+
+  window.fetch = function galviCareEnvironmentAwareFetch(input, init) {
+    const requestUrl = typeof input === 'string' ? input : input?.url;
+
+    if (
+      IS_WORKER_PREVIEW &&
+      typeof requestUrl === 'string' &&
+      requestUrl.startsWith(PRODUCTION_WORKER_ORIGIN)
+    ) {
+      const parsedUrl = new URL(requestUrl);
+      const sameOriginUrl = `${window.location.origin}${parsedUrl.pathname}${parsedUrl.search}`;
+
+      if (typeof input === 'string') {
+        input = sameOriginUrl;
+      } else if (input instanceof Request) {
+        input = new Request(sameOriginUrl, input);
+      }
+    }
+
+    return nativeFetch(input, init);
+  };
+
   const STRIPE_LINKS = Object.freeze({
     'galviscore-stripe-cta': 'https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01',
     'galvishot-stripe-cta': 'https://buy.stripe.com/test_00w14odrG1QLdcu9dA53O02'
@@ -34,14 +62,12 @@
   };
 
   function resolveCheckoutUrl(target) {
-    const configuredUrl = String(
+    return String(
       target?.dataset?.checkoutUrl ||
       target?.getAttribute?.('href') ||
       STRIPE_LINKS[target?.id] ||
       ''
     ).trim();
-
-    return configuredUrl;
   }
 
   document.addEventListener('click', function enforceTopLevelStripeCheckout(event) {
