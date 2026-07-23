@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import worker from '../worker/worker.js';
 
 class MockStmt{constructor(db,sql){this.db=db;this.sql=sql}bind(...p){this.p=p;return this}async run(){return this.db.run(this.sql,this.p)}async first(){return this.db.first(this.sql,this.p)}async all(){return{results:this.db.all(this.sql,this.p)}}}
@@ -49,7 +49,7 @@ test('Day 5 creates stable Clinic record, facilitator review, booking fallback, 
 test('Day 5 HubSpot failure is non-blocking and browser has no secret or entitlement authority',async()=>{const db=new MockD1();const old=globalThis.fetch;globalThis.fetch=async(url)=>String(url).includes('stripe.com')?new Response(JSON.stringify(stripeSession('cs_hub')),{status:200,headers:{'Content-Type':'application/json'}}):new Response('{}',{status:500});try{const res=await worker.fetch(req({action:'verify_clinic_payment_return',session_id:'s1',stripe_session_id:'cs_hub',expected_product:'galviclinic'}),env(db,{HUBSPOT_ENABLED:'true',HUBSPOT_PRIVATE_APP_TOKEN:'token',HUBSPOT_TIMEOUT_MS:'250'}));assert.equal(res.status,200);assert.equal(db.entitlements.size,1);assert.equal(db.errors.length,1)}finally{globalThis.fetch=old}const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');for(const forbidden of ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','HUBSPOT_PRIVATE_APP_TOKEN','STRIPE_PRODUCT_MAP_JSON','stripe.webhooks','grantEntitlement','DIMENSION_WEIGHTS'])assert.equal(html.includes(forbidden),false);assert.ok(html.includes('verify_clinic_payment_return'));assert.ok(html.includes('record_booking_click'));assert.ok(html.includes('https://www.galvipro.com/#contact'))});
 
 
-test('Day 5 browser uses top-level Stripe checkout navigation and query-before-hash return URL',()=>{const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');assert.ok(html.includes('function navigateToTopLevelCheckout(checkoutUrl)'));assert.ok(html.includes("url.startsWith('https://buy.stripe.com/')"));assert.ok(html.includes('window.top.location.assign(url)'));assert.ok(html.includes('window.open('));assert.ok(html.includes("'_blank'"));assert.ok(html.includes("'noopener,noreferrer'"));assert.ok(html.includes("return { navigation: 'top_navigation' }"));assert.ok(html.includes("return { navigation: 'new_tab' }"));assert.ok(html.includes('Stripe Checkout could not open outside the embedded GalviCare frame.'));assert.equal(html.includes('window.location.href=GSHOT.PAYMENT_LINK'),false);assert.equal(html.includes('window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK'),false);assert.ok(html.includes('new URLSearchParams(location.search)'));assert.ok(html.includes('verify_clinic_payment_return'));const successUrl='https://galvipro.com/?paid=clinic_success&stripe_session_id={CHECKOUT_SESSION_ID}#galvitriage';assert.equal(new URL(successUrl).searchParams.get('paid'),'clinic_success');assert.equal(new URL(successUrl).searchParams.get('stripe_session_id'),'{CHECKOUT_SESSION_ID}');assert.equal(new URL(successUrl).hash,'#galvitriage');});
+test('Day 5 browser uses top-level Stripe checkout navigation and query-before-hash return URL',()=>{const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');assert.ok(html.includes('function navigateToTopLevelCheckout(checkoutUrl)'));assert.ok(html.includes("url.startsWith('https://buy.stripe.com/')"));assert.equal(html.includes('window.top.location.assign(url)'),false);assert.ok(html.includes('window.open('));assert.ok(html.includes("'_blank'"));assert.ok(html.includes("'noopener,noreferrer'"));assert.ok(html.includes("return { navigation: 'top_navigation' }"));assert.ok(html.includes("return { navigation: 'new_tab' }"));assert.ok(html.includes('Stripe Checkout could not open outside the embedded GalviCare frame.'));assert.equal(html.includes('window.location.href=GSHOT.PAYMENT_LINK'),false);assert.equal(html.includes('window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK'),false);assert.ok(html.includes('new URLSearchParams(location.search)'));assert.ok(html.includes('verify_clinic_payment_return'));const successUrl='https://galvipro.com/?paid=clinic_success&stripe_session_id={CHECKOUT_SESSION_ID}#galvitriage';assert.equal(new URL(successUrl).searchParams.get('paid'),'clinic_success');assert.equal(new URL(successUrl).searchParams.get('stripe_session_id'),'{CHECKOUT_SESSION_ID}');assert.equal(new URL(successUrl).hash,'#galvitriage');});
 
 test('Day 5 checkout navigation rejects invalid URLs and escapes blocked iframes safely',()=>{
   const makeHelper = checkoutNavigationHelper();
@@ -64,27 +64,29 @@ test('Day 5 checkout navigation rejects invalid URLs and escapes blocked iframes
   assert.deepEqual(topCalls, ['https://buy.stripe.com/test_safe']);
 
   const parentCalls = [];
+  const openedTabs = [];
   const iframeLocationCalls = [];
   const iframeWindow = {
     self: {},
     top: { location: { assign: url => parentCalls.push(url) } },
     location: { assign: url => iframeLocationCalls.push(url) },
-    open: () => { throw new Error('parent navigation should be attempted first'); }
+    open: (url, target, features) => { openedTabs.push({ url, target, features }); return {}; }
   };
-  assert.deepEqual(makeHelper(iframeWindow)('https://buy.stripe.com/test_parent'), { navigation: 'top_navigation' });
-  assert.deepEqual(parentCalls, ['https://buy.stripe.com/test_parent']);
+  assert.deepEqual(makeHelper(iframeWindow)('https://buy.stripe.com/test_parent'), { navigation: 'new_tab' });
+  assert.deepEqual(parentCalls, []);
+  assert.deepEqual(openedTabs, [{ url: 'https://buy.stripe.com/test_parent', target: '_blank', features: 'noopener,noreferrer' }]);
   assert.deepEqual(iframeLocationCalls, []);
 
   const blockedIframeLocationCalls = [];
-  const openedTabs = [];
+  const blockedOpenedTabs = [];
   const blockedIframeWindow = {
     self: {},
     top: { location: { assign: () => { throw new Error('blocked by frame policy'); } } },
     location: { assign: url => blockedIframeLocationCalls.push(url) },
-    open: (url, target, features) => { openedTabs.push({ url, target, features }); return {}; }
+    open: (url, target, features) => { blockedOpenedTabs.push({ url, target, features }); return {}; }
   };
   assert.deepEqual(makeHelper(blockedIframeWindow)('https://buy.stripe.com/test_tab'), { navigation: 'new_tab' });
-  assert.deepEqual(openedTabs, [{ url: 'https://buy.stripe.com/test_tab', target: '_blank', features: 'noopener,noreferrer' }]);
+  assert.deepEqual(blockedOpenedTabs, [{ url: 'https://buy.stripe.com/test_tab', target: '_blank', features: 'noopener,noreferrer' }]);
   assert.deepEqual(blockedIframeLocationCalls, []);
 
   const fullyBlockedIframeWindow = {
@@ -94,6 +96,38 @@ test('Day 5 checkout navigation rejects invalid URLs and escapes blocked iframes
     open: () => null
   };
   assert.throws(() => makeHelper(fullyBlockedIframeWindow)('https://buy.stripe.com/test_blocked'), /Stripe Checkout could not open outside the embedded GalviCare frame/);
+});
+
+test('Day 5 Cloudflare static assets are configured and frontend copies stay QA-safe',()=>{
+  const rootHtml=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+  const publicUrl=new URL('../public/index.html',import.meta.url);
+  assert.equal(existsSync(publicUrl),true);
+  const publicHtml=readFileSync(publicUrl,'utf8');
+  assert.equal(publicHtml,rootHtml);
+  const wrangler=JSON.parse(readFileSync(new URL('../wrangler.jsonc',import.meta.url),'utf8'));
+  assert.equal(wrangler.assets.directory,'./public');
+  assert.equal(wrangler.assets.binding,'ASSETS');
+  for (const html of [rootHtml, publicHtml]) {
+    assert.equal(/id=["']galviscore[^"']*qa[^"']*override/i.test(html),false);
+    assert.equal(/id=["']qa[^"']*override[^"']*galviscore/i.test(html),false);
+  }
+});
+
+test('Day 5 Worker keeps API and webhook POST routing with static assets binding',async()=>{
+  const db=new MockD1();
+  const assetCalls=[];
+  const assets={fetch:async request=>{assetCalls.push(request.url);return new Response('<!doctype html><title>asset</title>',{headers:{'Content-Type':'text/html'}})}};
+  let res=await worker.fetch(new Request('https://worker.test/',{method:'GET',headers:{accept:'text/html'}}),env(db,{ASSETS:assets}));
+  assert.equal(res.status,200);
+  assert.equal(await res.text(),'<!doctype html><title>asset</title>');
+  assert.deepEqual(assetCalls,['https://worker.test/']);
+  res=await worker.fetch(req({action:'get_clinic_entitlement',session_id:'missing'}),env(db,{ASSETS:assets}));
+  assert.notEqual(res.status,404);
+  assert.equal(assetCalls.length,1);
+  res=await worker.fetch(await signedWebhook({id:'evt_assets',type:'checkout.session.completed',data:{object:stripeSession('cs_assets')}}),env(db,{ASSETS:assets}));
+  assert.equal(res.status,200);
+  assert.equal(db.stripeEvents.has('evt_assets'),true);
+  assert.equal(assetCalls.length,1);
 });
 
 test('Day 5 Stripe CTAs use the checkout navigation helper without iframe-local Stripe redirects',()=>{
