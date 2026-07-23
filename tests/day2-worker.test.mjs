@@ -147,14 +147,15 @@ test('Root legacy intake does not write to mocked D1 when Airtable credentials a
 }));
 
 
-test('Browser Day 2 QA path contains no GalviVitals/GalviScore scoring fallback and has governed retry error card', () => {
+test('Browser Day 2 QA path renders GalviVitals before non-blocking Worker persistence', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
   for (const forbidden of ['domainWeights','GALVISCORE_WEIGHTS','calculateDerivedScores','calculateGalviScore','normalizeFivePoint','mapRevenueRange','classifyGalviScore','buildGalviScoreDiagnosticFields']) {
     assert.equal(html.includes(forbidden), false, `${forbidden} must not be browser-delivered`);
   }
   assert.equal(html.includes('showGalviCareErrorCard'), true);
-  assert.equal(html.includes('retry-galvicare-worker'), true);
-  assert.equal(html.includes('Session ID:'), true);
+  assert.equal(html.includes('retry-galvicare-worker'), false);
+  assert.equal(html.includes('GalviCare could not prepare your Worker-based result.'), false);
+  assert.ok(html.indexOf('displayResults(vitals);') < html.indexOf('submitToGalviCareWorker(payload).then'));
 });
 
 test('Worker locks the exact Product Owner approved 20-question key/order/dimension mapping', () => {

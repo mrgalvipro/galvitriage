@@ -70,10 +70,11 @@ test('placeholder and malformed sessions are rejected', () => {
   assert.throws(() => ctx.persistSessionId('YOUR_SESSION_ID'), /Invalid GalviCare session ID/);
 });
 
-test('submit_triage response session ID becomes canonical before submission is marked complete', () => {
-  assert.match(html, /const canonicalSessionId\s*=\s*persistSessionId\(workerResult\.session_id \|\| payload\.session\.session_id\)/);
-  assert.ok(html.indexOf('const canonicalSessionId = persistSessionId(workerResult.session_id || payload.session.session_id);') < html.indexOf("localStorage.setItem(GALVI_SUBMITTED_STORAGE_KEY, 'true');"));
+test('submit_triage browser session ID becomes canonical before submission is marked complete', () => {
+  assert.match(html, /const canonicalSessionId\s*=\s*persistSessionId\(payload\.session\.session_id\)/);
+  assert.ok(html.indexOf('const canonicalSessionId = persistSessionId(payload.session.session_id);') < html.indexOf("localStorage.setItem(GALVI_SUBMITTED_STORAGE_KEY, 'true');"));
   assert.match(html, /score\.session_id\s*=\s*canonicalSessionId/);
+  assert.match(html, /workerSessionId = persistSessionId\(workerResult\.session_id \|\| canonicalSessionId\)/);
 });
 
 test('analytics does not create a replacement session after submission', () => {
