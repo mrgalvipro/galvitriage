@@ -53,3 +53,31 @@ test('Day 6 P0 non-success queries keep normal routing path', () => {
   assert.match(html, /if\(await restoreGalviCareSession\(\)\) return true; return false;/);
   assert.doesNotMatch(html, /product==='galviscore'&&paid!=='score_success'[\s\S]*renderGalviScoreAfterPayment/);
 });
+
+test('Day 6 product contract does not use GalviScore confidence thresholds as paid-access gates', () => {
+  assert.match(html, /function hasValidGalviScoreResult\(scoreResult\)/);
+  assert.match(html, /function routeByGalviScoreConfidence\(scoreResult\)\{ if\(hasValidGalviScoreResult\(scoreResult\)\)/);
+  assert.doesNotMatch(html, /function routeByGalviScoreConfidence\(scoreResult\)[\s\S]*confidence>=70[\s\S]*confidence>=60/);
+  assert.doesNotMatch(html, /minimum threshold for a paid GalviScore result/);
+});
+
+test('Day 6 QA override no longer falsifies GalviScore confidence', () => {
+  assert.doesNotMatch(html, /galviscore_confidence\s*=\s*Math\.max\(80/);
+  assert.match(html, /payment_galviscore = 'test_override'/);
+  assert.match(html, /renderUnlockedGalviScore\(cached\)/);
+});
+
+test('Day 6 complete low, mid, and high GalviScores are valid renderable results', () => {
+  for (const score of [20, 55, 90]) {
+    const payload = `galviscore_score:${score},galviscore_confidence:100`;
+    assert.match(`function routeByGalviScoreConfidence(scoreResult){ if(hasValidGalviScoreResult(scoreResult)){ renderUnlockedGalviScore(scoreResult); return'result'; } } ${payload}`, /hasValidGalviScoreResult/);
+  }
+  assert.match(html, /galviscore-score/);
+  assert.match(html, /document\.getElementById\('galviscore-score'\)\.textContent=result\.galviscore_score/);
+});
+
+test('Day 6 GalviShot paid return restores result path instead of restarting triage', () => {
+  assert.match(html, /product==='galvishot'&&paid[\s\S]*showIntegratedGalviShotResult/);
+  assert.doesNotMatch(html, /product==='galvishot'&&paid[\s\S]*startNewGalviCareAssessment\(/);
+  assert.match(html, /if\(\(p\.get\('product'\)==='galviscore'[\s\S]*\|\|\(p\.get\('product'\)==='galvishot'&&p\.get\('paid'\)\)\)/);
+});
