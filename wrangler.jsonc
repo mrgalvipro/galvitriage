@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvicare-triage-intake",
-  "main": "worker/worker.js",
+  "main": "worker/worker-entry.js",
   "compatibility_date": "2026-07-22",
   "keep_vars": false,
   "vars": {
