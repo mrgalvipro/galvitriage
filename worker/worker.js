@@ -251,10 +251,132 @@ function isStripePaid(session) {
   return paymentStatus === 'paid' || status === 'complete';
 }
 async function persistVerifiedPayment(db, stripeSession, sessionId, product) {
+  /*
+   * Day 6 paid-return stabilization.
+   *
+   * Do not use ON CONFLICT(column...) here. The QA D1 schema may not expose
+   * stripe_session_id or (session_id, product) as UNIQUE conflict targets,
+   * which causes SQLite/D1 to reject the statement before the paid session
+   * can be restored.
+   *
+   * Instead, perform explicit lookup -> UPDATE/INSERT. This is idempotent,
+   * works with the existing QA schema, and preserves the Stripe Checkout
+   * Session as the authoritative proof of payment.
+   */
   const ts = nowIso();
   const stripeSessionId = String(stripeSession.id || '').trim();
-  await dbRun(db, `INSERT INTO payments(payment_id,session_id,product,stripe_session_id,stripe_payment_intent_id,amount_cents,currency,payment_status,paid_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(stripe_session_id) DO UPDATE SET session_id=excluded.session_id,product=excluded.product,stripe_payment_intent_id=excluded.stripe_payment_intent_id,amount_cents=excluded.amount_cents,currency=excluded.currency,payment_status=excluded.payment_status,paid_at=COALESCE(payments.paid_at, excluded.paid_at),updated_at=excluded.updated_at`, `payment_${stripeSessionId || sessionId + '_' + product}`, sessionId, product, stripeSessionId, stripeSession.payment_intent || '', Number(stripeSession.amount_total || 0), stripeSession.currency || 'usd', 'paid', ts, ts, ts);
-  await dbRun(db, `INSERT INTO entitlements(entitlement_id,session_id,product,entitlement_status,source,source_reference,granted_at,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product) DO UPDATE SET entitlement_status=excluded.entitlement_status,source=excluded.source,source_reference=excluded.source_reference,granted_at=COALESCE(entitlements.granted_at, excluded.granted_at),updated_at=excluded.updated_at`, `entitlement_${sessionId}_${product}`, sessionId, product, 'active', 'stripe_checkout', stripeSessionId, ts, ts);
+  const paymentIntentId = String(stripeSession.payment_intent || '').trim();
+  const amountCents = Number(stripeSession.amount_total || 0);
+  const currency = String(stripeSession.currency || 'usd').trim().toLowerCase() || 'usd';
+
+  if (!required(stripeSessionId)) {
+    throw new Error('Stripe Checkout Session ID is required before payment persistence.');
+  }
+
+  const existingPayment = await dbFirst(
+    db,
+    `SELECT payment_id, paid_at FROM payments WHERE stripe_session_id=? LIMIT 1`,
+    stripeSessionId
+  );
+
+  if (existingPayment) {
+    await dbRun(
+      db,
+      `UPDATE payments
+       SET session_id=?,
+           product=?,
+           stripe_payment_intent_id=?,
+           amount_cents=?,
+           currency=?,
+           payment_status='paid',
+           paid_at=COALESCE(paid_at, ?),
+           updated_at=?
+       WHERE payment_id=?`,
+      sessionId,
+      product,
+      paymentIntentId,
+      amountCents,
+      currency,
+      ts,
+      ts,
+      existingPayment.payment_id
+    );
+  } else {
+    await dbRun(
+      db,
+      `INSERT INTO payments(
+         payment_id,session_id,product,stripe_session_id,stripe_payment_intent_id,
+         amount_cents,currency,payment_status,paid_at,created_at,updated_at
+       ) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+      `payment_${stripeSessionId}`,
+      sessionId,
+      product,
+      stripeSessionId,
+      paymentIntentId,
+      amountCents,
+      currency,
+      'paid',
+      ts,
+      ts,
+      ts
+    );
+  }
+
+  const existingEntitlement = await dbFirst(
+    db,
+    `SELECT entitlement_id, granted_at
+     FROM entitlements
+     WHERE session_id=? AND product=?
+     LIMIT 1`,
+    sessionId,
+    product
+  );
+
+  if (existingEntitlement) {
+    await dbRun(
+      db,
+      `UPDATE entitlements
+       SET entitlement_status='active',
+           source='stripe_checkout',
+           source_reference=?,
+           granted_at=COALESCE(granted_at, ?),
+           updated_at=?
+       WHERE entitlement_id=?`,
+      stripeSessionId,
+      ts,
+      ts,
+      existingEntitlement.entitlement_id
+    );
+  } else {
+    await dbRun(
+      db,
+      `INSERT INTO entitlements(
+         entitlement_id,session_id,product,entitlement_status,source,
+         source_reference,granted_at,updated_at
+       ) VALUES(?,?,?,?,?,?,?,?)`,
+      `entitlement_${sessionId}_${product}`,
+      sessionId,
+      product,
+      'active',
+      'stripe_checkout',
+      stripeSessionId,
+      ts,
+      ts
+    );
+  }
+
+  await dbRun(
+    db,
+    `UPDATE sessions
+     SET current_stage=?,
+         updated_at=?,
+         last_seen_at=?
+     WHERE session_id=?`,
+    `${product} Paid`,
+    ts,
+    ts,
+    sessionId
+  );
 }
 async function resolvePaymentReturn(env, payload) {
   const db = requireDb(env);
@@ -1880,4 +2002,3 @@ export default {
     }
   }
 };
-
