@@ -346,32 +346,6 @@ const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-triage-intake.mrgalvipro.wo
 const GALVICARE_API_ENDPOINT = GALVICARE_INTAKE_ENDPOINT + '/api';
 const GALVICARE_SCORE_ENDPOINT = ''; // Preserved for legacy later-product event hooks only.
 const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01';
-function navigateToTopLevelCheckout(checkoutUrl) {
-  const url = String(checkoutUrl || '').trim();
-
-  if (!url.startsWith('https://buy.stripe.com/')) {
-    throw new Error('Invalid Stripe checkout URL');
-  }
-
-  if (window.top === window.self) {
-    window.location.assign(url);
-    return { navigation: 'top_navigation' };
-  }
-
-  const checkoutWindow = window.open(
-    url,
-    '_blank',
-    'noopener,noreferrer'
-  );
-
-  if (checkoutWindow) {
-    return { navigation: 'new_tab' };
-  }
-
-  throw new Error(
-    'Stripe Checkout could not open outside the embedded GalviCare frame.'
-  );
-}
 const SCORING_VERSION = 'galviengine_score_v0_5_1';
 const QUESTION_CONTRACT_VERSION = 'galvitriage_questions_v0_5_1';
 const GALVI_ANALYTICS_VERSION = 'galvianalytics_0_5';
@@ -527,7 +501,7 @@ assessmentForm.addEventListener('submit', async function(e){
 });
 
 document.getElementById('continue-to-galviscore')?.addEventListener('click',function(){ const sessionId=getStoredSessionId()||getOrCreateSessionId(); showGalviScorePaywall(sessionId); });
-document.getElementById('galviscore-stripe-cta')?.addEventListener('click',function(){ const sessionId=persistSessionId(getStoredSessionId()||getOrCreateSessionId()); fireGalviEvent('stripe_click',{product:'galviscore',session_id:sessionId,stage:'GalviScore Paywall'}); navigateToTopLevelCheckout(GALVISCORE_STRIPE_PAYMENT_LINK); });
+document.getElementById('galviscore-stripe-cta')?.addEventListener('click',function(){ const checkoutUrl=GALVISCORE_STRIPE_PAYMENT_LINK; navigateToTopLevelCheckout(checkoutUrl); const sessionId=persistSessionId(getStoredSessionId()||getOrCreateSessionId()); fireGalviEvent('stripe_click',{product:'galviscore',session_id:sessionId,stage:'GalviScore Paywall'}); });
 document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=getStoredSessionId(); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const node of textareas){ if(!node.value.trim()){node.reportValidity(); return;} const response=await saveClinicalFollowUp(sessionId,{question_id:node.dataset.questionId},node.value.trim()); if(response.result){ cacheGalviScoreResult(response.result); renderGalviScoreState(response.result); } } });
 document.getElementById('return-to-triage')?.addEventListener('click',function(){ hideGalviScoreScreens(); document.getElementById('assessmentForm').style.display='block'; document.getElementById('assessmentForm').scrollIntoView({behavior:'smooth'}); });
 document.getElementById('continue-galvishot')?.addEventListener('click',function(){
@@ -659,7 +633,7 @@ document.addEventListener('DOMContentLoaded',async function(){ await routeGalviC
     });
     el('skip-galvishot-followup')?.addEventListener('click',()=>el('galvishot-followup')?.classList.add('hidden'));
     el('galvishot-live-test-override')?.addEventListener('click',async function(){ const token=window.prompt('Enter the QA GalviShot override token.'); if(token) localStorage.setItem(GSHOT.QA_OVERRIDE_TOKEN_KEY, token.trim()); await requestResult(); });
-    el('galvishot-stripe-cta')?.addEventListener('click',function(){ if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Paywall'}); navigateToTopLevelCheckout(GSHOT.PAYMENT_LINK); });
+    el('galvishot-stripe-cta')?.addEventListener('click',function(){ const checkoutUrl=GSHOT.PAYMENT_LINK; navigateToTopLevelCheckout(checkoutUrl); if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Paywall'}); });
     el('galvishot-back-score')?.addEventListener('click',returnToScore);
     el('galvishot-back-paywall')?.addEventListener('click',window.showIntegratedGalviShotPaywall);
     async function showSight(){ hideUpstream(); const sight=el('galvisight-handoff'); if(!sight) throw new Error('GalviSight handoff container is missing.'); sight.classList.remove('hidden'); sight.style.display='block'; setShotStage('GalviSight Handoff'); try{ const token=localStorage.getItem(GSHOT.QA_OVERRIDE_TOKEN_KEY)||''; const response=await postShot('get_or_generate_galvisight', token?{qa_override_token:token}:{}); const result=response.result||{}; ['galvisight-locked','galvisight-followup','galvisight-review','galvisight-result-panel','galvisight-error'].forEach(id=>el(id)?.classList.add('hidden')); if(response.status==='locked') el('galvisight-locked')?.classList.remove('hidden'); else if(result.status==='needs_followup') el('galvisight-followup')?.classList.remove('hidden'); else if(result.status==='facilitator_review') el('galvisight-review')?.classList.remove('hidden'); else { el('galvisight-result-panel')?.classList.remove('hidden'); if(el('galvisight-interpretation')) el('galvisight-interpretation').textContent=result.interpretation||''; fill('galvisight-actions',(result.recommended_actions||[]).map(a=>a.action||a)); } }catch(error){ el('galvisight-error')?.classList.remove('hidden'); } window.scrollTo({top:0,behavior:'smooth'}); }
@@ -675,5 +649,6 @@ document.addEventListener('DOMContentLoaded',async function(){ await routeGalviC
 })();
 </script>
 
+<script src="/embedded-checkout-fix.js"></script>
 </body>
 </html>
