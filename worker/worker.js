@@ -39,7 +39,10 @@ const DAY1_ACTIONS = new Set([
   'health_check',
   'create_or_resume_session',
   'journey_event',
-  'get_fixture_result'
+  'get_fixture_result',
+  'get_session_state',
+  'get_clinical_summary',
+  'save_fcd_note'
 ]);
 
 const DAY2_ACTIONS = new Set([
@@ -156,11 +159,68 @@ async function getStoredTriage(db, sessionId) {
   const rows = await db.prepare(`SELECT question_id,dimension,answer_number FROM assessment_responses WHERE session_id=? AND product='GalviTriage' ORDER BY question_id`).bind(sessionId).all();
   return { session, answers: (rows.results || []).reduce((acc, row) => { acc[row.question_id] = row.answer_number; return acc; }, {}) };
 }
+
+async function storedAnyProductResult(db, sessionId, product) {
+  return dbFirst(db, `SELECT * FROM product_results WHERE session_id=? AND product=?`, sessionId, product);
+}
+function parseStoredResult(row) { if (!row || !row.result_json) return null; try { return JSON.parse(row.result_json); } catch { return null; } }
+function day6Value(value) { return required(value) ? value : 'Not yet available'; }
+function day6SummaryFromResult(result, fallback = 'Not yet available') {
+  if (!result) return fallback;
+  if (result.executive_summary) return result.executive_summary;
+  if (result.interpretation) return result.interpretation;
+  if (result.primary_pathway) return result.primary_pathway;
+  if (result.classification || result.health_band) return `${result.classification || result.health_band}${result.score !== undefined ? ` (${result.score}/100)` : ''}`;
+  return fallback;
+}
+function requireFcdAccess(env, payload) {
+  const configured = String(env.FCD_API_TOKEN || '').trim();
+  if (!configured) return true;
+  const supplied = String(safe(payload, 'payload.fcd_token') || safe(payload, 'fcd_token') || '').trim();
+  return supplied === configured;
+}
+async function getSessionState(db, sessionId) {
+  const session = await dbFirst(db, `SELECT * FROM sessions WHERE session_id=?`, sessionId);
+  if (!session) return null;
+  const products = ['GalviVitals', 'GalviScore', 'GalviShot', 'GalviSight', 'GalviPath'];
+  const available = [];
+  for (const product of products) if (await storedAnyProductResult(db, sessionId, product)) available.push(product);
+  const current = available.includes('GalviPath') ? 'GalviPath' : available.includes('GalviSight') ? 'GalviSight' : available.includes('GalviShot') ? 'GalviShot' : available.includes('GalviScore') ? 'GalviScore' : available.includes('GalviVitals') ? 'GalviVitals' : (session.current_stage || 'GalviTriage');
+  return { success:true, session_id:sessionId, current_stage:current, available_products:available };
+}
+async function clinicalSummary(db, sessionId) {
+  const session = await dbFirst(db, `SELECT * FROM sessions WHERE session_id=?`, sessionId);
+  if (!session) return null;
+  const [vitalsRow, scoreRow, shotRow, sightRow, pathRow] = await Promise.all(['GalviVitals','GalviScore','GalviShot','GalviSight','GalviPath'].map(product => storedAnyProductResult(db, sessionId, product)));
+  const vitals = parseStoredResult(vitalsRow), score = parseStoredResult(scoreRow), shot = parseStoredResult(shotRow), sight = parseStoredResult(sightRow), path = parseStoredResult(pathRow);
+  const noteRows = await db.prepare(`SELECT * FROM fcd_notes WHERE session_id=? ORDER BY created_at DESC`).bind(sessionId).all();
+  const notes = noteRows.results || [];
+  return { success:true, session_id:sessionId, sections:{
+    reason_for_visit: day6Value(session.current_stage),
+    health_at_a_glance: day6SummaryFromResult(vitals || score),
+    galvishot_findings: shot ? (shot.findings || []).map(f => f.title || f.finding || f.finding_code).filter(Boolean) : 'Not yet available',
+    galvisight_interpretation: day6SummaryFromResult(sight),
+    galvipath_recommendation: path ? { primary_pathway:day6Value(path.primary_pathway), sequence:path.sequence || 'Not yet available', support_recommendation:day6Value(path.support_recommendation) } : 'Not yet available',
+    galviclinic_next_treatment_state: path ? 'GalviClinic treatment discussion is the next step.' : 'Not yet available',
+    commercial_journey_status: { current_stage:day6Value(session.current_stage), available_products: (await getSessionState(db, sessionId)).available_products },
+    facilitator_notes: notes.length ? notes : 'Not yet available'
+  }};
+}
+async function saveFcdNote(db, sessionId, payload) {
+  const allowed = ['confirmed_finding','rejected_finding','uncertain_finding','new_observation','objection','decision','next_action','follow_up_date'];
+  const body = safe(payload, 'payload', {}); const note = {};
+  for (const key of allowed) if (body[key] !== undefined && body[key] !== null) note[key] = String(body[key]).slice(0, 1000);
+  const ts = nowIso();
+  await dbRun(db, `INSERT INTO fcd_notes(note_id,session_id,facilitator_name,discussion_summary,objections,clinical_observations,recommended_next_step,upsell_status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, id('fcd'), sessionId, String(body.facilitator_name || '').slice(0,120), JSON.stringify(note), note.objection || '', [note.confirmed_finding,note.rejected_finding,note.uncertain_finding,note.new_observation].filter(Boolean).join('\n'), note.next_action || note.decision || '', note.follow_up_date || '', ts, ts);
+  return { success:true, session_id:sessionId, saved:true, note };
+}
+
 async function handleDay1Action(env, payload, action) {
   const db = requireDb(env); const ts = nowIso();
   if (action === 'health_check') return jsonResponse({ success: true, action, service: 'GalviCare D1 foundation', schema_version: 'galvivault_schema_v0_5_1' }, 200, env);
   if (action === 'create_or_resume_session') { const sid = normalizeSessionId(payload.session_id) || id('gt'); await dbRun(db, `INSERT INTO sessions(session_id,current_stage,status,source,created_at,updated_at,last_seen_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET current_stage=excluded.current_stage,updated_at=excluded.updated_at,last_seen_at=excluded.last_seen_at`, sid, payload.current_stage || 'Day 1 Browser QA', 'active', payload.source || 'day1_api', ts, ts, ts); return jsonResponse({ success: true, action, session_id: sid }, 200, env); }
   if (action === 'journey_event') { await dbRun(db, `INSERT INTO journey_events(event_id,session_id,event_name,product,current_stage,event_json,created_at) VALUES(?,?,?,?,?,?,?)`, id('evt'), normalizeSessionId(payload.session_id), payload.event_name || 'journey_event', payload.product || 'GalviCare', payload.current_stage || '', JSON.stringify(payload.event_data || payload), ts); return jsonResponse({ success: true, action, session_id: normalizeSessionId(payload.session_id) }, 200, env); }
+  if (['get_session_state','get_clinical_summary','save_fcd_note'].includes(action)) { const sid = normalizeSessionId(payload.session_id || safe(payload, 'session.session_id')); if (!required(sid)) return jsonResponse({ success:false, action, message:'Missing session_id' }, 400, env); if (action !== 'get_session_state' && !requireFcdAccess(env, payload)) return jsonResponse({ success:false, action, message:'FCD access token required' }, 403, env); if (action === 'get_session_state') { const state = await getSessionState(db, sid); if (!state) return jsonResponse({ success:false, action, message:'GalviCare session not found', session_id:sid }, 404, env); return jsonResponse({ action, ...state }, 200, env); } if (action === 'get_clinical_summary') { const summary = await clinicalSummary(db, sid); if (!summary) return jsonResponse({ success:false, action, message:'GalviCare session not found', session_id:sid }, 404, env); return jsonResponse({ action, ...summary }, 200, env); } return jsonResponse({ action, ...(await saveFcdNote(db, sid, payload)) }, 200, env); }
   if (action === 'get_fixture_result') return jsonResponse({ success: true, action, session_id: normalizeSessionId(payload.session_id), product: payload.product || 'GalviVitals', fixture: true, result: { product: payload.product || 'GalviVitals', status: 'fixture_available', rules_version: DAY2_RULES_VERSION } }, 200, env);
 }
 async function handleDay2Action(env, payload, action) {
