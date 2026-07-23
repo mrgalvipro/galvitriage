@@ -382,26 +382,26 @@ function postGalviScoreEvent(body) {
 }
 
 const questions = [
- { cat:'business_identity', key:'q01_business_clarity', text:'How clearly can you explain what your organization does in one sentence?' },
- { cat:'business_identity', key:'q02_stage_signal', text:'How clearly does your current stage reflect where your organization actually is today?' },
- { cat:'customer_health', key:'q03_real_problem', text:'How confident are you that your business solves a real customer problem?' },
- { cat:'customer_health', key:'q04_ideal_customer', text:'How clearly do you understand who your ideal customer is?' },
- { cat:'customer_health', key:'q05_attract_customers', text:'How consistently are you attracting new customers, users, donors, or supporters?' },
- { cat:'customer_health', key:'q06_customer_conversations', text:'How often do you speak directly with customers, users, donors, or stakeholders?' },
- { cat:'revenue_health', key:'q07_predictable_revenue', text:'How predictable is your revenue or funding today?' },
- { cat:'revenue_health', key:'q08_revenue_growth_confidence', text:'How confident are you in growing revenue or funding over the next 12 months?' },
- { cat:'revenue_health', key:'q09_revenue_driver_clarity', text:'How well do you understand what is driving or limiting your revenue today?' },
- { cat:'product_health', key:'q10_customer_satisfaction', text:'How satisfied are customers with your product, service, program, or offering?' },
- { cat:'product_health', key:'q11_feedback_improvement', text:'How consistently do you improve your offering based on feedback?' },
- { cat:'operations_health', key:'q12_organized_operations', text:'How organized are your day-to-day operations?' },
- { cat:'operations_health', key:'q13_founder_dependency', text:'How dependent is the organization on you personally?' },
- { cat:'operations_health', key:'q14_systems_support_growth', text:'How well are your systems supporting growth?' },
- { cat:'ai_readiness', key:'q15_technology_effectiveness', text:'How effectively are you using technology today?' },
- { cat:'ai_readiness', key:'q16_ai_readiness', text:'How ready is your organization to use AI responsibly and practically?' },
- { cat:'leadership_decision_intelligence', key:'q17_leadership_confidence', text:'How confident are you in your leadership?' },
- { cat:'leadership_decision_intelligence', key:'q18_vision_clarity', text:'How clear is your vision?' },
- { cat:'leadership_decision_intelligence', key:'q19_decision_information', text:'How confident are you that decisions are based on the right information?' },
- { cat:'leadership_decision_intelligence', key:'q20_execution_action', text:'How consistently do decisions turn into action?' }
+ { cat:'business_identity', dimension:'business_model', key:'q01_business_clarity', text:'How clearly can you explain what your organization does in one sentence?' },
+ { cat:'business_identity', dimension:'business_model', key:'q02_stage_signal', text:'How clearly does your current stage reflect where your organization actually is today?' },
+ { cat:'customer_health', dimension:'problem', key:'q03_real_problem', text:'How confident are you that your business solves a real customer problem?' },
+ { cat:'customer_health', dimension:'customer', key:'q04_ideal_customer', text:'How clearly do you understand who your ideal customer is?' },
+ { cat:'customer_health', dimension:'distribution', key:'q05_attract_customers', text:'How consistently are you attracting new customers, users, donors, or supporters?' },
+ { cat:'customer_health', dimension:'distribution', key:'q06_customer_conversations', text:'How often do you speak directly with customers, users, donors, or stakeholders?' },
+ { cat:'revenue_health', dimension:'revenue', key:'q07_predictable_revenue', text:'How predictable is your revenue or funding today?' },
+ { cat:'revenue_health', dimension:'revenue', key:'q08_revenue_growth_confidence', text:'How confident are you in growing revenue or funding over the next 12 months?' },
+ { cat:'revenue_health', dimension:'revenue', key:'q09_revenue_driver_clarity', text:'How well do you understand what is driving or limiting your revenue today?' },
+ { cat:'product_health', dimension:'customer', key:'q10_customer_satisfaction', text:'How satisfied are customers with your product, service, program, or offering?' },
+ { cat:'product_health', dimension:'product', key:'q11_feedback_improvement', text:'How consistently do you improve your offering based on feedback?' },
+ { cat:'operations_health', dimension:'technology_operations', key:'q12_organized_operations', text:'How organized are your day-to-day operations?' },
+ { cat:'operations_health', dimension:'business_model', key:'q13_founder_dependency', text:'How dependent is the organization on you personally?' },
+ { cat:'operations_health', dimension:'technology_operations', key:'q14_systems_support_growth', text:'How well are your systems supporting growth?' },
+ { cat:'ai_readiness', dimension:'technology_operations', key:'q15_technology_effectiveness', text:'How effectively are you using technology today?' },
+ { cat:'ai_readiness', dimension:'technology_operations', key:'q16_ai_readiness', text:'How ready is your organization to use AI responsibly and practically?' },
+ { cat:'leadership_decision_intelligence', dimension:'leadership', key:'q17_leadership_confidence', text:'How confident are you in your leadership?' },
+ { cat:'leadership_decision_intelligence', dimension:'leadership', key:'q18_vision_clarity', text:'How clear is your vision?' },
+ { cat:'leadership_decision_intelligence', dimension:'leadership', key:'q19_decision_information', text:'How confident are you that decisions are based on the right information?' },
+ { cat:'leadership_decision_intelligence', dimension:'leadership', key:'q20_execution_action', text:'How consistently do decisions turn into action?' }
 ];
 function labelDomain(domainKey){ return String(domainKey||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()); }
 function isValidGalviCareSessionId(value){ if(typeof value!=='string')return false; const canonical=value.trim(); const placeholders=new Set(['PASTE_SESSION_ID_HERE','ACTUAL_SESSION_ID','YOUR_SESSION_ID','undefined','null','']); if(placeholders.has(canonical))return false; if(canonical.length<8||canonical.length>96)return false; return /^gt_[A-Za-z0-9_-]+$/.test(canonical); }
@@ -674,7 +674,10 @@ document.addEventListener('DOMContentLoaded',function(){ setTimeout(async functi
       else showError('galvishot-paywall-error', new Error(response.message || 'GalviShot is not ready.'));
     } catch (error) { showError('galvishot-paywall-error', error); }
   }
-  function returnToScore(){ hideUpstream(); const cached=typeof getCachedGalviScoreResult==='function'?getCachedGalviScoreResult():{}; if(cached&&typeof renderGalviScoreResult==='function') renderGalviScoreResult(cached); else el('galviscore-result')?.classList.remove('hidden'); setShotStage('GalviScore'); window.scrollTo({top:0,behavior:'smooth'}); }
+  // Day 6 paid-return/session-restoration hook.
+  // routeGalviCareOnLoad() and restoreGalviCareSession() call this public function.
+  window.showIntegratedGalviShotResult = requestResult;
+  function returnToScore(){ hideUpstream(); const cached=typeof getCachedGalviScoreResult==='function'?getCachedGalviScoreResult():{}; if(cached&&typeof renderUnlockedGalviScore==='function') renderUnlockedGalviScore(cached); else { const scoreView=el('galviscore-result'); scoreView?.classList.remove('hidden'); if(scoreView) scoreView.style.display='block'; } setShotStage('GalviScore'); window.scrollTo({top:0,behavior:'smooth'}); }
   document.addEventListener('DOMContentLoaded',function(){
     el('submit-galvishot-followup')?.addEventListener('click',async function(){
       const fields=Array.from(document.querySelectorAll('#galvishot-followup-questions textarea'));
