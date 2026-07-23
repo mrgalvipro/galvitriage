@@ -22,7 +22,7 @@ async function json(res){return res.json()}
 async function signedWebhook(event){const raw=JSON.stringify(event);const t='1';const key=await crypto.subtle.importKey('raw',new TextEncoder().encode('whsec_unit'),{name:'HMAC',hash:'SHA-256'},false,['sign']);const digest=await crypto.subtle.sign('HMAC',key,new TextEncoder().encode(`${t}.${raw}`));const v1=[...new Uint8Array(digest)].map(b=>b.toString(16).padStart(2,'0')).join('');return new Request('https://worker.test/stripe/webhook',{method:'POST',headers:{'stripe-signature':`t=${t},v1=${v1}`},body:raw});}
 
 function checkoutNavigationHelper() {
-  const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const html = readFileSync(new URL('../public/embedded-checkout-fix.js', import.meta.url), 'utf8');
   const start = html.indexOf('function navigateToTopLevelCheckout(checkoutUrl)');
   assert.notEqual(start, -1);
   let depth = 0;
@@ -49,11 +49,11 @@ test('Day 5 creates stable Clinic record, facilitator review, booking fallback, 
 test('Day 5 HubSpot failure is non-blocking and browser has no secret or entitlement authority',async()=>{const db=new MockD1();const old=globalThis.fetch;globalThis.fetch=async(url)=>String(url).includes('stripe.com')?new Response(JSON.stringify(stripeSession('cs_hub')),{status:200,headers:{'Content-Type':'application/json'}}):new Response('{}',{status:500});try{const res=await worker.fetch(req({action:'verify_clinic_payment_return',session_id:'s1',stripe_session_id:'cs_hub',expected_product:'galviclinic'}),env(db,{HUBSPOT_ENABLED:'true',HUBSPOT_PRIVATE_APP_TOKEN:'token',HUBSPOT_TIMEOUT_MS:'250'}));assert.equal(res.status,200);assert.equal(db.entitlements.size,1);assert.equal(db.errors.length,1)}finally{globalThis.fetch=old}const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');for(const forbidden of ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','HUBSPOT_PRIVATE_APP_TOKEN','STRIPE_PRODUCT_MAP_JSON','stripe.webhooks','grantEntitlement','DIMENSION_WEIGHTS'])assert.equal(html.includes(forbidden),false);assert.ok(html.includes('verify_clinic_payment_return'));assert.ok(html.includes('record_booking_click'));assert.ok(html.includes('https://www.galvipro.com/#contact'))});
 
 
-test('Day 5 browser uses top-level Stripe checkout navigation and query-before-hash return URL',()=>{const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');assert.ok(html.includes('function navigateToTopLevelCheckout(checkoutUrl)'));assert.ok(html.includes("url.startsWith('https://buy.stripe.com/')"));assert.equal(html.includes('window.top.location.assign(url)'),false);assert.ok(html.includes('window.open('));assert.ok(html.includes("'_blank'"));assert.ok(html.includes("'noopener,noreferrer'"));assert.ok(html.includes("return { navigation: 'top_navigation' }"));assert.ok(html.includes("return { navigation: 'new_tab' }"));assert.ok(html.includes('Stripe Checkout could not open outside the embedded GalviCare frame.'));assert.equal(html.includes('window.location.href=GSHOT.PAYMENT_LINK'),false);assert.equal(html.includes('window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK'),false);assert.ok(html.includes('new URLSearchParams(location.search)'));assert.ok(html.includes('verify_clinic_payment_return'));const successUrl='https://galvipro.com/?paid=clinic_success&stripe_session_id={CHECKOUT_SESSION_ID}#galvitriage';assert.equal(new URL(successUrl).searchParams.get('paid'),'clinic_success');assert.equal(new URL(successUrl).searchParams.get('stripe_session_id'),'{CHECKOUT_SESSION_ID}');assert.equal(new URL(successUrl).hash,'#galvitriage');});
+test('Day 5 browser uses top-level or new-tab Stripe checkout navigation and query-before-hash return URL',()=>{const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');const publicHtml=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');const fix=readFileSync(new URL('../public/embedded-checkout-fix.js',import.meta.url),'utf8');for (const candidate of [html, publicHtml]) assert.ok(candidate.includes('<script src="/embedded-checkout-fix.js"></script>'));assert.ok(fix.includes('function navigateToTopLevelCheckout(checkoutUrl)'));assert.ok(fix.includes("url.startsWith('https://buy.stripe.com/')"));assert.ok(fix.includes('window.location.assign(url)'));assert.equal(fix.includes('window.top.location.assign'),false);assert.ok(fix.includes("window.open("));assert.equal(fix.includes("'about:blank'"),false);assert.ok(fix.includes("'_blank'"));assert.ok(fix.includes("'noopener,noreferrer'"));assert.equal(fix.includes('checkoutWindow.location.replace(url)'),false);assert.ok(fix.includes("navigation: 'top_navigation'"));assert.ok(fix.includes("navigation: 'new_tab'"));assert.ok(fix.includes('Checkout could not open. Please allow pop-ups and try again.'));assert.equal(html.includes('window.location.href=GSHOT.PAYMENT_LINK'),false);assert.equal(html.includes('window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK'),false);assert.ok(html.includes('new URLSearchParams(location.search)'));assert.ok(html.includes('verify_clinic_payment_return'));const successUrl='https://galvipro.com/?paid=clinic_success&stripe_session_id={CHECKOUT_SESSION_ID}#galvitriage';assert.equal(new URL(successUrl).searchParams.get('paid'),'clinic_success');assert.equal(new URL(successUrl).searchParams.get('stripe_session_id'),'{CHECKOUT_SESSION_ID}');assert.equal(new URL(successUrl).hash,'#galvitriage');});
 
-test('Day 5 checkout navigation rejects invalid URLs and escapes blocked iframes safely',()=>{
+test('Day 5 checkout navigation uses top-level navigation outside frames and new-tab navigation inside frames',()=>{
   const makeHelper = checkoutNavigationHelper();
-  assert.throws(() => makeHelper({}).call(null, 'https://example.com/checkout'), /Invalid Stripe checkout URL/);
+  assert.throws(() => makeHelper({}).call(null, 'https://example.com/checkout'), /Invalid Stripe Checkout URL/);
 
   const topCalls = [];
   const topWindow = { location: { assign: url => topCalls.push(url) } };
@@ -63,39 +63,23 @@ test('Day 5 checkout navigation rejects invalid URLs and escapes blocked iframes
   assert.deepEqual(makeHelper(topWindow)('https://buy.stripe.com/test_safe'), { navigation: 'top_navigation' });
   assert.deepEqual(topCalls, ['https://buy.stripe.com/test_safe']);
 
-  const parentCalls = [];
-  const openedTabs = [];
-  const iframeLocationCalls = [];
+  const calls = [];
+  const openedWindow = {
+    set opener(value) { calls.push(['opener', value]); }
+  };
   const iframeWindow = {
     self: {},
-    top: { location: { assign: url => parentCalls.push(url) } },
-    location: { assign: url => iframeLocationCalls.push(url) },
-    open: (url, target, features) => { openedTabs.push({ url, target, features }); return {}; }
+    top: {},
+    open: (url, target, features) => { calls.push(['open', url, target, features]); return openedWindow; }
   };
-  assert.deepEqual(makeHelper(iframeWindow)('https://buy.stripe.com/test_parent'), { navigation: 'new_tab' });
-  assert.deepEqual(parentCalls, []);
-  assert.deepEqual(openedTabs, [{ url: 'https://buy.stripe.com/test_parent', target: '_blank', features: 'noopener,noreferrer' }]);
-  assert.deepEqual(iframeLocationCalls, []);
+  assert.deepEqual(makeHelper(iframeWindow)('https://buy.stripe.com/test_safe'), { navigation: 'new_tab' });
+  assert.deepEqual(calls, [
+    ['open', 'https://buy.stripe.com/test_safe', '_blank', 'noopener,noreferrer'],
+    ['opener', null]
+  ]);
 
-  const blockedIframeLocationCalls = [];
-  const blockedOpenedTabs = [];
-  const blockedIframeWindow = {
-    self: {},
-    top: { location: { assign: () => { throw new Error('blocked by frame policy'); } } },
-    location: { assign: url => blockedIframeLocationCalls.push(url) },
-    open: (url, target, features) => { blockedOpenedTabs.push({ url, target, features }); return {}; }
-  };
-  assert.deepEqual(makeHelper(blockedIframeWindow)('https://buy.stripe.com/test_tab'), { navigation: 'new_tab' });
-  assert.deepEqual(blockedOpenedTabs, [{ url: 'https://buy.stripe.com/test_tab', target: '_blank', features: 'noopener,noreferrer' }]);
-  assert.deepEqual(blockedIframeLocationCalls, []);
-
-  const fullyBlockedIframeWindow = {
-    self: {},
-    top: { location: { assign: () => { throw new Error('blocked by frame policy'); } } },
-    location: { assign: url => blockedIframeLocationCalls.push(url) },
-    open: () => null
-  };
-  assert.throws(() => makeHelper(fullyBlockedIframeWindow)('https://buy.stripe.com/test_blocked'), /Stripe Checkout could not open outside the embedded GalviCare frame/);
+  const blockedWindow = { self: {}, top: {}, open: () => null };
+  assert.throws(() => makeHelper(blockedWindow)('https://buy.stripe.com/test_blocked'), /Checkout could not open/);
 });
 
 test('Day 5 Cloudflare static assets are configured and frontend copies stay QA-safe',()=>{
@@ -130,14 +114,14 @@ test('Day 5 Worker keeps API and webhook POST routing with static assets binding
   assert.equal(assetCalls.length,1);
 });
 
-test('Day 5 Stripe CTAs use the checkout navigation helper without iframe-local Stripe redirects',()=>{
+test('Day 5 Stripe CTAs use the checkout navigation helper before analytics without iframe-local Stripe redirects',()=>{
   const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
-  assert.match(html, /galviscore-stripe-cta[\s\S]*?navigateToTopLevelCheckout\(GALVISCORE_STRIPE_PAYMENT_LINK\)/);
-  assert.match(html, /galvishot-stripe-cta[\s\S]*?navigateToTopLevelCheckout\(GSHOT\.PAYMENT_LINK\)/);
-  assert.equal(html.includes('window.location.href=GSHOT.PAYMENT_LINK'),false);
-  assert.equal(html.includes('window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK'),false);
-  assert.equal(html.includes('location.assign(GSHOT.PAYMENT_LINK)'),false);
-  assert.equal(html.includes('location.assign(GALVISCORE_STRIPE_PAYMENT_LINK)'),false);
-  assert.equal(html.includes('<iframe'),false);
+  const publicHtml=readFileSync(new URL('../public/index.html',import.meta.url),'utf8');
+  for (const candidate of [html, publicHtml]) {
+    assert.match(candidate, /galviscore-stripe-cta[\s\S]*?const checkoutUrl=GALVISCORE_STRIPE_PAYMENT_LINK; navigateToTopLevelCheckout\(checkoutUrl\);[\s\S]*?fireGalviEvent\('stripe_click'/);
+    assert.match(candidate, /galvishot-stripe-cta[\s\S]*?const checkoutUrl=GSHOT\.PAYMENT_LINK; navigateToTopLevelCheckout\(checkoutUrl\);[\s\S]*?fireGalviEvent\('stripe_click'/);
+    for (const forbidden of ['window.top.location.assign', 'window.location.href=GSHOT.PAYMENT_LINK', 'window.location.href=GALVISCORE_STRIPE_PAYMENT_LINK', 'location.assign(GSHOT.PAYMENT_LINK)', 'location.assign(GALVISCORE_STRIPE_PAYMENT_LINK)', 'iframe.src']) assert.equal(candidate.includes(forbidden),false);
+    assert.equal(candidate.includes('<iframe'),false);
+  }
   for(const forbidden of ['STRIPE_SECRET_KEY','STRIPE_WEBHOOK_SECRET','HUBSPOT_PRIVATE_APP_TOKEN','STRIPE_PRODUCT_MAP_JSON','DIMENSION_WEIGHTS'])assert.equal(html.includes(forbidden),false);
 });
