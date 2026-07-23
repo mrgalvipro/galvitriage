@@ -532,7 +532,7 @@ assessmentForm.addEventListener('submit', async function(e){
 });
 
 document.getElementById('continue-to-galviscore')?.addEventListener('click',function(){ const sessionId=getStoredSessionId()||getOrCreateSessionId(); showGalviScorePaywall(sessionId); });
-document.getElementById('galviscore-stripe-cta')?.addEventListener('click',function(){ const sessionId=persistSessionId(getStoredSessionId()||getOrCreateSessionId()); fireGalviEvent('stripe_click',{product:'galviscore',session_id:sessionId,stage:'GalviScore Paywall'}); window.location.href=stripeCheckoutUrl(GALVISCORE_STRIPE_PAYMENT_LINK,sessionId); });
+document.getElementById('galviscore-stripe-cta')?.addEventListener('click',function(){ const sessionId=persistSessionId(getStoredSessionId()||getOrCreateSessionId()); fireGalviEvent('stripe_click',{product:'galviscore',session_id:sessionId,stage:'GalviScore Paywall'}); window.top.location.href=stripeCheckoutUrl(GALVISCORE_STRIPE_PAYMENT_LINK,sessionId); });
 document.getElementById('galviscore-qa-override')?.addEventListener('click', function(){
   const cached = getCachedGalviScoreResult();
   if(!cached){
@@ -675,7 +675,7 @@ document.addEventListener('DOMContentLoaded',function(){ setTimeout(async functi
     });
     el('skip-galvishot-followup')?.addEventListener('click',()=>el('galvishot-followup')?.classList.add('hidden'));
     el('galvishot-live-test-override')?.addEventListener('click',async function(){ const token=window.prompt('Enter the QA GalviShot override token.'); if(token) localStorage.setItem(GSHOT.QA_OVERRIDE_TOKEN_KEY, token.trim()); await requestResult(); });
-    el('galvishot-stripe-cta')?.addEventListener('click',function(){ if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Paywall'}); window.location.href=stripeCheckoutUrl(GSHOT.PAYMENT_LINK,sessionId()); });
+    el('galvishot-stripe-cta')?.addEventListener('click',function(){ if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Paywall'}); window.top.location.href=stripeCheckoutUrl(GSHOT.PAYMENT_LINK,sessionId()); });
     el('galvishot-back-score')?.addEventListener('click',returnToScore);
     el('galvishot-back-paywall')?.addEventListener('click',window.showIntegratedGalviShotPaywall);
     window.showGalviSight=showSight;
