@@ -1,0 +1,55 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+
+const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+
+test('Day 6 #continue-galvisight has one effective transition owner with in-flight guard', () => {
+  const listenerMatches = html.match(/continue-galvisight'\)\?\.addEventListener\('click'/g) || [];
+  assert.equal(listenerMatches.length, 1);
+  assert.match(html, /let galviSightInFlight=false/);
+  assert.match(html, /await showSight\(\)/);
+  assert.match(html, /fireGalviEvent\('continue_clicked',\{product:'galvisight'/);
+});
+
+test('Day 6 downstream CTAs route once, recover visibly, and analytics is non-blocking', () => {
+  assert.match(html, /let galviPathInFlight=false/);
+  assert.match(html, /fireGalviEvent\('continue_clicked',\{product:'galvipath'/);
+  assert.match(html, /fireGalviEvent\('journey_error',\{product:'galvipath'/);
+  assert.match(html, /catch\(e\)\{\}/);
+  assert.match(html, /clinic_booking_clicked/);
+  assert.match(html, /GALVICLINIC_FALLBACK_URL = 'https:\/\/www\.galvipro\.com\/#contact'/);
+  assert.match(html, /id="galvipath-book-galviclinic"/);
+  assert.doesNotMatch(html, /Book GalviClinic booking remains unchanged|alert\('GalviClinic/);
+});
+
+test('Day 6 refresh restoration reuses stored downstream state instead of restarting GalviTriage', () => {
+  assert.match(html, /action:'get_session_state'/);
+  assert.match(html, /available_products\?\.includes\('GalviShot'\)[\s\S]*showIntegratedGalviShotResult/);
+  assert.match(html, /available_products\?\.includes\('GalviSight'\)[\s\S]*window\.showGalviSight/);
+  assert.match(html, /available_products\?\.includes\('GalviPath'\)[\s\S]*window\.showGalviPath/);
+  assert.doesNotMatch(html, /restoreGalviCareSession[\s\S]*startNewGalviCareAssessment\(/);
+});
+
+test('Day 6 print rules hide non-print controls while preserving result cards', () => {
+  assert.match(html, /@media print/);
+  assert.match(html, /#galvishot-live-test-override/);
+  assert.match(html, /#continue-galvisight/);
+  assert.match(html, /#galvipath-book-galviclinic/);
+  assert.match(html, /\.galvicare-card,\.hidden\{display:block!important/);
+});
+
+test('Day 6 P0 Stripe success restores GalviScore from Worker before normal journey restart', () => {
+  assert.match(html, /galvicare-return-pending #assessmentForm/);
+  assert.match(html, /p\.get\('product'\)==='galviscore'&&p\.get\('paid'\)==='score_success'/);
+  assert.match(html, /function hideInitialJourneyForPaidReturn\(\)[\s\S]*assessmentForm[\s\S]*hideGalviScoreScreens/);
+  assert.match(html, /async function restoreGalviScoreFromWorker\(sessionId\)[\s\S]*action:'get_or_create_score'[\s\S]*normalizeScoreResult/);
+  assert.match(html, /async function renderGalviScoreAfterPayment\(sessionId\)[\s\S]*persistSessionId\(sessionId\)[\s\S]*restoreGalviScoreFromWorker\(canonicalSessionId\)[\s\S]*cacheGalviScoreResult\(restored\)[\s\S]*renderUnlockedGalviScore\(restored\)/);
+  assert.doesNotMatch(html, /renderGalviScoreAfterPayment\(sessionId\)[\s\S]*!GALVICARE_SCORE_ENDPOINT[\s\S]*renderTriageRepair/);
+  assert.match(html, /product==='galviscore'&&paid==='score_success'[\s\S]*hideInitialJourneyForPaidReturn\(\)[\s\S]*renderGalviScoreAfterPayment\(galviSessionId\)[\s\S]*return true/);
+});
+
+test('Day 6 P0 non-success queries keep normal routing path', () => {
+  assert.match(html, /if\(await restoreGalviCareSession\(\)\) return true; return false;/);
+  assert.doesNotMatch(html, /product==='galviscore'&&paid!=='score_success'[\s\S]*renderGalviScoreAfterPayment/);
+});
