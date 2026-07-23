@@ -42,7 +42,8 @@ const DAY1_ACTIONS = new Set([
   'get_fixture_result',
   'get_session_state',
   'get_clinical_summary',
-  'save_fcd_note'
+  'save_fcd_note',
+  'resolve_payment_return'
 ]);
 
 const DAY2_ACTIONS = new Set([
@@ -215,8 +216,67 @@ async function saveFcdNote(db, sessionId, payload) {
   return { success:true, session_id:sessionId, saved:true, note };
 }
 
+
+function paymentProductName(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'galviscore' || normalized === 'galvi_score') return 'GalviScore';
+  if (normalized === 'galvishot' || normalized === 'galvi_shot') return 'GalviShot';
+  return '';
+}
+function stripeCheckoutSessionUrl(stripeSessionId) {
+  return `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(stripeSessionId)}`;
+}
+async function retrieveStripeCheckoutSession(env, stripeSessionId) {
+  const secret = String(env.STRIPE_SECRET_KEY || '').trim();
+  if (!secret) throw new Error('STRIPE_SECRET_KEY is required for Worker-side Stripe Checkout Session verification.');
+  const response = await fetch(stripeCheckoutSessionUrl(stripeSessionId), {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${secret}` }
+  });
+  let body = {};
+  try { body = await response.json(); } catch { body = {}; }
+  if (!response.ok) throw new Error(body.error?.message || 'Stripe Checkout Session verification failed.');
+  return body;
+}
+function checkoutSessionProduct(session) {
+  const metadataProduct = session?.metadata?.product || session?.metadata?.galvicare_product;
+  return paymentProductName(metadataProduct);
+}
+function checkoutSessionGalviCareSessionId(session) {
+  return normalizeSessionId(session?.client_reference_id || session?.metadata?.galvicare_session_id);
+}
+function isStripePaid(session) {
+  const paymentStatus = String(session?.payment_status || '').toLowerCase();
+  const status = String(session?.status || '').toLowerCase();
+  return paymentStatus === 'paid' || status === 'complete';
+}
+async function persistVerifiedPayment(db, stripeSession, sessionId, product) {
+  const ts = nowIso();
+  const stripeSessionId = String(stripeSession.id || '').trim();
+  await dbRun(db, `INSERT INTO payments(payment_id,session_id,product,stripe_session_id,stripe_payment_intent_id,amount_cents,currency,payment_status,paid_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(stripe_session_id) DO UPDATE SET session_id=excluded.session_id,product=excluded.product,stripe_payment_intent_id=excluded.stripe_payment_intent_id,amount_cents=excluded.amount_cents,currency=excluded.currency,payment_status=excluded.payment_status,paid_at=COALESCE(payments.paid_at, excluded.paid_at),updated_at=excluded.updated_at`, `payment_${stripeSessionId || sessionId + '_' + product}`, sessionId, product, stripeSessionId, stripeSession.payment_intent || '', Number(stripeSession.amount_total || 0), stripeSession.currency || 'usd', 'paid', ts, ts, ts);
+  await dbRun(db, `INSERT INTO entitlements(entitlement_id,session_id,product,entitlement_status,source,source_reference,granted_at,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product) DO UPDATE SET entitlement_status=excluded.entitlement_status,source=excluded.source,source_reference=excluded.source_reference,granted_at=COALESCE(entitlements.granted_at, excluded.granted_at),updated_at=excluded.updated_at`, `entitlement_${sessionId}_${product}`, sessionId, product, 'active', 'stripe_checkout', stripeSessionId, ts, ts);
+}
+async function resolvePaymentReturn(env, payload) {
+  const db = requireDb(env);
+  const stripeSessionId = String(safe(payload, 'payload.stripe_session_id') || safe(payload, 'stripe_session_id') || '').trim();
+  const expectedProduct = paymentProductName(safe(payload, 'payload.expected_product') || safe(payload, 'expected_product'));
+  if (!required(stripeSessionId) || !stripeSessionId.startsWith('cs_')) return jsonResponse({ success:false, action:'resolve_payment_return', status:'error', message:'A valid Stripe Checkout Session ID is required.' }, 400, env);
+  if (!expectedProduct) return jsonResponse({ success:false, action:'resolve_payment_return', status:'error', message:'A valid expected GalviCare product is required.' }, 400, env);
+  const stripeSession = await retrieveStripeCheckoutSession(env, stripeSessionId);
+  const linkedSessionId = checkoutSessionGalviCareSessionId(stripeSession);
+  if (!required(linkedSessionId)) return jsonResponse({ success:false, action:'resolve_payment_return', status:'session_unresolved', message:'Stripe payment is not linked to a GalviCare session.' }, 409, env);
+  const claimedProduct = checkoutSessionProduct(stripeSession);
+  if (claimedProduct && claimedProduct !== expectedProduct) return jsonResponse({ success:false, action:'resolve_payment_return', status:'product_mismatch', message:'Stripe payment product does not match this GalviCare return.' }, 409, env);
+  const session = await dbFirst(db, `SELECT * FROM sessions WHERE session_id=?`, linkedSessionId);
+  if (!session) return jsonResponse({ success:false, action:'resolve_payment_return', status:'session_not_found', message:'The GalviCare session linked to this paid Stripe checkout was not found.', session_id:linkedSessionId }, 404, env);
+  if (!isStripePaid(stripeSession)) return jsonResponse({ success:false, action:'resolve_payment_return', status:String(stripeSession.payment_status || stripeSession.status || 'unpaid'), message:'Stripe payment is not complete.' }, 402, env);
+  await persistVerifiedPayment(db, stripeSession, linkedSessionId, expectedProduct);
+  return jsonResponse({ success:true, action:'resolve_payment_return', status:'paid', session_id:linkedSessionId, product:expectedProduct, stripe_session_id:stripeSessionId }, 200, env);
+}
+
 async function handleDay1Action(env, payload, action) {
   const db = requireDb(env); const ts = nowIso();
+  if (action === 'resolve_payment_return') return await resolvePaymentReturn(env, payload);
   if (action === 'health_check') return jsonResponse({ success: true, action, service: 'GalviCare D1 foundation', schema_version: 'galvivault_schema_v0_5_1' }, 200, env);
   if (action === 'create_or_resume_session') { const sid = normalizeSessionId(payload.session_id) || id('gt'); await dbRun(db, `INSERT INTO sessions(session_id,current_stage,status,source,created_at,updated_at,last_seen_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET current_stage=excluded.current_stage,updated_at=excluded.updated_at,last_seen_at=excluded.last_seen_at`, sid, payload.current_stage || 'Day 1 Browser QA', 'active', payload.source || 'day1_api', ts, ts, ts); return jsonResponse({ success: true, action, session_id: sid }, 200, env); }
   if (action === 'journey_event') { await dbRun(db, `INSERT INTO journey_events(event_id,session_id,event_name,product,current_stage,event_json,created_at) VALUES(?,?,?,?,?,?,?)`, id('evt'), normalizeSessionId(payload.session_id), payload.event_name || 'journey_event', payload.product || 'GalviCare', payload.current_stage || '', JSON.stringify(payload.event_data || payload), ts); return jsonResponse({ success: true, action, session_id: normalizeSessionId(payload.session_id) }, 200, env); }
