@@ -346,7 +346,37 @@ const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-triage-intake.mrgalvipro.wo
 const GALVICARE_API_ENDPOINT = GALVICARE_INTAKE_ENDPOINT + '/api';
 const GALVICARE_SCORE_ENDPOINT = ''; // Preserved for legacy later-product event hooks only.
 const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01';
-function navigateToTopLevelCheckout(checkoutUrl){ const url=String(checkoutUrl||'').trim(); if(!url.startsWith('https://buy.stripe.com/')) throw new Error('Invalid Stripe checkout URL'); try{ if(window.top&&window.top!==window.self){ window.top.location.assign(url); return; } }catch(error){} window.location.assign(url); }
+function navigateToTopLevelCheckout(checkoutUrl) {
+  const url = String(checkoutUrl || '').trim();
+
+  if (!url.startsWith('https://buy.stripe.com/')) {
+    throw new Error('Invalid Stripe checkout URL');
+  }
+
+  if (window.top === window.self) {
+    window.location.assign(url);
+    return { navigation: 'top_navigation' };
+  }
+
+  try {
+    window.top.location.assign(url);
+    return { navigation: 'top_navigation' };
+  } catch (error) {
+    const checkoutWindow = window.open(
+      url,
+      '_blank',
+      'noopener,noreferrer'
+    );
+
+    if (checkoutWindow) {
+      return { navigation: 'new_tab' };
+    }
+
+    throw new Error(
+      'Stripe Checkout could not open outside the embedded GalviCare frame.'
+    );
+  }
+}
 const SCORING_VERSION = 'galviengine_score_v0_5_1';
 const QUESTION_CONTRACT_VERSION = 'galvitriage_questions_v0_5_1';
 const GALVI_ANALYTICS_VERSION = 'galvianalytics_0_5';
