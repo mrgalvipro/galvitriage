@@ -1524,6 +1524,8 @@ async function handleStripeWebhook(request, env) {
 
 export default {
   async fetch(request, env) {
+    const url = new URL(request.url);
+
     /*
      * CORS preflight
      */
@@ -1536,6 +1538,20 @@ export default {
             responseHeaders(env)
         }
       );
+    }
+
+    /*
+     * Static frontend assets for Cloudflare version previews.
+     */
+    if (
+      request.method === 'GET' &&
+      env.ASSETS &&
+      (
+        url.pathname === '/' ||
+        request.headers.get('accept')?.includes('text/html')
+      )
+    ) {
+      return env.ASSETS.fetch(request);
     }
 
     /*
@@ -1567,7 +1583,7 @@ export default {
       );
     }
 
-    if (request.method === 'POST' && new URL(request.url).pathname === '/stripe/webhook') {
+    if (request.method === 'POST' && url.pathname === '/stripe/webhook') {
       return await handleStripeWebhook(request, env);
     }
 
@@ -1922,4 +1938,3 @@ export default {
     }
   }
 };
-
