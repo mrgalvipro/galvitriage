@@ -465,8 +465,74 @@ function showPaymentSessionRecoveryError(error,sessionId){ const recovery=showGa
 function clearGalviCareReturnPending(){ document.documentElement.classList.remove('galvicare-return-pending'); }
 function hideInitialJourneyForPaidReturn(){ hideGalviCareCustomerStates(); }
 async function restoreGalviScoreFromWorker(sessionId){ const response=await callGalviCareApi({action:'get_or_create_score',session_id:sessionId}); const source=response.result||response.score||response; if(!source||source.score===undefined)throw new Error('Stored GalviScore result was not available for this session.'); const normalized=normalizeScoreResult({...source,session_id:response.session_id||source.session_id||sessionId}); normalized.payment_galviscore='paid'; return normalized; }
-async function renderGalviScoreAfterPayment(sessionId){ if(!isValidGalviCareSessionId(sessionId)){ showPaymentSessionRecoveryError(new Error('GalviCare could not verify the GalviCare session linked to this Stripe payment.'),sessionId); return false; } const canonicalSessionId=persistSessionId(sessionId); hideInitialJourneyForPaidReturn(); try{ const restored=await restoreGalviScoreFromWorker(canonicalSessionId); cacheGalviScoreResult(restored); localStorage.setItem('payment_galviscore','paid'); renderUnlockedGalviScore(restored); clearGalviCareReturnPending(); return true; }catch(error){ const cached=getCachedGalviScoreResult(); if(cached&&cached.session_id===canonicalSessionId){ cached.payment_galviscore='paid'; cacheGalviScoreResult(cached); renderUnlockedGalviScore(cached); clearGalviCareReturnPending(); return true; } showPaymentSessionRecoveryError(error,canonicalSessionId); return false; } }
-async function routeGalviCareOnLoad(){ const params=getUrlParams(); const product=params.get('product'); const paid=params.get('paid'); const stripeSessionId=params.get('stripe_session_id')||params.get('session_id'); if(product==='galvishot'&&paid){ hideInitialJourneyForPaidReturn(); try{ const resolved=await resolveStripePaymentReturn(stripeSessionId,'galvishot'); const paidSessionId=persistSessionId(resolved.session_id); if(window.showIntegratedGalviShotResult) await window.showIntegratedGalviShotResult(); else await window.showIntegratedGalviShotPaywall?.(); clearGalviCareReturnPending(); return true; }catch(error){ showPaymentSessionRecoveryError(error); return true; }} if(product==='galvisight'&&paid&&window.showGalviSight){ await window.showGalviSight(); return true;} if(product==='galvipath'&&paid&&window.showGalviPath){ await window.showGalviPath(); return true;} if(product==='galviscore'&&paid==='score_success'){ hideInitialJourneyForPaidReturn(); try{ const resolved=await resolveStripePaymentReturn(stripeSessionId,'galviscore'); const paidSessionId=persistSessionId(resolved.session_id); fireGalviEvent('stripe_success',{product,session_id:paidSessionId,stripe_session_id:stripeSessionId,stage:'GalviScore Paid'}); await renderGalviScoreAfterPayment(paidSessionId); return true; }catch(error){ showPaymentSessionRecoveryError(error); return true; }} if(await restoreGalviCareSession()) return true; showGalviCareTriageState(); return false; }
+async function renderGalviScoreAfterPayment(sessionId){
+  if(!isValidGalviCareSessionId(sessionId)){
+    showPaymentSessionRecoveryError(new Error('GalviCare could not verify the GalviCare session linked to this Stripe payment.'),sessionId);
+    return false;
+  }
+  const canonicalSessionId=persistSessionId(sessionId);
+  hideInitialJourneyForPaidReturn();
+  try{
+    const restored=await restoreGalviScoreFromWorker(canonicalSessionId);
+    const categories=restored?.category_scores;
+    const confidence=Number(restored?.galviscore_confidence);
+    if(!categories || typeof categories!=='object' || Object.keys(categories).length===0 || !Number.isFinite(confidence) || confidence<=0){
+      throw new Error('Authoritative GalviScore was incomplete. GalviCare will not render a cached or zero fallback after verified payment.');
+    }
+    cacheGalviScoreResult(restored);
+    localStorage.setItem('payment_galviscore','paid');
+    renderUnlockedGalviScore(restored);
+    clearGalviCareReturnPending();
+    return true;
+  }catch(error){
+    showPaymentSessionRecoveryError(error,canonicalSessionId);
+    return false;
+  }
+}
+async function routeGalviCareOnLoad(){
+  const params=getUrlParams();
+  const product=(params.get('product')||'').toLowerCase();
+  const paid=params.get('paid')||'';
+  const stripeSessionId=params.get('stripe_session_id')||params.get('session_id');
+
+  if(product==='galvishot'&&paid==='shot_success'){
+    hideInitialJourneyForPaidReturn();
+    try{
+      const resolved=await resolveStripePaymentReturn(stripeSessionId,'galvishot');
+      const paidSessionId=persistSessionId(resolved.session_id);
+      if(typeof window.showIntegratedGalviShotResult!=='function'){
+        throw new Error('GalviShot result renderer was not initialized. Paid return will not fall back to the paywall.');
+      }
+      const rendered=await window.showIntegratedGalviShotResult({paidReturn:true,session_id:paidSessionId});
+      if(rendered===false) throw new Error('Verified GalviShot payment did not restore a GalviShot result.');
+      clearGalviCareReturnPending();
+      return true;
+    }catch(error){
+      showPaymentSessionRecoveryError(error,getStoredSessionId());
+      return true;
+    }
+  }
+
+  if(product==='galviscore'&&paid==='score_success'){
+    hideInitialJourneyForPaidReturn();
+    try{
+      const resolved=await resolveStripePaymentReturn(stripeSessionId,'galviscore');
+      const paidSessionId=persistSessionId(resolved.session_id);
+      fireGalviEvent('stripe_success',{product,session_id:paidSessionId,stripe_session_id:stripeSessionId,stage:'GalviScore Paid'});
+      await renderGalviScoreAfterPayment(paidSessionId);
+      return true;
+    }catch(error){
+      showPaymentSessionRecoveryError(error,getStoredSessionId());
+      return true;
+    }
+  }
+
+  if(product==='galvisight'&&paid&&typeof window.showGalviSight==='function'){ await window.showGalviSight(); return true; }
+  if(product==='galvipath'&&paid&&typeof window.showGalviPath==='function'){ await window.showGalviPath(); return true; }
+  if(await restoreGalviCareSession()) return true;
+  showGalviCareTriageState();
+  return false;
+}
 function hasValidGalviScoreResult(scoreResult){ return scoreResult && (scoreResult.galviscore_score!==undefined || scoreResult.score!==undefined); }
 function routeByGalviScoreConfidence(scoreResult){ if(hasValidGalviScoreResult(scoreResult)){ renderUnlockedGalviScore(scoreResult.galviscore_score!==undefined?scoreResult:normalizeScoreResult(scoreResult)); return'result'; } renderTriageRepair(scoreResult||{}); return'triage_repair'; }
 const GALVISCORE_FOLLOWUP_QUESTIONS={revenue_range:{question_id:'gs_revenue_range',label:'What annual revenue range best describes your business today?',confidence_impact:12},customer_acquisition:{question_id:'gs_customer_discovery',label:'How do customers currently discover you?',confidence_impact:10},primary_goal:{question_id:'gs_90_day_outcome',label:'What single business outcome matters most in the next 90 days?',confidence_impact:8},primary_challenge:{question_id:'gs_growth_bottleneck',label:'Which operational bottleneck most limits growth right now?',confidence_impact:8}};
@@ -604,7 +670,7 @@ document.getElementById('continue-galvishot')?.addEventListener('click',function
   }
 });
 document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventListener('click',function(){ trackGalviEvent('galvicare_cta_clicked',{journey_step:'cta_clicked',cta_name:el.getAttribute('data-cta-name')||'unknown',cta_location:el.getAttribute('data-cta-location')||'unknown',destination:el.getAttribute('href')||''}); }); });
-document.addEventListener('DOMContentLoaded',function(){ setTimeout(async function(){ await routeGalviCareOnLoad(); checkGalviScoreAbandonment(); },0); });
+/* Day 6: customer return routing starts after the GalviShot integration layer registers its public result hooks. */
 </script>
 
 <script>
@@ -632,7 +698,7 @@ document.addEventListener('DOMContentLoaded',function(){ setTimeout(async functi
   }
   function setMeter(id,value){ const node=el(id); if(node) node.style.width=Math.max(0,Math.min(100,Number(value)||0))+'%'; }
   function showError(targetId, error){ const target=el(targetId); if(target) target.textContent=`${error.message || 'GalviShot is temporarily unavailable.'} Session ID: ${safeShotSessionId()}`; }
-  function clearErrors(){ ['galvishot-paywall-error','galvishot-result-error','galvishot-followup-status'].forEach(id=>{ if(el(id)) el(id).textContent=''; }); }
+  function clearErrors(){ ['galvishot-paywall-error','galvishot-result-error'].forEach(id=>{ if(el(id)) el(id).textContent=''; }); }
   function renderFollowup(questions){
     const host=el('galvishot-followup-questions'); if(!host) return;
     host.innerHTML='';
@@ -677,15 +743,29 @@ document.addEventListener('DOMContentLoaded',function(){ setTimeout(async functi
     if(typeof fireGalviEvent==='function') fireGalviEvent('diagnostic_viewed',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Result',confidence:result.confidence});
     window.scrollTo({top:0,behavior:'smooth'});
   }
-  async function requestResult(){
+  async function requestResult(options={}){
     clearErrors();
     try {
       const token=localStorage.getItem(GSHOT.QA_OVERRIDE_TOKEN_KEY) || '';
       const response=await postShot('get_or_create_galvishot', token ? { qa_override_token: token } : {});
-      if(response.status==='ok' && response.result) renderResultPayload(response.result);
-      else if(response.status==='needs_followup') { await window.showIntegratedGalviShotPaywall(); renderFollowup(response.followup_questions||[]); }
-      else showError('galvishot-paywall-error', new Error(response.message || 'GalviShot is not ready.'));
-    } catch (error) { showError('galvishot-paywall-error', error); }
+      if(response.status==='ok' && response.result){
+        renderResultPayload(response.result);
+        return true;
+      }
+      if(response.status==='needs_followup'){
+        await window.showIntegratedGalviShotPaywall();
+        renderFollowup(response.followup_questions||[]);
+        const status=el('galvishot-followup-status');
+        if(status) status.textContent='Follow-up is still required before GalviShot can generate the paid result.';
+        return false;
+      }
+      const error=new Error(response.message || 'GalviShot is not ready.');
+      showError(options.paidReturn?'galvishot-result-error':'galvishot-paywall-error', error);
+      return false;
+    } catch (error) {
+      showError(options.paidReturn?'galvishot-result-error':'galvishot-paywall-error', error);
+      return false;
+    }
   }
   // Day 6 paid-return/session-restoration hook.
   // routeGalviCareOnLoad() and restoreGalviCareSession() call this public function.
@@ -695,7 +775,19 @@ document.addEventListener('DOMContentLoaded',function(){ setTimeout(async functi
     el('submit-galvishot-followup')?.addEventListener('click',async function(){
       const fields=Array.from(document.querySelectorAll('#galvishot-followup-questions textarea'));
       if(fields.some(x=>!x.value.trim())){ fields.find(x=>!x.value.trim())?.focus(); return; }
-      try { await postShot('save_galvishot_followup',{ answers: fields.map(x=>({ question_code:x.dataset.questionCode, question_text:x.dataset.questionText, answer_text:x.value.trim() })) }); el('galvishot-followup-status').textContent='Follow-up saved. GalviShot readiness refreshed.'; await window.showIntegratedGalviShotPaywall(); } catch (error) { showError('galvishot-paywall-error', error); }
+      try {
+        const saved=await postShot('save_galvishot_followup',{ answers: fields.map(x=>({ question_code:x.dataset.questionCode, question_text:x.dataset.questionText, answer_text:x.value.trim() })) });
+        const evaluation=saved.evaluation||{};
+        await window.showIntegratedGalviShotPaywall();
+        const status=el('galvishot-followup-status');
+        if(status){
+          status.textContent=evaluation.status==='eligible'
+            ? 'Follow-up saved. GalviShot is ready to unlock.'
+            : 'Follow-up saved. Additional evidence may still be required before GalviShot can generate the final result.';
+          status.classList.add('gshot-success');
+        }
+        if(evaluation.status==='eligible') el('galvishot-followup')?.classList.add('hidden');
+      } catch (error) { showError('galvishot-paywall-error', error); }
     });
     el('skip-galvishot-followup')?.addEventListener('click',()=>el('galvishot-followup')?.classList.add('hidden'));
     el('galvishot-live-test-override')?.addEventListener('click',async function(){ const token=window.prompt('Enter the QA GalviShot override token.'); if(token) localStorage.setItem(GSHOT.QA_OVERRIDE_TOKEN_KEY, token.trim()); await requestResult(); });
@@ -717,6 +809,13 @@ document.addEventListener('DOMContentLoaded',function(){ setTimeout(async functi
     const params=new URLSearchParams(location.search); if((params.get('product')||'').toLowerCase()==='galvishot'&&!params.get('paid')) window.showIntegratedGalviShotPaywall();
   });
 })();
+
+document.addEventListener('DOMContentLoaded',function(){
+  setTimeout(async function(){
+    await routeGalviCareOnLoad();
+    checkGalviScoreAbandonment();
+  },0);
+});
 </script>
 
 </body>
