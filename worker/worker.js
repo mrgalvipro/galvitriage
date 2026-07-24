@@ -416,11 +416,40 @@ function requireFcdAccess(env, payload) {
 async function getSessionState(db, sessionId) {
   const session = await dbFirst(db, `SELECT * FROM sessions WHERE session_id=?`, sessionId);
   if (!session) return null;
+
   const products = ['GalviVitals', 'GalviScore', 'GalviShot', 'GalviSight', 'GalviPath'];
   const available = [];
-  for (const product of products) if (await storedAnyProductResult(db, sessionId, product)) available.push(product);
-  const current = available.includes('GalviPath') ? 'GalviPath' : available.includes('GalviSight') ? 'GalviSight' : available.includes('GalviShot') ? 'GalviShot' : available.includes('GalviScore') ? 'GalviScore' : available.includes('GalviVitals') ? 'GalviVitals' : (session.current_stage || 'GalviTriage');
-  return { success:true, session_id:sessionId, current_stage:current, available_products:available };
+  const entitled = [];
+
+  for (const product of products) {
+    if (await storedAnyProductResult(db, sessionId, product)) {
+      available.push(product);
+    }
+
+    // Day 7 paid-return restoration:
+    // expose only server-authoritative entitlement/payment state.
+    // hasProductEntitlement() preserves exact-product authority and
+    // the approved GalviShot -> GalviSight/GalviPath continuity rule.
+    if (await hasProductEntitlement(db, sessionId, product)) {
+      entitled.push(product);
+    }
+  }
+
+  const current =
+    available.includes('GalviPath') ? 'GalviPath' :
+    available.includes('GalviSight') ? 'GalviSight' :
+    available.includes('GalviShot') ? 'GalviShot' :
+    available.includes('GalviScore') ? 'GalviScore' :
+    available.includes('GalviVitals') ? 'GalviVitals' :
+    (session.current_stage || 'GalviTriage');
+
+  return {
+    success: true,
+    session_id: sessionId,
+    current_stage: current,
+    available_products: available,
+    entitled_products: entitled
+  };
 }
 async function clinicalSummary(db, sessionId) {
   const session = await dbFirst(db, `SELECT * FROM sessions WHERE session_id=?`, sessionId);
