@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+const workerSource = readFileSync(new URL('../worker/worker.js', import.meta.url), 'utf8');
 const wrangler = JSON.parse(readFileSync(new URL('../wrangler.json', import.meta.url), 'utf8'));
 
 test('Day 6 D1 configuration preserves the existing QA database binding', () => {
@@ -28,3 +29,12 @@ test('Day 6 browser GalviVitals renders before non-blocking Worker persistence c
   assert.doesNotMatch(errorHandler, /innerHTML|retry-galvicare-worker|could not prepare your Worker-based result/);
 });
 
+test('Day 6 HE-2 returning-founder fix resolves canonical founder before venture persistence', () => {
+  assert.match(workerSource, /function normalizeFounderEmail\(value\)/);
+  assert.match(workerSource, /async function resolveOrCreateFounder\(db, payload, sessionId/);
+  assert.match(workerSource, /SELECT founder_id FROM founders[\s\S]*WHERE lower\(email\)=\?[\s\S]*LIMIT 1/);
+  assert.match(workerSource, /if \(existing\?\.founder_id\)[\s\S]*UPDATE founders[\s\S]*return existing\.founder_id/);
+  assert.match(workerSource, /const founderId = await resolveOrCreateFounder\(db, payload, sid, ts\)/);
+  assert.match(workerSource, /INSERT INTO ventures\([\s\S]*ventureId,[\s\S]*sid,[\s\S]*founderId/);
+  assert.doesNotMatch(workerSource, /INSERT OR IGNORE INTO founders/);
+});
