@@ -12,8 +12,9 @@ class MockD1{
   async run(sql,p){
     if(sql.includes('INSERT INTO sessions')){const row=this.sessions.get(p[0]);if(row){row.current_stage=p[1];row.updated_at=p[7];row.last_seen_at=p[8];}else this.sessions.set(p[0],{session_id:p[0],current_stage:p[1],status:p[2]});return{success:true}}
     if(sql.includes('UPDATE sessions')){const row=this.sessions.get(p[3]);if(!row)throw new Error('Session not found');row.current_stage=p[0];return{success:true}}
-    if(sql.includes('INSERT OR IGNORE INTO founders'))return{success:true};
-    if(sql.includes('INSERT INTO ventures'))return{success:true};
+    if(sql.includes('INSERT INTO founders')){if([...this.founders.values()].some(x=>String(x.email).toLowerCase()===String(p[4]).toLowerCase()))throw new Error('UNIQUE constraint failed: founders.email');this.founders.set(p[0],{founder_id:p[0],session_id:p[1],email:p[4]});return{success:true};}
+    if(sql.includes('UPDATE founders')){const row=this.founders.get(p[6]);if(!row)throw new Error('Founder not found');return{success:true};}
+    if(sql.includes('INSERT INTO ventures')){if(!this.sessions.has(p[1])||!this.founders.has(p[2]))throw new Error('FOREIGN KEY constraint failed');this.ventures.set(p[0],{venture_id:p[0],session_id:p[1],founder_id:p[2],venture_name:p[3]});return{success:true};}
     if(sql.includes('INSERT INTO assessment_responses')){this.responses.set(`${p[1]}:${p[2]}:${p[3]}`,{response_id:p[0],session_id:p[1],product:p[2],question_id:p[3],dimension:p[4],answer_number:p[5],rules_version:p[6]});return{success:true}}
     if(sql.includes('UPDATE assessment_responses')){const row=this.findById(this.responses,'response_id',p[4]);if(!row)throw new Error('Response not found');row.dimension=p[0];row.answer_number=p[1];row.rules_version=p[2];return{success:true}}
     if(sql.includes('INSERT INTO journey_events')){this.events.push({session_id:p[1],event_name:p[2],product:p[3]});return{success:true}}
@@ -28,6 +29,7 @@ class MockD1{
     throw new Error(`Unhandled SQL run: ${sql}`)
   }
   async first(sql,p){
+    if(sql.includes('FROM founders')&&sql.includes('lower(email)=?'))return[...this.founders.values()].find(x=>String(x.email).toLowerCase()===String(p[0]).toLowerCase())||null;
     if(sql.includes('FROM assessment_responses')&&sql.includes('question_id=?'))return this.responses.get(`${p[0]}:${p[1]}:${p[2]}`)||null;
     if(sql.includes('FROM product_results')){const r=this.results.get(`${p[0]}:${p[1]}`);return r&&(!p[2]||r.rules_version===p[2])?r:null}
     if(sql.includes('FROM clinical_followups')&&sql.includes('question_id=?'))return this.followups.get(`${p[0]}:${p[1]}:${p[2]}`)||null;
