@@ -406,6 +406,7 @@ const GALVI_ANALYTICS_STORAGE_KEY = 'galvitriage_analytics_state';
 const GALVISCORE_PAYWALL_VIEWED_AT_KEY = 'galviscore_paywall_viewed_at';
 const GALVISCORE_LAST_RESULT_KEY = 'galviscore_last_result';
 const GALVICLINIC_FALLBACK_URL = 'https://calendly.com/galvilpro/gearupwithgalviclinic?month=2026-07';
+const GALVICARE_CANONICAL_CUSTOMER_URL = 'https://www.galvipro.com/#galvitriage';
 function postGalviScoreEvent(body) {
   if (!GALVICARE_SCORE_ENDPOINT) return Promise.resolve(null);
   return fetch(GALVICARE_SCORE_ENDPOINT, {
@@ -491,6 +492,36 @@ function fireGalviEvent(eventName,params={}){ const payload={event:eventName,gal
 async function updatePaymentSuccess(sessionId,stripeSessionId){ return postGalviScoreEvent({event_name:'stripe_success',product:'galviscore',session_id:sessionId,stripe_session_id:stripeSessionId,payment_galviscore:'paid',current_stage:'GalviScore Paid'}); }
 function stripeCheckoutUrl(paymentLink,sessionId){ const checkoutUrl=new URL(paymentLink); checkoutUrl.searchParams.set('client_reference_id',sessionId); return checkoutUrl.toString(); }
 async function resolveStripePaymentReturn(stripeSessionId,expectedProduct){ return callGalviCareApi({action:'resolve_payment_return',payload:{stripe_session_id:stripeSessionId,expected_product:expectedProduct}}); }
+
+/* Day 7: sanitize the customer-visible paid-return URL only after the paid
+   product has been verified, the canonical session persisted, and rendering
+   has succeeded. history.replaceState is used only when the current origin
+   already matches the canonical GalviPro origin. */
+function cleanPaidReturnCustomerUrl(){
+  const canonical=new URL(GALVICARE_CANONICAL_CUSTOMER_URL);
+
+  if(window.location.origin===canonical.origin){
+    window.history.replaceState(
+      {},
+      document.title,
+      `${canonical.pathname}${canonical.search}${canonical.hash}`
+    );
+    return true;
+  }
+
+  try{
+    if(window.top&&window.top!==window){
+      window.top.location.replace(GALVICARE_CANONICAL_CUSTOMER_URL);
+      return true;
+    }
+  }catch(error){
+    // Cross-origin frame access may be blocked. Fall through to same-window navigation.
+  }
+
+  window.location.replace(GALVICARE_CANONICAL_CUSTOMER_URL);
+  return true;
+}
+
 function galviCareStateIds(){ return ['assessmentForm','result','galviscore-paywall','galviscore-followup','galviscore-result','galviscore-repair','galvicare-payment-recovery','galvishot-paywall','galvishot-result','galvisight-handoff','galvipath-result']; }
 function hideGalviCareCustomerStates(){ galviCareStateIds().forEach(id=>{ const node=document.getElementById(id); if(!node)return; if(id==='assessmentForm'||id==='result')node.style.display='none'; node.classList.add('hidden'); }); }
 function showGalviCareState(state){ hideGalviCareCustomerStates(); clearGalviCareReturnPending(); const map={TRIAGE:'assessmentForm',VITALS:'result',GALVISCORE_PAYWALL:'galviscore-paywall',GALVISCORE_RESULT:'galviscore-result',PAYMENT_RECOVERY:'galvicare-payment-recovery',GALVISHOT_PAYWALL:'galvishot-paywall',GALVISHOT_RESULT:'galvishot-result',GALVISIGHT:'galvisight-handoff',GALVIPATH:'galvipath-result',GALVICLINIC_HANDOFF:'galvipath-result'}; const id=map[state]||'assessmentForm'; const node=document.getElementById(id); if(node){ node.classList.remove('hidden'); node.style.display=(id==='assessmentForm'||id==='result')?(id==='assessmentForm'?'block':'block'):'block'; } return node; }
@@ -540,6 +571,7 @@ async function routeGalviCareOnLoad(){
       const rendered=await window.showIntegratedGalviShotResult({paidReturn:true,session_id:paidSessionId});
       if(rendered===false) throw new Error('Verified GalviShot payment did not restore a GalviShot result.');
       clearGalviCareReturnPending();
+      cleanPaidReturnCustomerUrl();
       return true;
     }catch(error){
       showPaymentSessionRecoveryError(error,getStoredSessionId());
@@ -553,7 +585,9 @@ async function routeGalviCareOnLoad(){
       const resolved=await resolveStripePaymentReturn(stripeSessionId,'galviscore');
       const paidSessionId=persistSessionId(resolved.session_id);
       fireGalviEvent('stripe_success',{product,session_id:paidSessionId,stripe_session_id:stripeSessionId,stage:'GalviScore Paid'});
-      await renderGalviScoreAfterPayment(paidSessionId);
+      const rendered=await renderGalviScoreAfterPayment(paidSessionId);
+      if(rendered===false) throw new Error('Verified GalviScore payment did not restore a GalviScore result.');
+      cleanPaidReturnCustomerUrl();
       return true;
     }catch(error){
       showPaymentSessionRecoveryError(error,getStoredSessionId());
@@ -1097,7 +1131,6 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
         return [source,display,usedFor].filter(Boolean).join(' — ');
       });
     }
-
     function renderGalviPathResult(result){
       const panel=el('galvipath-result-panel');
       if(!panel) throw new Error('GalviPath result panel is missing.');
