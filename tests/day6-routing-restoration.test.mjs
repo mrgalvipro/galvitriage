@@ -18,7 +18,7 @@ test('Day 6 downstream CTAs route once, recover visibly, and analytics is non-bl
   assert.match(html, /fireGalviEvent\('journey_error',\{product:'galvipath'/);
   assert.match(html, /catch\(e\)\{\}/);
   assert.match(html, /clinic_booking_clicked/);
-  assert.match(html, /GALVICLINIC_FALLBACK_URL = 'https:\/\/www\.galvipro\.com\/#contact'/);
+  assert.match(html, /GALVICLINIC_FALLBACK_URL = 'https:\/\/calendly\.com\/galvilpro\/gearupwithgalviclinic\?month=2026-07'/);
   assert.match(html, /id="galvipath-book-galviclinic"/);
   assert.doesNotMatch(html, /Book GalviClinic booking remains unchanged|alert\('GalviClinic/);
 });
