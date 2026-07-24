@@ -1273,13 +1273,7 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
         }
 
         if(typeof fireGalviEvent==='function'){
-          fireGalviEvent('diagnostic_viewed',{
-            product:'galvipath',
-            session_id:sessionId(),
-            stage:'GalviPath',
-            status:resultStatus||responseStatus,
-            primary_pathway:result.primary_pathway||''
-          });
+          try{fireGalviEvent('diagnostic_viewed',{product:'galvipath',session_id:sessionId(),stage:'GalviPath',status:resultStatus||responseStatus,primary_pathway:result.primary_pathway||''});}catch(e){}
         }
 
         window.scrollTo({top:0,behavior:'smooth'});
@@ -1292,11 +1286,7 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
           target.classList.remove('hidden');
         }
         if(typeof fireGalviEvent==='function'){
-          fireGalviEvent('journey_error',{
-            product:'galvipath',
-            session_id:sessionId(),
-            stage:'GalviPath'
-          });
+          try{fireGalviEvent('journey_error',{product:'galvipath',session_id:sessionId(),stage:'GalviPath'});}catch(e){}
         }
         console.error('GalviPath render failed.',error);
         return false;
@@ -1311,11 +1301,7 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
       this.disabled=true;
       try{
         if(typeof fireGalviEvent==='function'){
-          fireGalviEvent('continue_clicked',{
-            product:'galvipath',
-            session_id:sessionId(),
-            stage:'GalviSight'
-          });
+          try{fireGalviEvent('continue_clicked',{product:'galvipath',session_id:sessionId(),stage:'GalviSight'});}catch(e){}
         }
         await showGalviPath();
       } finally {
@@ -1325,7 +1311,7 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
     });
 
     el('return-galvishot-result')?.addEventListener('click',requestResult);
-    function openGalviClinicHandoff(){ if(typeof fireGalviEvent==='function') fireGalviEvent('clinic_booking_clicked',{product:'galviclinic',session_id:sessionId(),stage:'GalviClinic Handoff'}); const msg='Your GalviCare diagnostic pathway is complete. Your GalviClinic treatment discussion is the next step.'; const target=el('galvipath-error')||el('galvishot-result-error'); if(target){ target.textContent=msg+' Use the contact page if scheduling is not yet connected.'; target.classList.remove('hidden'); } window.open(GALVICLINIC_FALLBACK_URL,'_blank','noopener'); }
+    function openGalviClinicHandoff(){ if(typeof fireGalviEvent==='function'){try{fireGalviEvent('clinic_booking_clicked',{product:'galviclinic',session_id:sessionId(),stage:'GalviClinic Handoff'});}catch(e){}} const msg='Your GalviCare diagnostic pathway is complete. Your GalviClinic treatment discussion is the next step.'; const target=el('galvipath-error')||el('galvishot-result-error'); if(target){ target.textContent=msg+' Use the contact page if scheduling is not yet connected.'; target.classList.remove('hidden'); } window.open(GALVICLINIC_FALLBACK_URL,'_blank','noopener'); }
     el('book-galviclinic')?.addEventListener('click',openGalviClinicHandoff);
     el('galvipath-book-galviclinic')?.addEventListener('click',openGalviClinicHandoff);
     const params=new URLSearchParams(location.search); if((params.get('product')||'').toLowerCase()==='galvishot'&&!params.get('paid')) window.showIntegratedGalviShotPaywall();
