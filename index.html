@@ -404,6 +404,19 @@ const questions = [
  { cat:'leadership_decision_intelligence', dimension:'leadership', key:'q20_execution_action', text:'How consistently do decisions turn into action?' }
 ];
 function labelDomain(domainKey){ return String(domainKey||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()); }
+function insightForDimension(key){
+  const insights = {
+    problem: 'Clarify the customer problem and the evidence that proves it matters now.',
+    customer: 'Deepen customer understanding through direct conversations and sharper segmentation.',
+    product: 'Use feedback to tighten the offer around clearer customer outcomes.',
+    revenue: 'Focus on the most repeatable path to revenue or funding before adding complexity.',
+    business_model: 'Clarify the model, stage, promise, and next measurable milestone.',
+    distribution: 'Strengthen the channel or motion that consistently creates qualified demand.',
+    leadership: 'Improve leadership cadence, decision quality, and follow-through.',
+    technology_operations: 'Reduce operating friction with simpler systems, process discipline, and practical technology use.'
+  };
+  return insights[key] || 'Focus on the weakest dimension first.';
+}
 function isValidGalviCareSessionId(value){ if(typeof value!=='string')return false; const canonical=value.trim(); const placeholders=new Set(['PASTE_SESSION_ID_HERE','ACTUAL_SESSION_ID','YOUR_SESSION_ID','undefined','null','']); if(placeholders.has(canonical))return false; if(canonical.length<8||canonical.length>96)return false; return /^gt_[A-Za-z0-9_-]+$/.test(canonical); }
 function persistSessionId(sessionId){ const canonical=String(sessionId||'').trim(); if(!isValidGalviCareSessionId(canonical))throw new Error('Invalid GalviCare session ID'); [GALVICARE_SESSION_STORAGE_KEY,GALVI_SESSION_STORAGE_KEY,GALVI_DAY1_SESSION_STORAGE_KEY].forEach(key=>localStorage.setItem(key,canonical)); return canonical; }
 function getStoredSessionId(){ const keys=[GALVICARE_SESSION_STORAGE_KEY,GALVI_SESSION_STORAGE_KEY,GALVI_DAY1_SESSION_STORAGE_KEY]; for(const key of keys){ const candidate=localStorage.getItem(key); if(isValidGalviCareSessionId(candidate))return persistSessionId(candidate); } return ''; }
