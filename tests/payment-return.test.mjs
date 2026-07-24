@@ -307,7 +307,7 @@ test('Frontend paid return uses Worker resolver before restoring results and nev
 
 test('Day 6 paid GalviScore return preserves original GalviCare session through restoration', () => {
   const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-  const route = html.match(/if\(product==='galviscore'&&paid==='score_success'\)[\s\S]*?return true; \}\} if\(await restoreGalviCareSession/)?.[0];
+  const route = html.match(/if\(product==='galviscore'&&paid==='score_success'\)[\s\S]*?if\(await restoreGalviCareSession\(\)\)/)?.[0];
   assert.ok(route, 'GalviScore paid return route must be present');
   assert.match(route, /resolveStripePaymentReturn\(stripeSessionId,'galviscore'\)[\s\S]*const paidSessionId=persistSessionId\(resolved\.session_id\)[\s\S]*renderGalviScoreAfterPayment\(paidSessionId\)/);
   assert.doesNotMatch(route, /getOrCreateSessionId\(|startNewGalviCareAssessment\(/);
