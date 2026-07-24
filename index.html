@@ -82,7 +82,7 @@
       .scale { grid-template-columns: repeat(5, minmax(36px, 1fr)); }
       .scale label { font-size: 13px; padding: 9px 2px; }
     }
-  
+
     /* GalviShot module styles — merged downstream of the passed GalviScore build */
     .gshot-shell { display: none; }
     .gshot-shell.active { display: block; }
@@ -297,7 +297,6 @@
     <p class="gshot-status-note">Secure checkout powered by Stripe. The full GalviShot appears after payment confirmation. QA override is for controlled testing only.</p>
     <div id="galvishot-paywall-error" class="gshot-error"></div>
   </section>
-
   <section id="galvishot-result" class="galvicare-card hidden">
     <div class="gshot-stage-pill">Current Stage: GalviShot Result</div>
     <p class="eyebrow">GALVISHOT™ UNLOCKED</p>
@@ -1007,10 +1006,324 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
     }
     let galviSightInFlight=false;
     el('continue-galvisight')?.addEventListener('click',async function(){ if(galviSightInFlight)return; galviSightInFlight=true; this.disabled=true; try{ if(typeof fireGalviEvent==='function') fireGalviEvent('continue_clicked',{product:'galvisight',session_id:sessionId(),stage:'GalviShot Result'}); setShotStage('GalviSight Handoff'); await showSight(); }catch(error){ el('galvisight-error')?.classList.remove('hidden'); if(typeof fireGalviEvent==='function') fireGalviEvent('journey_error',{product:'galvisight',session_id:sessionId(),stage:'GalviSight Handoff'}); } finally { galviSightInFlight=false; this.disabled=false; } });
+
+    /* Day 6/7 critical-path GalviPath renderer:
+       Worker response is authoritative; browser only renders returned intelligence. */
+    function normalizeGalviPathText(value){
+      if(value===undefined || value===null) return '';
+      if(typeof value==='string' || typeof value==='number' || typeof value==='boolean') return String(value);
+      if(typeof value==='object'){
+        return value.statement || value.action || value.label || value.title || value.name || value.message || JSON.stringify(value);
+      }
+      return String(value);
+    }
+
+    function renderGalviPathListSection(parent, heading, items, ordered=false, mapper){
+      const normalized=Array.isArray(items)?items:[];
+      const rendered=normalized
+        .map((item,index)=>mapper?mapper(item,index):normalizeGalviPathText(item))
+        .filter(value=>String(value||'').trim()!=='');
+      if(!rendered.length) return 0;
+
+      const section=document.createElement('div');
+      section.className='galvipath-detail-section';
+
+      const headingNode=document.createElement('h3');
+      headingNode.textContent=heading;
+      section.appendChild(headingNode);
+
+      const list=document.createElement(ordered?'ol':'ul');
+      list.className=ordered?'gshot-action-list':'gshot-risk-list';
+      rendered.forEach(value=>{
+        const item=document.createElement('li');
+        item.textContent=String(value);
+        list.appendChild(item);
+      });
+      section.appendChild(list);
+      parent.appendChild(section);
+      return rendered.length;
+    }
+
+    function renderGalviPathSequence(parent, sequence){
+      const items=Array.isArray(sequence)?sequence:[];
+      if(!items.length) return 0;
+
+      const section=document.createElement('div');
+      section.className='galvipath-detail-section';
+
+      const heading=document.createElement('h3');
+      heading.textContent='30 / 60 / 90 Day Treatment Path';
+      section.appendChild(heading);
+
+      items
+        .slice()
+        .sort((a,b)=>(Number(a?.order)||0)-(Number(b?.order)||0))
+        .forEach(item=>{
+          const card=document.createElement('div');
+          card.className='gshot-finding';
+
+          const title=document.createElement('div');
+          title.className='gshot-finding-title';
+          title.textContent=item?.window || `Step ${item?.order || ''}`;
+          card.appendChild(title);
+
+          const actions=Array.isArray(item?.actions)?item.actions:[];
+          if(actions.length){
+            const list=document.createElement('ol');
+            list.className='gshot-action-list';
+            actions.forEach(action=>{
+              const li=document.createElement('li');
+              li.textContent=normalizeGalviPathText(action);
+              list.appendChild(li);
+            });
+            card.appendChild(list);
+          }
+
+          section.appendChild(card);
+        });
+
+      parent.appendChild(section);
+      return items.length;
+    }
+
+    function renderGalviPathEvidenceTrace(parent, items){
+      const trace=Array.isArray(items)?items:[];
+      return renderGalviPathListSection(parent,'Evidence Trace',trace,false,(item)=>{
+        if(typeof item==='string') return item;
+        if(!item || typeof item!=='object') return '';
+        const source=[item.source_type,item.source_field,item.source_id].filter(Boolean).join(' / ');
+        const display=item.display_value || item.value || item.statement || item.title || '';
+        const usedFor=item.used_for ? `Used for: ${item.used_for}` : '';
+        return [source,display,usedFor].filter(Boolean).join(' — ');
+      });
+    }
+
+    function renderGalviPathResult(result){
+      const panel=el('galvipath-result-panel');
+      if(!panel) throw new Error('GalviPath result panel is missing.');
+
+      panel.innerHTML='';
+
+      const primary=document.createElement('p');
+      const primaryLabel=document.createElement('strong');
+      primaryLabel.textContent='Primary pathway: ';
+      primary.appendChild(primaryLabel);
+      const primaryValue=document.createElement('span');
+      primaryValue.id='galvipath-primary';
+      primaryValue.textContent=result.primary_pathway || '';
+      primary.appendChild(primaryValue);
+      panel.appendChild(primary);
+
+      if(result.clinical_rationale){
+        const rationale=document.createElement('div');
+        rationale.className='gshot-preview-card';
+
+        const heading=document.createElement('h3');
+        heading.textContent='Clinical Rationale';
+        rationale.appendChild(heading);
+
+        const copy=document.createElement('p');
+        copy.textContent=normalizeGalviPathText(result.clinical_rationale);
+        rationale.appendChild(copy);
+
+        panel.appendChild(rationale);
+      }
+
+      if(result.confidence!==undefined || result.confidence_band){
+        const confidence=document.createElement('p');
+        const bits=[];
+        if(result.confidence!==undefined && result.confidence!==null) bits.push(`Confidence: ${result.confidence}%`);
+        if(result.confidence_band) bits.push(`Band: ${result.confidence_band}`);
+        confidence.textContent=bits.join(' | ');
+        panel.appendChild(confidence);
+      }
+
+      renderGalviPathSequence(panel,result.sequence);
+
+      renderGalviPathListSection(
+        panel,
+        'Evidence to Collect',
+        result.evidence_to_collect,
+        false
+      );
+
+      if(result.operating_cadence){
+        const cadence=document.createElement('div');
+        cadence.className='galvipath-detail-section';
+        const heading=document.createElement('h3');
+        heading.textContent='Operating Cadence';
+        cadence.appendChild(heading);
+        const copy=document.createElement('p');
+        copy.textContent=normalizeGalviPathText(result.operating_cadence);
+        cadence.appendChild(copy);
+        panel.appendChild(cadence);
+      }
+
+      if(result.support_recommendation){
+        const support=document.createElement('div');
+        support.className='galvipath-detail-section';
+        const heading=document.createElement('h3');
+        heading.textContent='GalviClinic Support Recommendation';
+        support.appendChild(heading);
+        const copy=document.createElement('p');
+        copy.textContent=normalizeGalviPathText(result.support_recommendation);
+        support.appendChild(copy);
+        panel.appendChild(support);
+      }
+
+      renderGalviPathListSection(
+        panel,
+        'Escalation Triggers',
+        result.escalation_triggers,
+        false
+      );
+
+      renderGalviPathListSection(
+        panel,
+        'Assumptions',
+        result.assumptions,
+        false
+      );
+
+      renderGalviPathEvidenceTrace(panel,result.evidence_trace);
+
+      renderGalviPathListSection(
+        panel,
+        'Source References',
+        result.source_references,
+        false
+      );
+
+      const buttonRow=document.createElement('div');
+      buttonRow.className='button-row';
+
+      const printButton=document.createElement('button');
+      printButton.type='button';
+      printButton.className='secondary-button';
+      printButton.textContent='Print / Save GalviPath';
+      printButton.addEventListener('click',()=>window.print());
+
+      const clinicButton=document.createElement('button');
+      clinicButton.id='galvipath-book-galviclinic';
+      clinicButton.type='button';
+      clinicButton.className='primary-btn';
+      clinicButton.textContent='Book GalviClinic';
+      clinicButton.addEventListener('click',openGalviClinicHandoff);
+
+      buttonRow.appendChild(printButton);
+      buttonRow.appendChild(clinicButton);
+      panel.appendChild(buttonRow);
+
+      panel.classList.remove('hidden');
+    }
+
     let galviPathInFlight=false;
-    async function showGalviPath(){ hideUpstream(); const path=el('galvipath-result'); path?.classList.remove('hidden'); try{ const token=localStorage.getItem(GSHOT.QA_OVERRIDE_TOKEN_KEY)||''; const response=await postShot('get_or_generate_galvipath', token?{qa_override_token:token}:{}); const result=response.result||{}; ['galvipath-locked','galvipath-result-panel','galvipath-error'].forEach(id=>el(id)?.classList.add('hidden')); if(response.status==='locked') el('galvipath-locked')?.classList.remove('hidden'); else { el('galvipath-result-panel')?.classList.remove('hidden'); if(el('galvipath-primary')) el('galvipath-primary').textContent=result.primary_pathway||''; fill('galvipath-sequence',(result.sequence||[]).map(x=>`${x.window}: ${(x.actions||[]).join(' ')}`)); } }catch(error){ el('galvipath-error')?.classList.remove('hidden'); if(typeof fireGalviEvent==='function') fireGalviEvent('journey_error',{product:'galvipath',session_id:sessionId(),stage:'GalviPath'}); } }
+
+    async function showGalviPath(){
+      hideUpstream();
+
+      const path=el('galvipath-result');
+      if(!path) throw new Error('GalviPath result container is missing.');
+
+      path.classList.remove('hidden');
+      path.style.display='block';
+      setShotStage('Chart Your GalviPath');
+
+      const stateMessage=el('galvipath-state-message');
+      if(stateMessage){
+        stateMessage.textContent='Loading deterministic GalviPath from the Worker.';
+        stateMessage.classList.remove('gshot-success');
+      }
+
+      ['galvipath-locked','galvipath-result-panel','galvipath-error']
+        .forEach(id=>el(id)?.classList.add('hidden'));
+
+      try{
+        const token=localStorage.getItem(GSHOT.QA_OVERRIDE_TOKEN_KEY)||'';
+        const response=await postShot(
+          'get_or_generate_galvipath',
+          token?{qa_override_token:token}:{}
+        );
+
+        const result=response.result||response.galvipath||{};
+        const responseStatus=String(response.status||'').toLowerCase();
+        const resultStatus=String(result.status||'').toLowerCase();
+
+        if(responseStatus==='locked'){
+          if(stateMessage) stateMessage.textContent='GalviPath is locked pending server-side entitlement verification.';
+          el('galvipath-locked')?.classList.remove('hidden');
+          return false;
+        }
+
+        const ready=
+          responseStatus==='ready' ||
+          responseStatus==='ok' ||
+          resultStatus==='ready' ||
+          resultStatus==='ok';
+
+        if(!ready){
+          throw new Error(`GalviPath returned an unsupported status: ${response.status||result.status||'unknown'}`);
+        }
+
+        renderGalviPathResult(result);
+
+        if(stateMessage){
+          stateMessage.textContent='Your deterministic GalviPath is ready.';
+          stateMessage.classList.add('gshot-success');
+        }
+
+        if(typeof fireGalviEvent==='function'){
+          fireGalviEvent('diagnostic_viewed',{
+            product:'galvipath',
+            session_id:sessionId(),
+            stage:'GalviPath',
+            status:resultStatus||responseStatus,
+            primary_pathway:result.primary_pathway||''
+          });
+        }
+
+        window.scrollTo({top:0,behavior:'smooth'});
+        return true;
+      }catch(error){
+        if(stateMessage) stateMessage.textContent='GalviPath could not render the deterministic Worker result.';
+        const target=el('galvipath-error');
+        if(target){
+          target.textContent=`GalviPath could not load. ${error.message||'Please retry.'}`;
+          target.classList.remove('hidden');
+        }
+        if(typeof fireGalviEvent==='function'){
+          fireGalviEvent('journey_error',{
+            product:'galvipath',
+            session_id:sessionId(),
+            stage:'GalviPath'
+          });
+        }
+        console.error('GalviPath render failed.',error);
+        return false;
+      }
+    }
+
     window.showGalviPath=showGalviPath;
-    el('continue-galvipath')?.addEventListener('click',async function(){ if(galviPathInFlight)return; galviPathInFlight=true; this.disabled=true; try{ if(typeof fireGalviEvent==='function') fireGalviEvent('continue_clicked',{product:'galvipath',session_id:sessionId(),stage:'GalviSight'}); await showGalviPath(); } finally { galviPathInFlight=false; this.disabled=false; } });
+
+    el('continue-galvipath')?.addEventListener('click',async function(){
+      if(galviPathInFlight) return;
+      galviPathInFlight=true;
+      this.disabled=true;
+      try{
+        if(typeof fireGalviEvent==='function'){
+          fireGalviEvent('continue_clicked',{
+            product:'galvipath',
+            session_id:sessionId(),
+            stage:'GalviSight'
+          });
+        }
+        await showGalviPath();
+      } finally {
+        galviPathInFlight=false;
+        this.disabled=false;
+      }
+    });
+
     el('return-galvishot-result')?.addEventListener('click',requestResult);
     function openGalviClinicHandoff(){ if(typeof fireGalviEvent==='function') fireGalviEvent('clinic_booking_clicked',{product:'galviclinic',session_id:sessionId(),stage:'GalviClinic Handoff'}); const msg='Your GalviCare diagnostic pathway is complete. Your GalviClinic treatment discussion is the next step.'; const target=el('galvipath-error')||el('galvishot-result-error'); if(target){ target.textContent=msg+' Use the contact page if scheduling is not yet connected.'; target.classList.remove('hidden'); } window.open(GALVICLINIC_FALLBACK_URL,'_blank','noopener'); }
     el('book-galviclinic')?.addEventListener('click',openGalviClinicHandoff);
