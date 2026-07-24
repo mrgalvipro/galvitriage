@@ -143,17 +143,195 @@ async function upsertSession(db, payload, stage = 'GalviTriage') {
   await dbRun(db, `INSERT INTO sessions(session_id,current_stage,status,source,utm_source,utm_campaign,created_at,updated_at,last_seen_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET current_stage=excluded.current_stage, source=COALESCE(excluded.source, sessions.source), utm_source=COALESCE(excluded.utm_source, sessions.utm_source), utm_campaign=COALESCE(excluded.utm_campaign, sessions.utm_campaign), updated_at=excluded.updated_at, last_seen_at=excluded.last_seen_at`, sid, stage, 'active', safe(payload,'session.source'), safe(payload,'session.utm_source'), safe(payload,'session.utm_campaign'), ts, ts, ts);
   return sid;
 }
+async function upsertAssessmentResponse(db, sessionId, question, answer, ts) {
+  const existing = await dbFirst(
+    db,
+    `SELECT response_id FROM assessment_responses
+     WHERE session_id=? AND product=? AND question_id=?
+     LIMIT 1`,
+    sessionId,
+    'GalviTriage',
+    question.key
+  );
+
+  if (existing) {
+    await dbRun(
+      db,
+      `UPDATE assessment_responses
+       SET dimension=?, answer_number=?, rules_version=?, updated_at=?
+       WHERE response_id=?`,
+      question.dimension,
+      normalizeAnswer(answer),
+      DAY2_RULES_VERSION,
+      ts,
+      existing.response_id
+    );
+    return;
+  }
+
+  await dbRun(
+    db,
+    `INSERT INTO assessment_responses(
+       response_id,session_id,product,question_id,dimension,answer_number,
+       rules_version,created_at,updated_at
+     ) VALUES(?,?,?,?,?,?,?,?,?)`,
+    `resp_${sessionId}_${question.key}`,
+    sessionId,
+    'GalviTriage',
+    question.key,
+    question.dimension,
+    normalizeAnswer(answer),
+    DAY2_RULES_VERSION,
+    ts,
+    ts
+  );
+}
+
 async function persistTriage(db, payload) {
-  const sid = await upsertSession(db, payload, 'GalviTriage Submitted'); const ts = nowIso(); const founderId = `founder_${sid}`; const ventureId = `venture_${sid}`;
-  await dbRun(db, `INSERT OR IGNORE INTO founders(founder_id,session_id,first_name,last_name,email,phone,linkedin_url,consent_status,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`, founderId, sid, safe(payload,'founder.first_name'), safe(payload,'founder.last_name'), safe(payload,'founder.email'), safe(payload,'founder.phone'), safe(payload,'founder.linkedin_url'), safe(payload,'founder.consent', false) ? 'accepted' : 'missing', ts, ts);
-  await dbRun(db, `INSERT INTO ventures(venture_id,session_id,founder_id,venture_name,organization_type,stage,industry,revenue_range,primary_goal,primary_challenge,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(venture_id) DO UPDATE SET venture_name=excluded.venture_name,organization_type=excluded.organization_type,stage=excluded.stage,industry=excluded.industry,revenue_range=excluded.revenue_range,primary_goal=excluded.primary_goal,primary_challenge=excluded.primary_challenge,updated_at=excluded.updated_at`, ventureId, sid, founderId, safe(payload,'venture.venture_name'), safe(payload,'venture.organization_type'), safe(payload,'venture.organization_stage'), safe(payload,'venture.industry'), safe(payload,'venture.revenue_range'), safe(payload,'priority.highest_impact_area'), safe(payload,'open_text.biggest_challenge'), ts, ts);
+  const sid = await upsertSession(db, payload, 'GalviTriage Submitted');
+  const ts = nowIso();
+  const founderId = `founder_${sid}`;
+  const ventureId = `venture_${sid}`;
+
+  await dbRun(
+    db,
+    `INSERT OR IGNORE INTO founders(
+       founder_id,session_id,first_name,last_name,email,phone,linkedin_url,
+       consent_status,created_at,updated_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+    founderId,
+    sid,
+    safe(payload,'founder.first_name'),
+    safe(payload,'founder.last_name'),
+    safe(payload,'founder.email'),
+    safe(payload,'founder.phone'),
+    safe(payload,'founder.linkedin_url'),
+    safe(payload,'founder.consent', false) ? 'accepted' : 'missing',
+    ts,
+    ts
+  );
+
+  await dbRun(
+    db,
+    `INSERT INTO ventures(
+       venture_id,session_id,founder_id,venture_name,organization_type,stage,
+       industry,revenue_range,primary_goal,primary_challenge,created_at,updated_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+     ON CONFLICT(venture_id) DO UPDATE SET
+       venture_name=excluded.venture_name,
+       organization_type=excluded.organization_type,
+       stage=excluded.stage,
+       industry=excluded.industry,
+       revenue_range=excluded.revenue_range,
+       primary_goal=excluded.primary_goal,
+       primary_challenge=excluded.primary_challenge,
+       updated_at=excluded.updated_at`,
+    ventureId,
+    sid,
+    founderId,
+    safe(payload,'venture.venture_name'),
+    safe(payload,'venture.organization_type'),
+    safe(payload,'venture.organization_stage'),
+    safe(payload,'venture.industry'),
+    safe(payload,'venture.revenue_range'),
+    safe(payload,'priority.highest_impact_area'),
+    safe(payload,'open_text.biggest_challenge'),
+    ts,
+    ts
+  );
+
   const answers = answersFromPayload(payload);
-  for (const q of TRIAGE_QUESTIONS) await dbRun(db, `INSERT INTO assessment_responses(response_id,session_id,product,question_id,dimension,answer_number,rules_version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,question_id) DO UPDATE SET dimension=excluded.dimension,answer_number=excluded.answer_number,rules_version=excluded.rules_version,updated_at=excluded.updated_at`, `resp_${sid}_${q.key}`, sid, 'GalviTriage', q.key, q.dimension, normalizeAnswer(answers[q.key]), DAY2_RULES_VERSION, ts, ts);
-  await dbRun(db, `INSERT INTO journey_events(event_id,session_id,event_name,product,current_stage,event_json,created_at) VALUES(?,?,?,?,?,?,?)`, id('evt'), sid, 'galvitriage_submitted', 'GalviTriage', 'GalviTriage Submitted', JSON.stringify({ source: 'day2_worker', contract: DAY2_QUESTION_CONTRACT_VERSION }), ts);
+  for (const q of TRIAGE_QUESTIONS) {
+    await upsertAssessmentResponse(db, sid, q, answers[q.key], ts);
+  }
+
+  await dbRun(
+    db,
+    `INSERT INTO journey_events(
+       event_id,session_id,event_name,product,current_stage,event_json,created_at
+     ) VALUES(?,?,?,?,?,?,?)`,
+    id('evt'),
+    sid,
+    'galvitriage_submitted',
+    'GalviTriage',
+    'GalviTriage Submitted',
+    JSON.stringify({ source: 'day2_worker', contract: DAY2_QUESTION_CONTRACT_VERSION }),
+    ts
+  );
+
   return sid;
 }
-async function storedProductResult(db, sessionId, product) { return dbFirst(db, `SELECT * FROM product_results WHERE session_id=? AND product=? AND rules_version=?`, sessionId, product, DAY2_RULES_VERSION); }
-async function writeProductResult(db, sessionId, product, result) { const ts = nowIso(); await dbRun(db, `INSERT INTO product_results(result_id,session_id,product,status,confidence,confidence_band,result_json,generation_source,rules_version,content_version,generated_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product) DO UPDATE SET status=excluded.status,confidence=excluded.confidence,confidence_band=excluded.confidence_band,result_json=excluded.result_json,generation_source=excluded.generation_source,rules_version=excluded.rules_version,content_version=excluded.content_version,updated_at=excluded.updated_at`, `result_${sessionId}_${product}`, sessionId, product, 'generated', result.confidence, result.confidence_band, JSON.stringify(result), DAY2_GENERATION_SOURCE, DAY2_RULES_VERSION, DAY2_QUESTION_CONTRACT_VERSION, ts, ts); return result; }
+
+async function storedProductResult(db, sessionId, product) {
+  return dbFirst(
+    db,
+    `SELECT * FROM product_results
+     WHERE session_id=? AND product=? AND rules_version=?`,
+    sessionId,
+    product,
+    DAY2_RULES_VERSION
+  );
+}
+
+async function writeProductResult(db, sessionId, product, result) {
+  const ts = nowIso();
+  const existing = await dbFirst(
+    db,
+    `SELECT result_id, generated_at FROM product_results
+     WHERE session_id=? AND product=?
+     LIMIT 1`,
+    sessionId,
+    product
+  );
+
+  if (existing) {
+    await dbRun(
+      db,
+      `UPDATE product_results
+       SET status=?,
+           confidence=?,
+           confidence_band=?,
+           result_json=?,
+           generation_source=?,
+           rules_version=?,
+           content_version=?,
+           updated_at=?
+       WHERE result_id=?`,
+      'generated',
+      result.confidence,
+      result.confidence_band,
+      JSON.stringify(result),
+      DAY2_GENERATION_SOURCE,
+      DAY2_RULES_VERSION,
+      DAY2_QUESTION_CONTRACT_VERSION,
+      ts,
+      existing.result_id
+    );
+    return result;
+  }
+
+  await dbRun(
+    db,
+    `INSERT INTO product_results(
+       result_id,session_id,product,status,confidence,confidence_band,result_json,
+       generation_source,rules_version,content_version,generated_at,updated_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `result_${sessionId}_${product}`,
+    sessionId,
+    product,
+    'generated',
+    result.confidence,
+    result.confidence_band,
+    JSON.stringify(result),
+    DAY2_GENERATION_SOURCE,
+    DAY2_RULES_VERSION,
+    DAY2_QUESTION_CONTRACT_VERSION,
+    ts,
+    ts
+  );
+
+  return result;
+}
 async function getStoredTriage(db, sessionId) {
   const session = await dbFirst(db, `SELECT * FROM sessions WHERE session_id=?`, sessionId);
   if (!session) return null;
@@ -1420,24 +1598,243 @@ async function evaluateGalviShot(db, sessionId) {
 function stableGalviShotEvidenceLinkId(sessionId, findingCode, sourceField) {
   return `evidence_link_${sessionId}_GalviShot_${findingCode}_${sourceField}_${GALVISHOT_RULES_VERSION}`.replace(/[^A-Za-z0-9_:-]/g, '_');
 }
-async function writeGalviShot(db, sessionId, result) {
+async function writeProductResultForVersion(db, sessionId, product, result, rulesVersion, contentVersion) {
   const ts = nowIso();
-  await dbRun(db, `INSERT INTO product_results(result_id,session_id,product,status,confidence,confidence_band,result_json,generation_source,rules_version,content_version,generated_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product) DO NOTHING`, `result_${sessionId}_GalviShot`, sessionId, 'GalviShot', result.status, result.confidence, result.confidence_band, JSON.stringify(result), 'rules', GALVISHOT_RULES_VERSION, GALVISHOT_CONTENT_VERSION, ts, ts);
+  const existing = await dbFirst(
+    db,
+    `SELECT result_id FROM product_results
+     WHERE session_id=? AND product=?
+     LIMIT 1`,
+    sessionId,
+    product
+  );
+
+  if (existing) {
+    await dbRun(
+      db,
+      `UPDATE product_results
+       SET status=?,
+           confidence=?,
+           confidence_band=?,
+           result_json=?,
+           generation_source=?,
+           rules_version=?,
+           content_version=?,
+           updated_at=?
+       WHERE result_id=?`,
+      result.status || 'generated',
+      Number(result.confidence || 0),
+      result.confidence_band || confidenceBand(result.confidence || 0),
+      JSON.stringify(result),
+      'rules',
+      rulesVersion,
+      contentVersion,
+      ts,
+      existing.result_id
+    );
+    return result;
+  }
+
+  await dbRun(
+    db,
+    `INSERT INTO product_results(
+       result_id,session_id,product,status,confidence,confidence_band,result_json,
+       generation_source,rules_version,content_version,generated_at,updated_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `result_${sessionId}_${product}`,
+    sessionId,
+    product,
+    result.status || 'generated',
+    Number(result.confidence || 0),
+    result.confidence_band || confidenceBand(result.confidence || 0),
+    JSON.stringify(result),
+    'rules',
+    rulesVersion,
+    contentVersion,
+    ts,
+    ts
+  );
+
+  return result;
+}
+
+async function upsertGalviShotFinding(db, sessionId, finding, evidence, ts) {
+  const existing = await dbFirst(
+    db,
+    `SELECT finding_id FROM clinical_findings
+     WHERE session_id=? AND product=? AND finding_code=?
+     LIMIT 1`,
+    sessionId,
+    'GalviShot',
+    finding.finding_code
+  );
+
+  if (existing) {
+    await dbRun(
+      db,
+      `UPDATE clinical_findings
+       SET finding_text=?,
+           evidence_ids_json=?,
+           severity=?,
+           confidence=?,
+           confidence_band=?,
+           status=?,
+           rules_version=?,
+           updated_at=?
+       WHERE finding_id=?`,
+      finding.finding_text,
+      JSON.stringify(evidence.map(e=>e.source_id)),
+      finding.domain,
+      finding.confidence,
+      finding.confidence_language,
+      'supported',
+      GALVISHOT_RULES_VERSION,
+      ts,
+      existing.finding_id
+    );
+    return;
+  }
+
+  await dbRun(
+    db,
+    `INSERT INTO clinical_findings(
+       finding_id,session_id,product,finding_code,finding_text,evidence_ids_json,
+       severity,confidence,confidence_band,status,rules_version,created_at,updated_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    `finding_${sessionId}_${finding.finding_code}`,
+    sessionId,
+    'GalviShot',
+    finding.finding_code,
+    finding.finding_text,
+    JSON.stringify(evidence.map(e=>e.source_id)),
+    finding.domain,
+    finding.confidence,
+    finding.confidence_language,
+    'supported',
+    GALVISHOT_RULES_VERSION,
+    ts,
+    ts
+  );
+}
+
+async function upsertGalviShotEvidenceLink(db, sessionId, findingCode, evidence, ts) {
+  const sourceField = String(evidence.source_field || evidence.source_id || 'unknown');
+  const existing = await dbFirst(
+    db,
+    `SELECT evidence_link_id FROM galvishot_evidence_links
+     WHERE session_id=? AND product=? AND finding_code=? AND source_field=? AND rules_version=?
+     LIMIT 1`,
+    sessionId,
+    'GalviShot',
+    findingCode,
+    sourceField,
+    GALVISHOT_RULES_VERSION
+  );
+
+  if (existing) {
+    await dbRun(
+      db,
+      `UPDATE galvishot_evidence_links
+       SET source_type=?, display_value=?, used_for=?
+       WHERE evidence_link_id=?`,
+      String(evidence.source_type || 'assessment_response'),
+      String(evidence.display_value || ''),
+      String(evidence.used_for || findingCode),
+      existing.evidence_link_id
+    );
+    return;
+  }
+
+  await dbRun(
+    db,
+    `INSERT INTO galvishot_evidence_links(
+       evidence_link_id,session_id,product,finding_code,source_type,source_field,
+       display_value,used_for,rules_version,created_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+    stableGalviShotEvidenceLinkId(sessionId, findingCode, sourceField),
+    sessionId,
+    'GalviShot',
+    findingCode,
+    String(evidence.source_type || 'assessment_response'),
+    sourceField,
+    String(evidence.display_value || ''),
+    String(evidence.used_for || findingCode),
+    GALVISHOT_RULES_VERSION,
+    ts
+  );
+}
+
+async function writeGalviShot(db, sessionId, result) {
+  await writeProductResultForVersion(
+    db,
+    sessionId,
+    'GalviShot',
+    result,
+    GALVISHOT_RULES_VERSION,
+    GALVISHOT_CONTENT_VERSION
+  );
+
+  const ts = nowIso();
   for (const f of result.findings) {
     const evidence = Array.isArray(f.evidence) ? f.evidence : [];
-    await dbRun(db, `INSERT INTO clinical_findings(finding_id,session_id,product,finding_code,finding_text,evidence_ids_json,severity,confidence,confidence_band,status,rules_version,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,finding_code) DO UPDATE SET finding_text=excluded.finding_text,evidence_ids_json=excluded.evidence_ids_json,confidence=excluded.confidence,confidence_band=excluded.confidence_band,updated_at=excluded.updated_at`, `finding_${sessionId}_${f.finding_code}`, sessionId, 'GalviShot', f.finding_code, f.finding_text, JSON.stringify(evidence.map(e=>e.source_id)), f.domain, f.confidence, f.confidence_language, 'supported', GALVISHOT_RULES_VERSION, ts, ts);
+    await upsertGalviShotFinding(db, sessionId, f, evidence, ts);
     for (const e of evidence) {
-      const sourceField = String(e.source_field || e.source_id || 'unknown');
-      await dbRun(db, `INSERT INTO galvishot_evidence_links(evidence_link_id,session_id,product,finding_code,source_type,source_field,display_value,used_for,rules_version,created_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,finding_code,source_field,rules_version) DO UPDATE SET source_type=excluded.source_type,display_value=excluded.display_value,used_for=excluded.used_for`, stableGalviShotEvidenceLinkId(sessionId, f.finding_code, sourceField), sessionId, 'GalviShot', f.finding_code, String(e.source_type || 'assessment_response'), sourceField, String(e.display_value || ''), String(e.used_for || f.finding_code), GALVISHOT_RULES_VERSION, ts);
+      await upsertGalviShotEvidenceLink(db, sessionId, f.finding_code, e, ts);
     }
   }
 }
+
+async function upsertClinicalFollowup(db, sessionId, code, text, answer, confidenceImpact, ts) {
+  const existing = await dbFirst(
+    db,
+    `SELECT followup_id FROM clinical_followups
+     WHERE session_id=? AND product=? AND question_id=?
+     LIMIT 1`,
+    sessionId,
+    'GalviShot',
+    code
+  );
+
+  if (existing) {
+    await dbRun(
+      db,
+      `UPDATE clinical_followups
+       SET question_text=?, answer=?, confidence_impact=?, updated_at=?
+       WHERE followup_id=?`,
+      text,
+      answer,
+      confidenceImpact,
+      ts,
+      existing.followup_id
+    );
+    return;
+  }
+
+  await dbRun(
+    db,
+    `INSERT INTO clinical_followups(
+       followup_id,session_id,current_stage,product,question_id,question_text,
+       answer,confidence_impact,created_at,updated_at
+     ) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+    `followup_${sessionId}_${code}`,
+    sessionId,
+    'GalviShot',
+    'GalviShot',
+    code,
+    text,
+    answer,
+    confidenceImpact,
+    ts,
+    ts
+  );
+}
+
 async function handleDay3GalviShotAction(env, payload, action) {
   const db = requireDb(env); const sid = normalizeSessionId(safe(payload, 'session_id') || safe(payload, 'session.session_id'));
   if (!required(sid)) return jsonResponse({ success:false, action, status:'error', message:'Missing session_id' }, 400, env);
   if (action === 'get_galvishot') { const entitled = await hasGalviShotEntitlement(db, sid) || hasQaOverride(env, payload); if (!entitled) return jsonResponse({ success:false, action, status:'locked', message:'GalviShot is locked until server-side entitlement is verified.', session_id:sid, payment_required:true }, 402, env); const stored = await storedGalviShot(db, sid); if (!stored) return jsonResponse({ success:false, action, status:'not_found', session_id:sid }, 404, env); return jsonResponse({ success:true, action, status:'ok', stored:true, session_id:sid, result:JSON.parse(stored.result_json) }, 200, env); }
   if (action === 'evaluate_galvishot') return jsonResponse({ action, ...(await evaluateGalviShot(db, sid)) }, 200, env);
-  if (action === 'save_galvishot_followup') { const answers = safe(payload, 'payload.answers', []); if (!Array.isArray(answers)) return jsonResponse({ success:false, action, status:'error', message:'answers must be an array' }, 400, env); const ts = nowIso(); for (const a of answers.slice(0, 5)) { const code = String(a.question_code || a.question_id || '').slice(0,64); const text = String(a.question_text || code).slice(0,500); const ans = String(a.answer_text || a.answer || '').trim().slice(0,1000); if (required(code) && required(ans)) await dbRun(db, `INSERT INTO clinical_followups(followup_id,session_id,current_stage,product,question_id,question_text,answer,confidence_impact,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product,question_id) DO UPDATE SET question_text=excluded.question_text,answer=excluded.answer,confidence_impact=excluded.confidence_impact,updated_at=excluded.updated_at`, `followup_${sid}_${code}`, sid, 'GalviShot', 'GalviShot', code, text, ans, Number(a.confidence_impact || 5), ts, ts); } return jsonResponse({ success:true, action, status:'ok', session_id:sid, evaluation:await evaluateGalviShot(db, sid) }, 200, env); }
+  if (action === 'save_galvishot_followup') { const answers = safe(payload, 'payload.answers', []); if (!Array.isArray(answers)) return jsonResponse({ success:false, action, status:'error', message:'answers must be an array' }, 400, env); const ts = nowIso(); for (const a of answers.slice(0, 5)) { const code = String(a.question_code || a.question_id || '').slice(0,64); const text = String(a.question_text || code).slice(0,500); const ans = String(a.answer_text || a.answer || '').trim().slice(0,1000); if (required(code) && required(ans)) await upsertClinicalFollowup(db, sid, code, text, ans, Number(a.confidence_impact || 5), ts); } return jsonResponse({ success:true, action, status:'ok', session_id:sid, evaluation:await evaluateGalviShot(db, sid) }, 200, env); }
   const entitled = await hasGalviShotEntitlement(db, sid) || hasQaOverride(env, payload);
   if (!entitled) return jsonResponse({ success:false, action, status:'locked', message:'GalviShot is locked until server-side entitlement is verified.', session_id:sid, payment_required:true }, 402, env);
   const stored = await storedGalviShot(db, sid); if (stored) return jsonResponse({ success:true, action, status:'ok', stored:true, session_id:sid, result:JSON.parse(stored.result_json) }, 200, env);
@@ -1462,9 +1859,15 @@ async function storedDay4Result(db, sessionId, product) {
   return dbFirst(db, `SELECT * FROM product_results WHERE session_id=? AND product=? AND rules_version=?`, sessionId, product, v.rules);
 }
 async function writeDay4Result(db, sessionId, product, result) {
-  const ts = nowIso(); const v = day4ProductVersion(product);
-  await dbRun(db, `INSERT INTO product_results(result_id,session_id,product,status,confidence,confidence_band,result_json,generation_source,rules_version,content_version,generated_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,product) DO NOTHING`, `result_${sessionId}_${product}`, sessionId, product, result.status, result.confidence || 0, result.confidence_band || confidenceBand(result.confidence || 0), JSON.stringify(result), 'rules', v.rules, v.content, ts, ts);
-  return result;
+  const v = day4ProductVersion(product);
+  return writeProductResultForVersion(
+    db,
+    sessionId,
+    product,
+    result,
+    v.rules,
+    v.content
+  );
 }
 async function getPaidGalviShotForDay4(db, env, payload, sessionId) {
   const entitled = await hasGalviShotEntitlement(db, sessionId) || hasQaOverride(env, payload);
