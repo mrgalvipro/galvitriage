@@ -50,7 +50,7 @@ test('Day 6 P0 Stripe success restores GalviScore from Worker before normal jour
 });
 
 test('Day 6 P0 non-success queries keep normal routing path', () => {
-  assert.match(html, /if\(await restoreGalviCareSession\(\)\) return true; showGalviCareTriageState\(\); return false;/);
+  assert.match(html, /if\(await restoreGalviCareSession\(\)\)\s*return true;\s*showGalviCareTriageState\(\);\s*return false;/);
   assert.doesNotMatch(html, /product==='galviscore'&&paid!=='score_success'[\s\S]*renderGalviScoreAfterPayment/);
 });
 
@@ -77,13 +77,13 @@ test('Day 6 complete low, mid, and high GalviScores are valid renderable results
 });
 
 test('Day 6 GalviShot paid return restores result path instead of restarting triage', () => {
-  assert.match(html, /product==='galvishot'&&paid[\s\S]*showIntegratedGalviShotResult/);
-  assert.doesNotMatch(html, /product==='galvishot'&&paid[\s\S]*startNewGalviCareAssessment\(/);
+  assert.match(html, /product==='galvishot'&&paid==='shot_success'[\s\S]*showIntegratedGalviShotResult/);
+  assert.doesNotMatch(html, /product==='galvishot'&&paid==='shot_success'[\s\S]*startNewGalviCareAssessment\(/);
   assert.match(html, /if\(\(p\.get\('product'\)==='galviscore'[\s\S]*\|\|\(p\.get\('product'\)==='galvishot'&&p\.get\('paid'\)\)\)/);
 });
 
 test('Day 6 normal clean URL restores exactly GalviTriage presentation when no route owns the page', () => {
-  assert.match(html, /if\(await restoreGalviCareSession\(\)\) return true; showGalviCareTriageState\(\); return false;/);
+  assert.match(html, /if\(await restoreGalviCareSession\(\)\)\s*return true;\s*showGalviCareTriageState\(\);\s*return false;/);
   assert.match(html, /function showGalviCareTriageState\(\)[\s\S]*showGalviCareState\('TRIAGE'\)/);
   assert.match(html, /function showGalviCareState\(state\)[\s\S]*clearGalviCareReturnPending\(\)/);
   assert.match(html, /const scoreContainer=document\.getElementById\('scoreQuestions'\);[\s\S]*questions\.forEach/);
@@ -91,7 +91,7 @@ test('Day 6 normal clean URL restores exactly GalviTriage presentation when no r
 
 test('Day 6 incomplete existing session falls through to GalviTriage without creating replacement session', () => {
   assert.match(html, /if\(!state\|\|!isDay6DownstreamStage\(state\.current_stage\)\)return false/);
-  assert.match(html, /if\(await restoreGalviCareSession\(\)\) return true; showGalviCareTriageState\(\); return false;/);
+  assert.match(html, /if\(await restoreGalviCareSession\(\)\)\s*return true;\s*showGalviCareTriageState\(\);\s*return false;/);
   assert.doesNotMatch(html, /restoreGalviCareSession[\s\S]*startNewGalviCareAssessment\(/);
 });
 
@@ -107,7 +107,6 @@ test('Day 6 payment-return resolver failure displays standalone visible recovery
 
 test('Day 6 payment-return paths clear return-pending after success or visible failure', () => {
   assert.match(html, /function showGalviCareState\(state\)[\s\S]*clearGalviCareReturnPending\(\)/);
-  assert.match(html, /renderUnlockedGalviScore\(restored\); clearGalviCareReturnPending\(\); return true/);
-  assert.match(html, /showIntegratedGalviShotResult[\s\S]*clearGalviCareReturnPending\(\); return true/);
+  assert.match(html, /renderUnlockedGalviScore\(restored\);\s*clearGalviCareReturnPending\(\);\s*return true/);
+  assert.match(html, /showIntegratedGalviShotResult[\s\S]*clearGalviCareReturnPending\(\);\s*return true/);
 });
-
