@@ -108,9 +108,47 @@
     }
 
   .galvicare-return-pending #assessmentForm,.galvicare-return-pending #result,.galvicare-return-pending #galviscore-paywall{display:none!important}
-  @media print{.button-row,#galvishot-live-test-override,#galvishot-stripe-cta,#galvishot-back-score,#galvishot-back-paywall,#return-galvishot-result,#continue-galvisight,#continue-galvipath,#book-galviclinic,#galvipath-book-galviclinic,.facilitator-only{display:none!important}.galvicare-card,.hidden{display:block!important;box-shadow:none!important;max-height:none!important;overflow:visible!important}body{background:#fff!important;color:#111!important}.gshot-error:empty,.gshot-success:empty{display:none!important}}
+  @media print{
+  body *{visibility:hidden!important}
+  body.print-galviscore #galviscore-result,
+  body.print-galviscore #galviscore-result *,
+  body.print-galvishot #galvishot-result,
+  body.print-galvishot #galvishot-result *,
+  body.print-galvisight #galvisight-handoff,
+  body.print-galvisight #galvisight-handoff *,
+  body.print-galvipath #galvipath-result,
+  body.print-galvipath #galvipath-result *{
+    visibility:visible!important;
+  }
+  body.print-galviscore #galviscore-result,
+  body.print-galvishot #galvishot-result,
+  body.print-galvisight #galvisight-handoff,
+  body.print-galvipath #galvipath-result{
+    display:block!important;
+    position:absolute!important;
+    inset:0 auto auto 0!important;
+    width:100%!important;
+    max-width:none!important;
+    box-shadow:none!important;
+    overflow:visible!important;
+    background:#fff!important;
+  }
+  body.print-galviscore #galviscore-result .button-row,
+  body.print-galvishot #galvishot-result .button-row,
+  body.print-galvisight #galvisight-handoff .button-row,
+  body.print-galvipath #galvipath-result .button-row,
+  body.print-galvisight #continue-galvipath,
+  body.print-galvishot #continue-galvisight,
+  body.print-galvishot #book-galviclinic,
+  body.print-galvipath #galvipath-book-galviclinic,
+  .facilitator-only{
+    display:none!important;
+  }
+  body{background:#fff!important;color:#111!important}
+  .gshot-error.hidden,.gshot-success.hidden{display:none!important}
+}
 </style>
-<script>try{const p=new URLSearchParams(location.search);if((p.get('product')==='galviscore'&&p.get('paid')==='score_success')||(p.get('product')==='galvishot'&&p.get('paid')))document.documentElement.classList.add('galvicare-return-pending');}catch(e){}</script>
+<script>try{const p=new URLSearchParams(location.search);const product=(p.get('product')||'').toLowerCase();const paid=p.get('paid')||'';if((product==='galviscore'&&paid==='score_success')||(product==='galvishot'&&paid==='shot_success')||(product==='galvisight'&&paid==='sight_success')||(product==='galvipath'&&paid==='path_success'))document.documentElement.classList.add('galvicare-return-pending');}catch(e){}</script>
 </head>
 <body>
 <div class="wrap">
@@ -248,7 +286,10 @@
     <div id="galviscore-category-bars"></div>
     <h3>Top 3 Priorities</h3>
     <ol id="galviscore-priorities"></ol>
-    <div class="button-row"><button id="continue-galvishot" class="primary-btn" type="button">Continue to GalviShot™</button></div>
+    <div class="button-row">
+      <button id="print-galviscore" class="secondary-button" type="button">Print / Save GalviScore</button>
+      <button id="continue-galvishot" class="primary-btn" type="button">Continue to GalviShot™</button>
+    </div>
   </section>
 
   <section id="galviscore-repair" class="galvicare-card hidden">
@@ -316,12 +357,36 @@
     <h3>Assumptions</h3>
     <ul id="galvishot-assumptions" class="gshot-risk-list"></ul>
     <div class="button-row">
+      <button id="print-galvishot" class="secondary-button" type="button">Print / Save GalviShot</button>
       <button id="continue-galvisight" class="primary-btn" type="button">Continue to GalviSight™</button>
       <button id="book-galviclinic" class="secondary-button" type="button">Book GalviClinic™</button>
       <button id="galvishot-back-paywall" class="secondary-button" type="button">Back</button>
     </div>
     <p class="gshot-status-note">Business guidance only; not legal, financial, medical, tax, or investment advice.</p>
     <div id="galvishot-result-error" class="gshot-error"></div>
+  </section>
+
+  <section id="galvisight-paywall" class="galvicare-card hidden">
+    <div class="gshot-stage-pill">Current Stage: GalviSight Paywall</div>
+    <p class="eyebrow">GALVISIGHT™</p>
+    <h1>Unlock Your Executive Interpretation.</h1>
+    <p>GalviSight interprets your GalviShot findings into prioritized executive meaning, risks, opportunities, and recommended actions.</p>
+    <div class="inclusions">
+      <strong>Included in your $29 unlock:</strong>
+      <ul>
+        <li>Executive interpretation of the strongest supported findings</li>
+        <li>Prioritized hypotheses, risks, and opportunities</li>
+        <li>Recommended actions and urgency</li>
+        <li>Evidence trace and assumptions</li>
+      </ul>
+    </div>
+    <div class="button-row">
+      <button id="galvisight-stripe-cta" class="primary-btn" type="button">Unlock GalviSight™ — $29</button>
+      <button id="galvisight-qa-override" class="secondary-button" type="button">QA Test Override</button>
+      <button id="galvisight-back-galvishot" class="secondary-button" type="button">Back to GalviShot</button>
+    </div>
+    <p class="microcopy">Secure checkout powered by Stripe. GalviSight unlocks only after exact-product payment confirmation or the approved QA override.</p>
+    <div id="galvisight-paywall-error" class="gshot-error"></div>
   </section>
 
   <section id="galvisight-handoff" class="galvicare-card hidden">
@@ -370,11 +435,37 @@
       </div>
 
       <p id="galvisight-next-step" class="gshot-status-note"></p>
-      <button id="continue-galvipath" class="primary-btn" type="button">Continue to Chart Your GalviPath</button>
+      <div class="button-row">
+        <button id="print-galvisight" class="secondary-button" type="button">Print / Save GalviSight</button>
+        <button id="continue-galvipath" class="primary-btn" type="button">Continue to Chart Your GalviPath</button>
+      </div>
     </div>
     <div id="galvisight-error" class="gshot-error hidden">GalviSight could not load. Please retry.</div>
     <div class="button-row"><button id="return-galvishot-result" class="secondary-button" type="button">Return to GalviShot</button></div>
   </section>
+  <section id="galvipath-paywall" class="galvicare-card hidden">
+    <div class="gshot-stage-pill">Current Stage: GalviPath Paywall</div>
+    <p class="eyebrow">GALVIPATH™</p>
+    <h1>Unlock Your 30 / 60 / 90 Day Treatment Path.</h1>
+    <p>GalviPath converts the supported GalviCare findings into a deterministic treatment path with evidence collection, operating cadence, escalation triggers, and a GalviClinic handoff.</p>
+    <div class="inclusions">
+      <strong>Included in your $29 unlock:</strong>
+      <ul>
+        <li>Primary treatment pathway and clinical rationale</li>
+        <li>30 / 60 / 90 day action sequence</li>
+        <li>Evidence to collect and operating cadence</li>
+        <li>Escalation triggers and GalviClinic support recommendation</li>
+      </ul>
+    </div>
+    <div class="button-row">
+      <button id="galvipath-stripe-cta" class="primary-btn" type="button">Unlock GalviPath™ — $29</button>
+      <button id="galvipath-qa-override" class="secondary-button" type="button">QA Test Override</button>
+      <button id="galvipath-back-galvisight" class="secondary-button" type="button">Back to GalviSight</button>
+    </div>
+    <p class="microcopy">Secure checkout powered by Stripe. GalviPath unlocks only after exact-product payment confirmation or the approved QA override.</p>
+    <div id="galvipath-paywall-error" class="gshot-error"></div>
+  </section>
+
   <section id="galvipath-result" class="galvicare-card hidden">
     <div class="gshot-stage-pill">Current Stage: Chart Your GalviPath</div>
     <h2>Chart Your GalviPath™</h2>
@@ -384,7 +475,7 @@
     <div id="galvipath-result-panel" class="hidden">
       <p><strong>Primary pathway:</strong> <span id="galvipath-primary"></span></p>
       <ol id="galvipath-sequence" class="gshot-action-list"></ol>
-      <div class="button-row"><button type="button" class="secondary-button" onclick="window.print()">Print</button><button id="galvipath-book-galviclinic" type="button" class="primary-btn">Book GalviClinic</button></div>
+      <div class="button-row"><button id="print-galvipath" type="button" class="secondary-button">Print / Save GalviPath</button><button id="galvipath-book-galviclinic" type="button" class="primary-btn">Book GalviClinic</button></div>
     </div>
   </section>
 
@@ -395,6 +486,8 @@ const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-triage-intake.mrgalvipro.wo
 const GALVICARE_API_ENDPOINT = GALVICARE_INTAKE_ENDPOINT + '/api';
 const GALVICARE_SCORE_ENDPOINT = ''; // Preserved for legacy later-product event hooks only.
 const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01';
+const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_eVq3cw3R63YT6O6ahE53O03';
+const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_fZu14ofzO9jd8We1L853O05';
 const SCORING_VERSION = 'galviengine_score_v0_5_1';
 const QUESTION_CONTRACT_VERSION = 'galvitriage_questions_v0_5_1';
 const GALVI_ANALYTICS_VERSION = 'galvianalytics_0_5';
@@ -497,30 +590,22 @@ async function restoreGalviCareSession(){
     const available=Array.isArray(state.available_products)?state.available_products:[];
     const entitled=Array.isArray(state.entitled_products)?state.entitled_products:[];
 
-    // Day 7 restoration priority must preserve the deepest completed state first.
-    if(available.includes('GalviPath')&&window.showGalviPath){
-      await window.showGalviPath();
-      return true;
+    if(available.includes('GalviPath')&&entitled.includes('GalviPath')&&window.showGalviPath){
+      const rendered=await window.showGalviPath();
+      return rendered!==false;
     }
 
-    if(available.includes('GalviSight')&&window.showGalviSight){
-      await window.showGalviSight();
-      return true;
+    if(available.includes('GalviSight')&&entitled.includes('GalviSight')&&window.showGalviSight){
+      const rendered=await window.showGalviSight();
+      return rendered!==false;
     }
 
-    if(available.includes('GalviShot')&&window.showIntegratedGalviShotResult){
+    if(available.includes('GalviShot')&&entitled.includes('GalviShot')&&window.showIntegratedGalviShotResult){
       const rendered=await window.showIntegratedGalviShotResult();
       return rendered!==false;
     }
 
-    // Critical paid-return fix:
-    // after canonical URL navigation/reinitialization, restore GalviScore
-    // only when the Worker reports both the stored result and authoritative
-    // server-side entitlement/payment for the same canonical session.
-    if(
-      available.includes('GalviScore') &&
-      entitled.includes('GalviScore')
-    ){
+    if(available.includes('GalviScore')&&entitled.includes('GalviScore')){
       const rendered=await renderGalviScoreAfterPayment(sessionId);
       return rendered!==false;
     }
@@ -542,6 +627,23 @@ function showGalviScorePaywall(sessionId){ sessionId=persistSessionId(sessionId)
 async function updateJourneyStage(sessionId,stage,extra={}){ return postGalviScoreEvent({event_name:'journey_stage_updated',product:'galviscore',session_id:sessionId,current_stage:stage,...extra}); }
 function fireGalviEvent(eventName,params={}){ const payload={event:eventName,galvicare_product:params.product||'galviscore',galvicare_session_id:params.session_id||getAnalyticsSessionId(),galvicare_stage:params.stage||'',stripe_session_id:params.stripe_session_id||'',timestamp:new Date().toISOString()}; window.dataLayer=window.dataLayer||[]; window.dataLayer.push(payload); try{if(typeof window.gtag==='function')window.gtag('event',eventName,payload);}catch(e){} try{if(window.clarity){window.clarity('event',eventName); if(payload.galvicare_session_id)window.clarity('set','galvicare_session_id',payload.galvicare_session_id); window.clarity('set','galvicare_product',payload.galvicare_product);}}catch(e){} return postGalviScoreEvent({event_name:eventName,...payload}); }
 async function updatePaymentSuccess(sessionId,stripeSessionId){ return postGalviScoreEvent({event_name:'stripe_success',product:'galviscore',session_id:sessionId,stripe_session_id:stripeSessionId,payment_galviscore:'paid',current_stage:'GalviScore Paid'}); }
+function printGalviCareReport(product){
+  const classMap={
+    GalviScore:'print-galviscore',
+    GalviShot:'print-galvishot',
+    GalviSight:'print-galvisight',
+    GalviPath:'print-galvipath'
+  };
+  const printClass=classMap[product];
+  if(!printClass) return;
+  Object.values(classMap).forEach(name=>document.body.classList.remove(name));
+  document.body.classList.add(printClass);
+  window.print();
+}
+window.addEventListener('afterprint',function(){
+  ['print-galviscore','print-galvishot','print-galvisight','print-galvipath']
+    .forEach(name=>document.body.classList.remove(name));
+});
 function stripeCheckoutUrl(paymentLink,sessionId){ const checkoutUrl=new URL(paymentLink); checkoutUrl.searchParams.set('client_reference_id',sessionId); return checkoutUrl.toString(); }
 async function resolveStripePaymentReturn(stripeSessionId,expectedProduct){ return callGalviCareApi({action:'resolve_payment_return',payload:{stripe_session_id:stripeSessionId,expected_product:expectedProduct}}); }
 
@@ -574,9 +676,9 @@ function cleanPaidReturnCustomerUrl(){
   return true;
 }
 
-function galviCareStateIds(){ return ['assessmentForm','result','galviscore-paywall','galviscore-followup','galviscore-result','galviscore-repair','galvicare-payment-recovery','galvishot-paywall','galvishot-result','galvisight-handoff','galvipath-result']; }
+function galviCareStateIds(){ return ['assessmentForm','result','galviscore-paywall','galviscore-followup','galviscore-result','galviscore-repair','galvicare-payment-recovery','galvishot-paywall','galvishot-result','galvisight-paywall','galvisight-handoff','galvipath-paywall','galvipath-result']; }
 function hideGalviCareCustomerStates(){ galviCareStateIds().forEach(id=>{ const node=document.getElementById(id); if(!node)return; if(id==='assessmentForm'||id==='result')node.style.display='none'; node.classList.add('hidden'); }); }
-function showGalviCareState(state){ hideGalviCareCustomerStates(); clearGalviCareReturnPending(); const map={TRIAGE:'assessmentForm',VITALS:'result',GALVISCORE_PAYWALL:'galviscore-paywall',GALVISCORE_RESULT:'galviscore-result',PAYMENT_RECOVERY:'galvicare-payment-recovery',GALVISHOT_PAYWALL:'galvishot-paywall',GALVISHOT_RESULT:'galvishot-result',GALVISIGHT:'galvisight-handoff',GALVIPATH:'galvipath-result',GALVICLINIC_HANDOFF:'galvipath-result'}; const id=map[state]||'assessmentForm'; const node=document.getElementById(id); if(node){ node.classList.remove('hidden'); node.style.display=(id==='assessmentForm'||id==='result')?(id==='assessmentForm'?'block':'block'):'block'; } return node; }
+function showGalviCareState(state){ hideGalviCareCustomerStates(); clearGalviCareReturnPending(); const map={TRIAGE:'assessmentForm',VITALS:'result',GALVISCORE_PAYWALL:'galviscore-paywall',GALVISCORE_RESULT:'galviscore-result',PAYMENT_RECOVERY:'galvicare-payment-recovery',GALVISHOT_PAYWALL:'galvishot-paywall',GALVISHOT_RESULT:'galvishot-result',GALVISIGHT_PAYWALL:'galvisight-paywall',GALVISIGHT:'galvisight-handoff',GALVIPATH_PAYWALL:'galvipath-paywall',GALVIPATH:'galvipath-result',GALVICLINIC_HANDOFF:'galvipath-result'}; const id=map[state]||'assessmentForm'; const node=document.getElementById(id); if(node){ node.classList.remove('hidden'); node.style.display=(id==='assessmentForm'||id==='result')?(id==='assessmentForm'?'block':'block'):'block'; } return node; }
 function showGalviCareTriageState(){ const node=showGalviCareState('TRIAGE'); const submitError=document.getElementById('submitError'); if(submitError)submitError.style.display='none'; return node; }
 function showPaymentSessionRecoveryError(error,sessionId){ const recovery=showGalviCareState('PAYMENT_RECOVERY'); const safeSession=escapeHtml(sessionId||getStoredSessionId()||'payment-return-unresolved'); const safeMessage=escapeHtml(error&&error.message?error.message:'GalviCare could not verify and restore your paid Stripe session. Please retry from the same browser or contact support with this session reference.'); if(document.getElementById('galvicare-payment-recovery-message'))document.getElementById('galvicare-payment-recovery-message').textContent=safeMessage; if(document.getElementById('galvicare-payment-recovery-reference'))document.getElementById('galvicare-payment-recovery-reference').innerHTML=safeSession; document.getElementById('retry-payment-restoration')?.addEventListener('click',function(){ window.location.reload(); },{once:true}); document.getElementById('return-to-galvicare')?.addEventListener('click',function(){ showGalviCareTriageState(); },{once:true}); recovery?.scrollIntoView({behavior:'smooth'}); }
 function clearGalviCareReturnPending(){ document.documentElement.classList.remove('galvicare-return-pending'); }
@@ -618,7 +720,7 @@ async function routeGalviCareOnLoad(){
       const resolved=await resolveStripePaymentReturn(stripeSessionId,'galvishot');
       const paidSessionId=persistSessionId(resolved.session_id);
       if(typeof window.showIntegratedGalviShotResult!=='function'){
-        throw new Error('GalviShot result renderer was not initialized. Paid return will not fall back to the paywall.');
+        throw new Error('GalviShot result renderer was not initialized.');
       }
       const rendered=await window.showIntegratedGalviShotResult({paidReturn:true,session_id:paidSessionId});
       if(rendered===false) throw new Error('Verified GalviShot payment did not restore a GalviShot result.');
@@ -647,8 +749,40 @@ async function routeGalviCareOnLoad(){
     }
   }
 
-  if(product==='galvisight'&&paid&&typeof window.showGalviSight==='function'){ await window.showGalviSight(); return true; }
-  if(product==='galvipath'&&paid&&typeof window.showGalviPath==='function'){ await window.showGalviPath(); return true; }
+  if(product==='galvisight'&&paid==='sight_success'){
+    hideInitialJourneyForPaidReturn();
+    try{
+      const resolved=await resolveStripePaymentReturn(stripeSessionId,'galvisight');
+      const paidSessionId=persistSessionId(resolved.session_id);
+      if(typeof window.showGalviSight!=='function') throw new Error('GalviSight renderer was not initialized.');
+      const rendered=await window.showGalviSight({paidReturn:true,session_id:paidSessionId});
+      if(rendered===false) throw new Error('Verified GalviSight payment did not restore a GalviSight result.');
+      clearGalviCareReturnPending();
+      cleanPaidReturnCustomerUrl();
+      return true;
+    }catch(error){
+      showPaymentSessionRecoveryError(error,getStoredSessionId());
+      return true;
+    }
+  }
+
+  if(product==='galvipath'&&paid==='path_success'){
+    hideInitialJourneyForPaidReturn();
+    try{
+      const resolved=await resolveStripePaymentReturn(stripeSessionId,'galvipath');
+      const paidSessionId=persistSessionId(resolved.session_id);
+      if(typeof window.showGalviPath!=='function') throw new Error('GalviPath renderer was not initialized.');
+      const rendered=await window.showGalviPath({paidReturn:true,session_id:paidSessionId});
+      if(rendered===false) throw new Error('Verified GalviPath payment did not restore a GalviPath result.');
+      clearGalviCareReturnPending();
+      cleanPaidReturnCustomerUrl();
+      return true;
+    }catch(error){
+      showPaymentSessionRecoveryError(error,getStoredSessionId());
+      return true;
+    }
+  }
+
   if(await restoreGalviCareSession()) return true;
   showGalviCareTriageState();
   return false;
@@ -809,7 +943,7 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
     return callGalviCareApi({ action, session_id: sessionId(), current_stage: 'GalviShot', payload: payload || {} });
   }
   function hideUpstream(){
-    ['assessmentForm','result','galviscore-paywall','galviscore-followup','galviscore-result','galviscore-repair','galvicare-payment-recovery','galvishot-paywall','galvishot-result','galvisight-handoff','galvipath-result']
+    ['assessmentForm','result','galviscore-paywall','galviscore-followup','galviscore-result','galviscore-repair','galvicare-payment-recovery','galvishot-paywall','galvishot-result','galvisight-paywall','galvisight-handoff','galvipath-paywall','galvipath-result']
       .forEach(id=>{ const node=el(id); if(!node) return; node.classList.add('hidden'); if(id==='result') node.style.display='none'; });
   }
   function setShotStage(stage){
@@ -983,6 +1117,30 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
       const node=el(sectionId);
       if(node) node.classList.toggle('hidden',!visible);
     }
+    function showGalviSightPaywall(){
+      hideUpstream();
+      const node=el('galvisight-paywall');
+      if(!node) throw new Error('GalviSight paywall container is missing.');
+      node.classList.remove('hidden');
+      node.style.display='block';
+      setShotStage('GalviSight Paywall');
+      window.scrollTo({top:0,behavior:'smooth'});
+      return true;
+    }
+
+    function showGalviPathPaywall(){
+      hideUpstream();
+      const node=el('galvipath-paywall');
+      if(!node) throw new Error('GalviPath paywall container is missing.');
+      node.classList.remove('hidden');
+      node.style.display='block';
+      setShotStage('GalviPath Paywall');
+      window.scrollTo({top:0,behavior:'smooth'});
+      return true;
+    }
+
+    window.showGalviSightPaywall=showGalviSightPaywall;
+    window.showGalviPathPaywall=showGalviPathPaywall;
     window.showGalviSight=showSight;
     async function showSight(){
       hideUpstream();
@@ -1091,7 +1249,20 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
       window.scrollTo({top:0,behavior:'smooth'});
     }
     let galviSightInFlight=false;
-    el('continue-galvisight')?.addEventListener('click',async function(){ if(galviSightInFlight)return; galviSightInFlight=true; this.disabled=true; try{ if(typeof fireGalviEvent==='function') fireGalviEvent('continue_clicked',{product:'galvisight',session_id:sessionId(),stage:'GalviShot Result'}); setShotStage('GalviSight Handoff'); await showSight(); }catch(error){ el('galvisight-error')?.classList.remove('hidden'); if(typeof fireGalviEvent==='function') fireGalviEvent('journey_error',{product:'galvisight',session_id:sessionId(),stage:'GalviSight Handoff'}); } finally { galviSightInFlight=false; this.disabled=false; } });
+    el('continue-galvisight')?.addEventListener('click',function(){
+      if(galviSightInFlight) return;
+      galviSightInFlight=true;
+      this.disabled=true;
+      try{
+        if(typeof fireGalviEvent==='function'){
+          fireGalviEvent('continue_clicked',{product:'galvisight',session_id:sessionId(),stage:'GalviShot Result'});
+        }
+        showGalviSightPaywall();
+      } finally {
+        galviSightInFlight=false;
+        this.disabled=false;
+      }
+    });
 
     /* Day 6/7 critical-path GalviPath renderer:
        Worker response is authoritative; browser only renders returned intelligence. */
@@ -1283,10 +1454,11 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
       buttonRow.className='button-row';
 
       const printButton=document.createElement('button');
+      printButton.id='print-galvipath';
       printButton.type='button';
       printButton.className='secondary-button';
       printButton.textContent='Print / Save GalviPath';
-      printButton.addEventListener('click',()=>window.print());
+      printButton.addEventListener('click',()=>printGalviCareReport('GalviPath'));
 
       const clinicButton=document.createElement('button');
       clinicButton.id='galvipath-book-galviclinic';
@@ -1380,7 +1552,7 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
 
     window.showGalviPath=showGalviPath;
 
-    el('continue-galvipath')?.addEventListener('click',async function(){
+    el('continue-galvipath')?.addEventListener('click',function(){
       if(galviPathInFlight) return;
       galviPathInFlight=true;
       this.disabled=true;
@@ -1388,12 +1560,53 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
         if(typeof fireGalviEvent==='function'){
           try{fireGalviEvent('continue_clicked',{product:'galvipath',session_id:sessionId(),stage:'GalviSight'});}catch(e){}
         }
-        await showGalviPath();
+        showGalviPathPaywall();
       } finally {
         galviPathInFlight=false;
         this.disabled=false;
       }
     });
+
+    el('galvisight-stripe-cta')?.addEventListener('click',function(){
+      if(!GALVISIGHT_STRIPE_PAYMENT_LINK){
+        showError('galvisight-paywall-error',new Error('GalviSight Stripe Payment Link is not configured yet.'));
+        return;
+      }
+      if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvisight',session_id:sessionId(),stage:'GalviSight Paywall'});
+      window.top.location.href=stripeCheckoutUrl(GALVISIGHT_STRIPE_PAYMENT_LINK,sessionId());
+    });
+
+    el('galvisight-qa-override')?.addEventListener('click',async function(){
+      const token=window.prompt('Enter the approved QA override token.');
+      if(!token) return;
+      localStorage.setItem(GSHOT.QA_OVERRIDE_TOKEN_KEY,token.trim());
+      await showSight();
+    });
+
+    el('galvisight-back-galvishot')?.addEventListener('click',requestResult);
+
+    el('galvipath-stripe-cta')?.addEventListener('click',function(){
+      if(!GALVIPATH_STRIPE_PAYMENT_LINK){
+        showError('galvipath-paywall-error',new Error('GalviPath Stripe Payment Link is not configured yet.'));
+        return;
+      }
+      if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvipath',session_id:sessionId(),stage:'GalviPath Paywall'});
+      window.top.location.href=stripeCheckoutUrl(GALVIPATH_STRIPE_PAYMENT_LINK,sessionId());
+    });
+
+    el('galvipath-qa-override')?.addEventListener('click',async function(){
+      const token=window.prompt('Enter the approved QA override token.');
+      if(!token) return;
+      localStorage.setItem(GSHOT.QA_OVERRIDE_TOKEN_KEY,token.trim());
+      await showGalviPath();
+    });
+
+    el('galvipath-back-galvisight')?.addEventListener('click',showSight);
+
+    el('print-galviscore')?.addEventListener('click',()=>printGalviCareReport('GalviScore'));
+    el('print-galvishot')?.addEventListener('click',()=>printGalviCareReport('GalviShot'));
+    el('print-galvisight')?.addEventListener('click',()=>printGalviCareReport('GalviSight'));
+    el('print-galvipath')?.addEventListener('click',()=>printGalviCareReport('GalviPath'));
 
     el('return-galvishot-result')?.addEventListener('click',requestResult);
     function openGalviClinicHandoff(){ if(typeof fireGalviEvent==='function'){try{fireGalviEvent('clinic_booking_clicked',{product:'galviclinic',session_id:sessionId(),stage:'GalviClinic Handoff'});}catch(e){}} const msg='Your GalviCare diagnostic pathway is complete. Your GalviClinic treatment discussion is the next step.'; const target=el('galvipath-error')||el('galvishot-result-error'); if(target){ target.textContent=msg+' Use the contact page if scheduling is not yet connected.'; target.classList.remove('hidden'); } window.open(GALVICLINIC_FALLBACK_URL,'_blank','noopener'); }
