@@ -7,7 +7,7 @@ class MockD1 {
   constructor(){ this.sessions=new Map(); this.results=new Map(); this.notes=[]; }
   prepare(sql){ return new MockStmt(this, sql); }
   async run(sql,p){ if(sql.includes('INSERT INTO fcd_notes')){ this.notes.push({ note_id:p[0], session_id:p[1], facilitator_name:p[2], discussion_summary:p[3], objections:p[4], clinical_observations:p[5], recommended_next_step:p[6], upsell_status:p[7], created_at:p[8], updated_at:p[9] }); return {success:true}; } throw new Error(`Unhandled run ${sql}`); }
-  async first(sql,p){ if(sql.includes('FROM sessions')) return this.sessions.get(p[0]) || null; if(sql.includes('FROM product_results')) return this.results.get(`${p[0]}:${p[1]}`) || null; throw new Error(`Unhandled first ${sql}`); }
+  async first(sql,p){ if(sql.includes('FROM sessions')) return this.sessions.get(p[0]) || null; if(sql.includes('FROM product_results')) return this.results.get(`${p[0]}:${p[1]}`) || null; if(sql.includes('FROM entitlements') || sql.includes('FROM payments')) return null; throw new Error(`Unhandled first ${sql}`); }
   all(sql,p){ if(sql.includes('FROM fcd_notes')) return this.notes.filter(n=>n.session_id===p[0]); throw new Error(`Unhandled all ${sql}`); }
 }
 function env(extra={}){ return { DB:new MockD1(), FCD_API_TOKEN:'fcd-ok', ...extra }; }
@@ -28,6 +28,7 @@ test('Day 6 get_session_state restores downstream product availability', async()
   assert.equal(res.status,200);
   assert.equal(body.current_stage,'GalviPath');
   assert.deepEqual(body.available_products, ['GalviVitals','GalviShot','GalviSight','GalviPath']);
+  assert.deepEqual(body.entitled_products, []);
 });
 
 test('Day 6 FCD summary reads stored data only and uses not-yet-available fallbacks', async()=>{
@@ -38,7 +39,7 @@ test('Day 6 FCD summary reads stored data only and uses not-yet-available fallba
   assert.equal(body.sections.reason_for_visit,'GalviPath');
   assert.deepEqual(body.sections.galvishot_findings, ['Stored finding']);
   assert.equal(body.sections.galvisight_interpretation, 'Stored interpretation');
-  assert.equal(body.sections.galvipath_recommendation.primary_pathway, 'stabilize');
+  assert.equal(body.sections.galvipath_recommendation.primary_pathway,'stabilize');
   assert.equal(body.sections.facilitator_notes, 'Not yet available');
 });
 
