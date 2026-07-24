@@ -184,6 +184,56 @@ test('Day 7 failure paths retain visible payment recovery and do not perform cle
   }
 });
 
+
+
+test('Day 7 get_session_state exposes server-authoritative entitled_products', () => {
+  const stateFn = functionBlock(
+    worker,
+    'async function getSessionState',
+    'async function clinicalSummary'
+  );
+
+  assert.match(
+    stateFn,
+    /const entitled = \[\]/
+  );
+  assert.match(
+    stateFn,
+    /await hasProductEntitlement\(db, sessionId, product\)/
+  );
+  assert.match(
+    stateFn,
+    /entitled_products: entitled/
+  );
+});
+
+test('Day 7 canonical reinitialization restores entitled GalviScore after deeper products', () => {
+  const restoreFn = functionBlock(
+    html,
+    'async function restoreGalviCareSession',
+    'function showGalviCareErrorCard'
+  );
+
+  const pathIndex = restoreFn.indexOf("available.includes('GalviPath')");
+  const sightIndex = restoreFn.indexOf("available.includes('GalviSight')");
+  const shotIndex = restoreFn.indexOf("available.includes('GalviShot')");
+  const scoreIndex = restoreFn.indexOf("available.includes('GalviScore')");
+  const entitledIndex = restoreFn.indexOf("entitled.includes('GalviScore')");
+  const scoreRenderIndex = restoreFn.indexOf('renderGalviScoreAfterPayment(sessionId)');
+
+  assert.ok(pathIndex >= 0);
+  assert.ok(sightIndex > pathIndex);
+  assert.ok(shotIndex > sightIndex);
+  assert.ok(scoreIndex > shotIndex);
+  assert.ok(entitledIndex > scoreIndex);
+  assert.ok(scoreRenderIndex > entitledIndex);
+
+  assert.doesNotMatch(
+    restoreFn,
+    /isDay6DownstreamStage\(state\.current_stage\)/
+  );
+});
+
 test('Day 7 preserves approved GalviClinic destination and rejects obsolete contact fallback', () => {
   assert.match(
     html,
