@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/day2-worker.test.mjs tests/day3-worker.test.mjs tests/day3-security-gate.test.mjs tests/day4-worker.test.mjs tests/session-continuity.test.mjs tests/day6-routing-restoration.test.mjs tests/day6-fcd.test.mjs tests/payment-return.test.mjs tests/day6-critical-path.test.mjs",
+    "test": "node --test tests/day2-worker.test.mjs tests/day3-worker.test.mjs tests/day3-security-gate.test.mjs tests/day4-worker.test.mjs tests/session-continuity.test.mjs tests/day6-routing-restoration.test.mjs tests/day6-fcd.test.mjs tests/payment-return.test.mjs tests/day6-critical-path.test.mjs tests/day7-release-readiness.test.mjs",
     "check": "node --check worker/worker.js",
     "test:day2": "node --test tests/day2-worker.test.mjs",
     "test:day3": "node --test tests/day3-worker.test.mjs",
