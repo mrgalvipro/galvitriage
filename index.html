@@ -335,7 +335,42 @@
     <div id="galvisight-review" class="gshot-success hidden">Facilitator review is required before automated GalviSight interpretation.</div>
     <div id="galvisight-result-panel" class="hidden">
       <p id="galvisight-interpretation"></p>
-      <ul id="galvisight-actions" class="gshot-action-list"></ul>
+
+      <div id="galvisight-urgency-wrap" class="gshot-preview-card hidden">
+        <strong>Urgency:</strong> <span id="galvisight-urgency"></span>
+      </div>
+
+      <div id="galvisight-hypotheses-section" class="hidden">
+        <h3>GalviSight Hypotheses</h3>
+        <div id="galvisight-hypotheses"></div>
+      </div>
+
+      <div id="galvisight-risks-section" class="hidden">
+        <h3>Strategic Risks</h3>
+        <ul id="galvisight-risks" class="gshot-risk-list"></ul>
+      </div>
+
+      <div id="galvisight-opportunities-section" class="hidden">
+        <h3>Opportunities</h3>
+        <ul id="galvisight-opportunities" class="gshot-risk-list"></ul>
+      </div>
+
+      <div id="galvisight-actions-section" class="hidden">
+        <h3>Recommended Actions</h3>
+        <ol id="galvisight-actions" class="gshot-action-list"></ol>
+      </div>
+
+      <div id="galvisight-assumptions-section" class="hidden">
+        <h3>Assumptions</h3>
+        <ul id="galvisight-assumptions" class="gshot-risk-list"></ul>
+      </div>
+
+      <div id="galvisight-evidence-section" class="hidden">
+        <h3>Evidence Trace</h3>
+        <ul id="galvisight-evidence-trace" class="gshot-risk-list"></ul>
+      </div>
+
+      <p id="galvisight-next-step" class="gshot-status-note"></p>
       <button id="continue-galvipath" class="primary-btn" type="button">Continue to Chart Your GalviPath</button>
     </div>
     <div id="galvisight-error" class="gshot-error hidden">GalviSight could not load. Please retry.</div>
@@ -794,8 +829,182 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
     el('galvishot-stripe-cta')?.addEventListener('click',function(){ if(typeof fireGalviEvent==='function') fireGalviEvent('stripe_click',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Paywall'}); window.top.location.href=stripeCheckoutUrl(GSHOT.PAYMENT_LINK,sessionId()); });
     el('galvishot-back-score')?.addEventListener('click',returnToScore);
     el('galvishot-back-paywall')?.addEventListener('click',window.showIntegratedGalviShotPaywall);
+    function clearList(id){
+      const host=el(id);
+      if(host) host.innerHTML='';
+      return host;
+    }
+    function renderTextList(id, items, mapper){
+      const host=clearList(id);
+      if(!host) return 0;
+      let count=0;
+      (Array.isArray(items)?items:[]).forEach((item,index)=>{
+        const value=mapper?mapper(item,index):item;
+        if(value===undefined||value===null||String(value).trim()==='') return;
+        const li=document.createElement('li');
+        li.textContent=String(value);
+        host.appendChild(li);
+        count+=1;
+      });
+      return count;
+    }
+    function renderGalviSightHypotheses(items){
+      const host=el('galvisight-hypotheses');
+      if(!host) return 0;
+      host.innerHTML='';
+      let count=0;
+      (Array.isArray(items)?items:[]).forEach((hypothesis,index)=>{
+        const card=document.createElement('div');
+        card.className='gshot-finding';
+
+        const title=document.createElement('div');
+        title.className='gshot-finding-title';
+        title.textContent=`${index+1}. ${hypothesis.statement || hypothesis.label || hypothesis.finding_code || 'GalviSight hypothesis'}`;
+        card.appendChild(title);
+
+        if(hypothesis.finding_code){
+          const code=document.createElement('div');
+          code.className='gshot-evidence';
+          code.textContent=`Finding code: ${hypothesis.finding_code}`;
+          card.appendChild(code);
+        }
+
+        const support=Array.isArray(hypothesis.support)?hypothesis.support:[];
+        support.forEach(item=>{
+          const evidence=document.createElement('div');
+          evidence.className='gshot-evidence';
+          const source=[item.source_type,item.source_field].filter(Boolean).join(' / ');
+          const display=item.display_value || item.value || '';
+          evidence.textContent=[source,display].filter(Boolean).join(': ');
+          card.appendChild(evidence);
+        });
+
+        host.appendChild(card);
+        count+=1;
+      });
+      return count;
+    }
+    function renderEvidenceTrace(items){
+      return renderTextList('galvisight-evidence-trace',items,(item)=>{
+        if(typeof item==='string') return item;
+        if(!item||typeof item!=='object') return '';
+        const source=[item.source_type,item.source_field,item.source_id].filter(Boolean).join(' / ');
+        const display=item.display_value || item.value || item.statement || '';
+        const usedFor=item.used_for ? `Used for: ${item.used_for}` : '';
+        return [source,display,usedFor].filter(Boolean).join(' — ');
+      });
+    }
+    function setSectionVisibility(sectionId, visible){
+      const node=el(sectionId);
+      if(node) node.classList.toggle('hidden',!visible);
+    }
     window.showGalviSight=showSight;
-    async function showSight(){ hideUpstream(); const sight=el('galvisight-handoff'); if(!sight) throw new Error('GalviSight handoff container is missing.'); sight.classList.remove('hidden'); sight.style.display='block'; setShotStage('GalviSight Handoff'); try{ const token=localStorage.getItem(GSHOT.QA_OVERRIDE_TOKEN_KEY)||''; const response=await postShot('get_or_generate_galvisight', token?{qa_override_token:token}:{}); const result=response.result||{}; ['galvisight-locked','galvisight-followup','galvisight-review','galvisight-result-panel','galvisight-error'].forEach(id=>el(id)?.classList.add('hidden')); if(response.status==='locked') el('galvisight-locked')?.classList.remove('hidden'); else if(result.status==='needs_followup') el('galvisight-followup')?.classList.remove('hidden'); else if(result.status==='facilitator_review') el('galvisight-review')?.classList.remove('hidden'); else { el('galvisight-result-panel')?.classList.remove('hidden'); if(el('galvisight-interpretation')) el('galvisight-interpretation').textContent=result.interpretation||''; fill('galvisight-actions',(result.recommended_actions||[]).map(a=>a.action||a)); } }catch(error){ el('galvisight-error')?.classList.remove('hidden'); } window.scrollTo({top:0,behavior:'smooth'}); }
+    async function showSight(){
+      hideUpstream();
+      const sight=el('galvisight-handoff');
+      if(!sight) throw new Error('GalviSight handoff container is missing.');
+      sight.classList.remove('hidden');
+      sight.style.display='block';
+      setShotStage('GalviSight Handoff');
+
+      const stateMessage=el('galvisight-state-message');
+      if(stateMessage){
+        stateMessage.textContent='Loading deterministic GalviSight from the Worker.';
+        stateMessage.classList.remove('gshot-success');
+      }
+
+      try{
+        const token=localStorage.getItem(GSHOT.QA_OVERRIDE_TOKEN_KEY)||'';
+        const response=await postShot('get_or_generate_galvisight',token?{qa_override_token:token}:{});
+        const result=response.result||response.galvisight||{};
+        const responseStatus=String(response.status||'').toLowerCase();
+        const resultStatus=String(result.status||'').toLowerCase();
+
+        ['galvisight-locked','galvisight-followup','galvisight-review','galvisight-result-panel','galvisight-error']
+          .forEach(id=>el(id)?.classList.add('hidden'));
+
+        if(responseStatus==='locked'){
+          if(stateMessage) stateMessage.textContent='GalviSight is locked pending server-side entitlement verification.';
+          el('galvisight-locked')?.classList.remove('hidden');
+        } else if(resultStatus==='needs_followup'){
+          if(stateMessage) stateMessage.textContent='GalviSight needs additional evidence before interpretation.';
+          el('galvisight-followup')?.classList.remove('hidden');
+        } else if(resultStatus==='facilitator_review'){
+          if(stateMessage) stateMessage.textContent='GalviSight requires facilitator review before automated interpretation.';
+          el('galvisight-review')?.classList.remove('hidden');
+        } else {
+          const ready = responseStatus==='ready' || responseStatus==='ok' || resultStatus==='ready' || resultStatus==='ok';
+          if(!ready){
+            throw new Error(`GalviSight returned an unsupported status: ${response.status||result.status||'unknown'}`);
+          }
+
+          if(stateMessage){
+            stateMessage.textContent='GalviSight interpretation ready.';
+            stateMessage.classList.add('gshot-success');
+          }
+
+          const panel=el('galvisight-result-panel');
+          panel?.classList.remove('hidden');
+
+          if(el('galvisight-interpretation')){
+            el('galvisight-interpretation').textContent=result.interpretation||'';
+          }
+
+          const hypothesisCount=renderGalviSightHypotheses(result.hypotheses);
+          setSectionVisibility('galvisight-hypotheses-section',hypothesisCount>0);
+
+          const riskCount=renderTextList('galvisight-risks',result.risks,(item)=>item?.statement||item?.risk||item);
+          setSectionVisibility('galvisight-risks-section',riskCount>0);
+
+          const opportunityCount=renderTextList('galvisight-opportunities',result.opportunities,(item)=>item?.statement||item?.opportunity||item);
+          setSectionVisibility('galvisight-opportunities-section',opportunityCount>0);
+
+          const actionCount=renderTextList('galvisight-actions',result.recommended_actions,(item)=>item?.action||item?.statement||item);
+          setSectionVisibility('galvisight-actions-section',actionCount>0);
+
+          const assumptionCount=renderTextList('galvisight-assumptions',result.assumptions,(item)=>item?.statement||item);
+          setSectionVisibility('galvisight-assumptions-section',assumptionCount>0);
+
+          const evidenceCount=renderEvidenceTrace(result.evidence_trace);
+          setSectionVisibility('galvisight-evidence-section',evidenceCount>0);
+
+          const urgency=result.urgency;
+          const urgencyText=typeof urgency==='object'
+            ? (urgency.label||urgency.level||urgency.statement||JSON.stringify(urgency))
+            : (urgency||'');
+          if(el('galvisight-urgency')) el('galvisight-urgency').textContent=String(urgencyText||'');
+          setSectionVisibility('galvisight-urgency-wrap',Boolean(String(urgencyText||'').trim()));
+
+          if(el('galvisight-next-step')){
+            const next=result.next_step;
+            el('galvisight-next-step').textContent=typeof next==='object'
+              ? (next.action||next.statement||next.label||'')
+              : String(next||'');
+          }
+
+          if(typeof fireGalviEvent==='function'){
+            fireGalviEvent('diagnostic_viewed',{
+              product:'galvisight',
+              session_id:sessionId(),
+              stage:'GalviSight',
+              status:resultStatus||responseStatus
+            });
+          }
+        }
+      }catch(error){
+        if(stateMessage) stateMessage.textContent='GalviSight could not render the deterministic Worker result.';
+        const target=el('galvisight-error');
+        if(target){
+          target.textContent=`GalviSight could not load. ${error.message||'Please retry.'}`;
+          target.classList.remove('hidden');
+        }
+        if(typeof fireGalviEvent==='function'){
+          fireGalviEvent('journey_error',{product:'galvisight',session_id:sessionId(),stage:'GalviSight Handoff'});
+        }
+        console.error('GalviSight render failed.',error);
+      }
+      window.scrollTo({top:0,behavior:'smooth'});
+    }
     let galviSightInFlight=false;
     el('continue-galvisight')?.addEventListener('click',async function(){ if(galviSightInFlight)return; galviSightInFlight=true; this.disabled=true; try{ if(typeof fireGalviEvent==='function') fireGalviEvent('continue_clicked',{product:'galvisight',session_id:sessionId(),stage:'GalviShot Result'}); setShotStage('GalviSight Handoff'); await showSight(); }catch(error){ el('galvisight-error')?.classList.remove('hidden'); if(typeof fireGalviEvent==='function') fireGalviEvent('journey_error',{product:'galvisight',session_id:sessionId(),stage:'GalviSight Handoff'}); } finally { galviSightInFlight=false; this.disabled=false; } });
     let galviPathInFlight=false;
