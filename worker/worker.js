@@ -187,29 +187,84 @@ async function upsertAssessmentResponse(db, sessionId, question, answer, ts) {
   );
 }
 
+function normalizeFounderEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+async function resolveOrCreateFounder(db, payload, sessionId, ts = nowIso()) {
+  const email = normalizeFounderEmail(safe(payload, 'founder.email'));
+  if (!email) throw new Error('Founder email is required');
+
+  const existing = await dbFirst(
+    db,
+    `SELECT founder_id FROM founders
+     WHERE lower(email)=?
+     LIMIT 1`,
+    email
+  );
+
+  if (existing?.founder_id) {
+    await dbRun(
+      db,
+      `UPDATE founders
+       SET first_name=COALESCE(NULLIF(?,''), first_name),
+           last_name=COALESCE(NULLIF(?,''), last_name),
+           phone=COALESCE(NULLIF(?,''), phone),
+           linkedin_url=COALESCE(NULLIF(?,''), linkedin_url),
+           consent_status=?,
+           updated_at=?
+       WHERE founder_id=?`,
+      safe(payload,'founder.first_name'),
+      safe(payload,'founder.last_name'),
+      safe(payload,'founder.phone'),
+      safe(payload,'founder.linkedin_url'),
+      safe(payload,'founder.consent', false) ? 'accepted' : 'missing',
+      ts,
+      existing.founder_id
+    );
+    return existing.founder_id;
+  }
+
+  const founderId = `founder_${sessionId}`;
+  try {
+    await dbRun(
+      db,
+      `INSERT INTO founders(
+         founder_id,session_id,first_name,last_name,email,phone,linkedin_url,
+         consent_status,created_at,updated_at
+       ) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+      founderId,
+      sessionId,
+      safe(payload,'founder.first_name'),
+      safe(payload,'founder.last_name'),
+      email,
+      safe(payload,'founder.phone'),
+      safe(payload,'founder.linkedin_url'),
+      safe(payload,'founder.consent', false) ? 'accepted' : 'missing',
+      ts,
+      ts
+    );
+    return founderId;
+  } catch (error) {
+    // Defend against a concurrent same-email submission: reuse the canonical row
+    // if another request created it after our lookup. Preserve all other errors.
+    const raced = await dbFirst(
+      db,
+      `SELECT founder_id FROM founders
+       WHERE lower(email)=?
+       LIMIT 1`,
+      email
+    );
+    if (raced?.founder_id) return raced.founder_id;
+    throw error;
+  }
+}
+
 async function persistTriage(db, payload) {
   const sid = await upsertSession(db, payload, 'GalviTriage Submitted');
   const ts = nowIso();
-  const founderId = `founder_${sid}`;
+  const founderId = await resolveOrCreateFounder(db, payload, sid, ts);
   const ventureId = `venture_${sid}`;
-
-  await dbRun(
-    db,
-    `INSERT OR IGNORE INTO founders(
-       founder_id,session_id,first_name,last_name,email,phone,linkedin_url,
-       consent_status,created_at,updated_at
-     ) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-    founderId,
-    sid,
-    safe(payload,'founder.first_name'),
-    safe(payload,'founder.last_name'),
-    safe(payload,'founder.email'),
-    safe(payload,'founder.phone'),
-    safe(payload,'founder.linkedin_url'),
-    safe(payload,'founder.consent', false) ? 'accepted' : 'missing',
-    ts,
-    ts
-  );
 
   await dbRun(
     db,
