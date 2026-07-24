@@ -32,11 +32,18 @@ class MockD1 {
       const row=this.sessions.get(p[3]); if(!row) throw new Error('Session not found');
       row.current_stage=p[0]; row.updated_at=p[1]; row.last_seen_at=p[2]; return {success:true};
     }
-    if (sql.includes('INSERT OR IGNORE INTO founders')) {
-      if (![...this.founders.values()].some(x => x.email === p[4])) this.founders.set(p[0], { founder_id:p[0], session_id:p[1], email:p[4] });
+    if (sql.includes('INSERT INTO founders')) {
+      if ([...this.founders.values()].some(x => String(x.email).toLowerCase() === String(p[4]).toLowerCase())) throw new Error('UNIQUE constraint failed: founders.email');
+      this.founders.set(p[0], { founder_id:p[0], session_id:p[1], first_name:p[2], last_name:p[3], email:p[4], phone:p[5], linkedin_url:p[6], consent_status:p[7], created_at:p[8], updated_at:p[9] });
       return { success:true };
     }
+    if (sql.includes('UPDATE founders')) {
+      const row=this.founders.get(p[6]); if(!row) throw new Error('Founder not found');
+      if(p[0]) row.first_name=p[0]; if(p[1]) row.last_name=p[1]; if(p[2]) row.phone=p[2]; if(p[3]) row.linkedin_url=p[3]; row.consent_status=p[4]; row.updated_at=p[5]; return { success:true };
+    }
     if (sql.includes('INSERT INTO ventures')) {
+      if(!this.sessions.has(p[1])) throw new Error('FOREIGN KEY constraint failed: ventures.session_id');
+      if(!this.founders.has(p[2])) throw new Error('FOREIGN KEY constraint failed: ventures.founder_id');
       this.ventures.set(p[0], { venture_id:p[0], session_id:p[1], founder_id:p[2], venture_name:p[3] }); return { success:true };
     }
     if (sql.includes('INSERT INTO assessment_responses')) {
@@ -67,6 +74,7 @@ class MockD1 {
     throw new Error(`Unhandled SQL run: ${sql}`);
   }
   async first(sql, p) {
+    if (sql.includes('FROM founders') && sql.includes('lower(email)=?')) return [...this.founders.values()].find(x => String(x.email).toLowerCase() === String(p[0]).toLowerCase()) || null;
     if (sql.includes('FROM assessment_responses') && sql.includes('question_id=?')) return this.responses.get(`${p[0]}:${p[1]}:${p[2]}`) || null;
     if (sql.includes('FROM product_results')) {
       const row=this.results.get(`${p[0]}:${p[1]}`) || null;
@@ -109,6 +117,28 @@ test('Day 2 submit stores triage, vitals, and score without outbound fetch', asy
 }));
 test('Day 2 duplicate submission is idempotent and prevents duplicate stored results', async () => withBlockedFetch(async () => {
   const e = env(); let res = await worker.fetch(req('/api', payload()), e); assert.equal(res.status, 200); res = await worker.fetch(req('/api', payload()), e); assert.equal(res.status, 200); assert.equal(e.DB.sessions.size, 1); assert.equal(e.DB.responses.size, 20); assert.equal(e.DB.results.size, 2);
+}));
+test('Day 2 returning founder reuses canonical founder across a new session without FK failure', async () => withBlockedFetch(async () => {
+  const e = env();
+  let res = await worker.fetch(req('/api', payload()), e);
+  assert.equal(res.status, 200);
+  const firstFounder = [...e.DB.founders.values()][0];
+  const secondSessionId = 'fixture_returning_day2_second';
+  res = await worker.fetch(req('/api', payload({
+    session:{ session_id:secondSessionId, source:'test' },
+    founder:{ ...fixture.founder, email:String(fixture.founder.email).toUpperCase(), consent:true }
+  })), e);
+  const body = await json(res);
+  assert.equal(res.status, 200);
+  assert.equal(body.success, true);
+  assert.equal(e.DB.sessions.size, 2);
+  assert.equal(e.DB.founders.size, 1);
+  assert.equal(e.DB.ventures.size, 2);
+  assert.equal(e.DB.responses.size, 40);
+  assert.equal(e.DB.results.size, 4);
+  assert.equal(e.DB.ventures.get(`venture_${secondSessionId}`).founder_id, firstFounder.founder_id);
+  assert.ok(Number(body.score.score) > 0);
+  assert.ok(Object.values(body.score.dimension_scores || {}).some(v => Number(v) > 0));
 }));
 test('Day 2 retrieval returns stored triage and product results', async () => withBlockedFetch(async () => {
   const e = env(); await worker.fetch(req('/api', payload()), e);
