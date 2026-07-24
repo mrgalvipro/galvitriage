@@ -482,7 +482,59 @@ function displayResults(vitals){ const score=Number(vitals.score||0); showGalviC
 function normalizeScoreResult(result){ return {session_id:result.session_id,galviscore_score:result.score,galviscore_confidence:result.confidence,galviscore_classification:result.classification,galviscore_lowest_category:(result.weakest_dimensions&&result.weakest_dimensions[0]?.key)||'',galviscore_top_priorities:(result.weakest_dimensions||[]).map(x=>x.insight||`Improve ${labelDomain(x.key)}.`).join('\n'),category_scores:result.dimension_scores||{},prompt_version:result.rules_version||SCORING_VERSION,galviscore_generated_at:new Date().toISOString(),payment_galviscore:'unpaid'}; }
 function escapeHtml(value){ return String(value||'').replace(/[&<>"']/g,function(ch){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[ch]; }); }
 function isDay6DownstreamStage(stage){ return ['GalviShot','GalviSight','GalviPath'].includes(String(stage||'')); }
-async function restoreGalviCareSession(){ const sessionId=getStoredSessionId(); if(!sessionId)return false; try{ const state=await callGalviCareApi({action:'get_session_state',session_id:sessionId}); if(!state||!isDay6DownstreamStage(state.current_stage))return false; if(state.available_products?.includes('GalviPath')&&window.showGalviPath){ await window.showGalviPath(); return true; } if(state.available_products?.includes('GalviSight')&&window.showGalviSight){ await window.showGalviSight(); return true; } if(state.available_products?.includes('GalviShot')&&window.showIntegratedGalviShotResult){ await window.showIntegratedGalviShotResult(); return true; } return false; }catch(error){ fireGalviEvent('journey_error',{product:'galvicare',session_id:sessionId,stage:'Session Restoration'}); return false; } }
+async function restoreGalviCareSession(){
+  const sessionId=getStoredSessionId();
+  if(!sessionId) return false;
+
+  try{
+    const state=await callGalviCareApi({
+      action:'get_session_state',
+      session_id:sessionId
+    });
+
+    if(!state) return false;
+
+    const available=Array.isArray(state.available_products)?state.available_products:[];
+    const entitled=Array.isArray(state.entitled_products)?state.entitled_products:[];
+
+    // Day 7 restoration priority must preserve the deepest completed state first.
+    if(available.includes('GalviPath')&&window.showGalviPath){
+      await window.showGalviPath();
+      return true;
+    }
+
+    if(available.includes('GalviSight')&&window.showGalviSight){
+      await window.showGalviSight();
+      return true;
+    }
+
+    if(available.includes('GalviShot')&&window.showIntegratedGalviShotResult){
+      const rendered=await window.showIntegratedGalviShotResult();
+      return rendered!==false;
+    }
+
+    // Critical paid-return fix:
+    // after canonical URL navigation/reinitialization, restore GalviScore
+    // only when the Worker reports both the stored result and authoritative
+    // server-side entitlement/payment for the same canonical session.
+    if(
+      available.includes('GalviScore') &&
+      entitled.includes('GalviScore')
+    ){
+      const rendered=await renderGalviScoreAfterPayment(sessionId);
+      return rendered!==false;
+    }
+
+    return false;
+  }catch(error){
+    fireGalviEvent('journey_error',{
+      product:'galvicare',
+      session_id:sessionId,
+      stage:'Session Restoration'
+    });
+    return false;
+  }
+}
 function showGalviCareErrorCard(error,sessionId){ console.warn('GalviCare backend persistence warning.',{session_id:sessionId||getStoredSessionId()||'unavailable',message:error&&error.message?error.message:'Worker request failed'}); }
 function labelize(value){ return String(value||'').replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase()); }
 function hideGalviScoreScreens(){ ['galviscore-paywall','galviscore-followup','galviscore-result','galviscore-repair'].forEach(id=>document.getElementById(id)?.classList.add('hidden')); }
