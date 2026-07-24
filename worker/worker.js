@@ -1519,7 +1519,6 @@ async function hubspotRequest(
           Authorization:
             `Bearer ` +
             `${env.HUBSPOT_PRIVATE_APP_TOKEN}`,
-
           'Content-Type':
             'application/json'
         },
@@ -1904,10 +1903,74 @@ function day4ProductVersion(product) {
     : { rules: GALVISIGHT_RULES_VERSION, content: GALVISIGHT_CONTENT_VERSION };
 }
 async function hasProductEntitlement(db, sessionId, product) {
-  const entitlement = await dbFirst(db, `SELECT * FROM entitlements WHERE session_id=? AND product=?`, sessionId, product);
-  if (entitlement && ['active', 'paid', 'granted', 'test_override'].includes(String(entitlement.entitlement_status || '').toLowerCase())) return true;
-  const payment = await dbFirst(db, `SELECT * FROM payments WHERE session_id=? AND product=?`, sessionId, product);
-  return Boolean(payment && ['paid', 'succeeded', 'complete'].includes(String(payment.payment_status || '').toLowerCase()));
+  const acceptedEntitlementStatuses = ['active', 'paid', 'granted', 'test_override'];
+  const acceptedPaymentStatuses = ['paid', 'succeeded', 'complete'];
+
+  const entitlement = await dbFirst(
+    db,
+    `SELECT * FROM entitlements WHERE session_id=? AND product=?`,
+    sessionId,
+    product
+  );
+  if (
+    entitlement &&
+    acceptedEntitlementStatuses.includes(
+      String(entitlement.entitlement_status || '').toLowerCase()
+    )
+  ) {
+    return true;
+  }
+
+  const payment = await dbFirst(
+    db,
+    `SELECT * FROM payments WHERE session_id=? AND product=?`,
+    sessionId,
+    product
+  );
+  if (
+    payment &&
+    acceptedPaymentStatuses.includes(
+      String(payment.payment_status || '').toLowerCase()
+    )
+  ) {
+    return true;
+  }
+
+  // Day 7 continuity: only GalviSight/GalviPath may inherit the same-session,
+  // server-authoritative GalviShot entitlement/payment relationship.
+  if (product === 'GalviSight' || product === 'GalviPath') {
+    const shotEntitlement = await dbFirst(
+      db,
+      `SELECT * FROM entitlements WHERE session_id=? AND product=?`,
+      sessionId,
+      'GalviShot'
+    );
+    if (
+      shotEntitlement &&
+      acceptedEntitlementStatuses.includes(
+        String(shotEntitlement.entitlement_status || '').toLowerCase()
+      )
+    ) {
+      return true;
+    }
+
+    const shotPayment = await dbFirst(
+      db,
+      `SELECT * FROM payments WHERE session_id=? AND product=?`,
+      sessionId,
+      'GalviShot'
+    );
+    if (
+      shotPayment &&
+      acceptedPaymentStatuses.includes(
+        String(shotPayment.payment_status || '').toLowerCase()
+      )
+    ) {
+      return true;
+    }
+  }
+
+  return false;
 }
 async function storedDay4Result(db, sessionId, product) {
   const v = day4ProductVersion(product);
