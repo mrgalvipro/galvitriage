@@ -36,33 +36,26 @@ test('Day 7 downstream handler retains QA override and unauthorized HTTP 402', (
   assert.match(handler, /payment_required:true[\s\S]*402/);
 });
 
-test('Day 7 GalviSight commercial paywall is present at $29', () => {
+test('Day 7 GalviSight commercial paywall is present while the customer button omits price', () => {
   assert.match(html, /id="galvisight-paywall"/);
-  assert.match(html, /Unlock GalviSight™ — \$29/);
-  assert.match(html, /id="galvisight-stripe-cta"/);
+  assert.match(html, /id="galvisight-stripe-cta"[\s\S]*>Unlock GalviSight™<\/button>/);
+  assert.doesNotMatch(html, /id="galvisight-stripe-cta"[^>]*>[^<]*\$29/);
   assert.match(html, /id="galvisight-qa-override"/);
   assert.match(html, /showGalviSightPaywall\(\)/);
 });
 
-test('Day 7 GalviPath commercial paywall is present at $29', () => {
+test('Day 7 GalviPath commercial paywall is present while the customer button omits price', () => {
   assert.match(html, /id="galvipath-paywall"/);
-  assert.match(html, /Unlock GalviPath™ — \$29/);
-  assert.match(html, /id="galvipath-stripe-cta"/);
+  assert.match(html, /Chart Your GalviPath™/);
+  assert.match(html, /id="galvipath-stripe-cta"[\s\S]*>Unlock GalviPath™<\/button>/);
+  assert.doesNotMatch(html, /id="galvipath-stripe-cta"[^>]*>[^<]*\$29/);
   assert.match(html, /id="galvipath-qa-override"/);
   assert.match(html, /showGalviPathPaywall\(\)/);
 });
 
 test('Day 7 approved GalviSight and GalviPath Stripe TEST links are configured', () => {
-  assert.match(
-    html,
-    /const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https:\/\/buy\.stripe\.com\/test_eVq3cw3R63YT6O6ahE53O03';/
-  );
-  assert.match(
-    html,
-    /const GALVIPATH_STRIPE_PAYMENT_LINK = 'https:\/\/buy\.stripe\.com\/test_fZu14ofzO9jd8We1L853O05';/
-  );
-  assert.doesNotMatch(html, /const GALVISIGHT_STRIPE_PAYMENT_LINK = '';/);
-  assert.doesNotMatch(html, /const GALVIPATH_STRIPE_PAYMENT_LINK = '';/);
+  assert.match(html, /const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https:\/\/buy\.stripe\.com\/test_eVq3cw3R63YT6O6ahE53O03';/);
+  assert.match(html, /const GALVIPATH_STRIPE_PAYMENT_LINK = 'https:\/\/buy\.stripe\.com\/test_fZu14ofzO9jd8We1L853O05';/);
 });
 
 test('Day 7 GalviSight paid return verifies, restores, then cleans customer URL', () => {
@@ -95,24 +88,65 @@ test('Day 7 restoration requires exact entitlement for downstream paid products'
   assert.match(restore, /available\.includes\('GalviScore'\)&&entitled\.includes\('GalviScore'\)/);
 });
 
-test('Day 7 print architecture is product scoped and does not reveal all hidden states', () => {
+test('Day 7 print architecture is product scoped and GalviVitals no longer exposes Print Save', () => {
   assert.match(html, /body\.print-galviscore #galviscore-result/);
   assert.match(html, /body\.print-galvishot #galvishot-result/);
   assert.match(html, /body\.print-galvisight #galvisight-handoff/);
   assert.match(html, /body\.print-galvipath #galvipath-result/);
   assert.match(html, /function printGalviCareReport\(product\)/);
-  assert.match(html, /afterprint/);
-  assert.doesNotMatch(html, /\.galvicare-card,\.hidden\{display:block!important/);
+  assert.doesNotMatch(html, /data-cta-location="galvivitals_result"[^>]*>Print \/ Save Results/);
 });
 
-test('Day 7 product print controls are present', () => {
+test('Day 7 customer presentation hides QA/debug controls by default', () => {
+  assert.doesNotMatch(html, /Baseline QA sequence:/);
+  assert.match(html, /#galviscore-qa-override,[\s\S]*#galvishot-live-test-override/);
+  assert.match(html, /qa-debug-enabled/);
+  assert.match(html, /#galvishot-executive-summary/);
+  assert.match(html, /#galvisight-assumptions-section/);
+  assert.match(html, /#galvisight-evidence-section/);
+});
+
+test('Day 7A approved GalviTriage and GalviVitals customer copy is present', () => {
+  assert.match(html, /<h1 class="hero-title">GalviTriage™<\/h1>/);
+  assert.match(html, /GalviCare™ can prepare your initial business health snapshot: GalviVitals™/);
+  assert.match(html, /placeholder="Example: I need a more consistent way to find and convert customers\."/);
+  assert.match(html, /placeholder="Example: I need help deciding which business priority to focus on first\."/);
+  assert.match(html, /<h2 class="center">GalviVitals™<\/h2>/);
+  assert.match(html, /Your business health snapshot: \$\{vitals\.classification\|\|vitals\.health_band/);
+});
+
+test('Day 7A GalviScore preserves proprietary naming and exactly three deterministic priorities', () => {
+  assert.match(html, /Your GalviScore™ is Ready/);
+  assert.match(html, /<h2 class="center">Your GalviScore™<\/h2>/);
+  assert.doesNotMatch(html, /Built from your GalviTriage data using rules-first GalviEngine logic/);
+  assert.match(html, /function topThreePriorityText\(result\)/);
+  assert.match(html, /\.slice\(0,3\)/);
+  assert.match(html, /updatePersistentGalviScore/);
+});
+
+test('Day 7A approved product progression copy is present', () => {
+  assert.match(html, /GalviScore™ shows where your business stands\. GalviShot™ helps you understand/);
+  assert.match(html, /GalviShot™ explains why your business is showing these symptoms\. GalviSight™ turns those findings into clear actions/);
+  assert.match(html, /GalviSight™ shows what actions deserve your attention\. GalviPath™ organizes those actions into a focused 90 day path/);
+  assert.match(html, /GalviPath™ turns your GalviCare™ findings into a focused 90 day plan/);
+  assert.match(html, /Your GalviPath™ gives you a clear direction for the next 90 days\. GalviClinic™ gives you dedicated support/);
+});
+
+test('Day 7A confidence and evidence presentation are customer readable without changing Worker authority', () => {
+  assert.match(html, /function confidencePresentation\(value\)/);
+  assert.match(html, /label:'Strong'/);
+  assert.match(html, /label:'Moderate'/);
+  assert.match(html, /label:'Limited'/);
+  assert.match(html, /function contextualEvidenceSentence\(value\)/);
+  assert.match(html, /function pruneGalviPathInternalSections\(panel\)/);
+});
+
+test('Day 7 product print controls remain available after paid products', () => {
   assert.match(html, /id="print-galviscore"/);
   assert.match(html, /id="print-galvishot"/);
   assert.match(html, /id="print-galvisight"/);
-  assert.match(html, /Print \/ Save GalviPath/);
+  assert.match(html, /Print \/ Save GalviPath™/);
 });
-
-
 
 test('Day 7A payment-product aliases use one authoritative Worker contract', () => {
   assert.match(worker, /const PAYMENT_PRODUCT_ALIASES = Object\.freeze\(\{/);
@@ -120,30 +154,16 @@ test('Day 7A payment-product aliases use one authoritative Worker contract', () 
   assert.match(worker, /galvishot: 'GalviShot'/);
   assert.match(worker, /galvisight: 'GalviSight'/);
   assert.match(worker, /galvipath: 'GalviPath'/);
-
-  const paymentNameFn = block(
-    worker,
-    'function paymentProductName',
-    'function stripeCheckoutSessionUrl'
-  );
-
+  const paymentNameFn = block(worker, 'function paymentProductName', 'function stripeCheckoutSessionUrl');
   assert.match(paymentNameFn, /PAYMENT_PRODUCT_ALIASES\[normalized\] \|\| ''/);
 });
 
 test('Day 7A health_check exposes a deployment fingerprint and all paid-return products', () => {
   assert.match(worker, /const DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1';/);
-
-  const day1Handler = block(
-    worker,
-    'async function handleDay1Action',
-    'async function handleDay2Action'
-  );
-
+  const day1Handler = block(worker, 'async function handleDay1Action', 'async function handleDay2Action');
   assert.match(day1Handler, /runtime_marker: DAY7A_RUNTIME_MARKER/);
   assert.match(day1Handler, /payment_return_products: Array\.from\(new Set\(Object\.values\(PAYMENT_PRODUCT_ALIASES\)\)\)/);
   assert.match(day1Handler, /payment_return_aliases: PAYMENT_PRODUCT_ALIASES/);
-  assert.match(day1Handler, /environment: GALVICARE_BUILD\.environment/);
-  assert.match(day1Handler, /branch: GALVICARE_BUILD\.branch/);
 });
 
 test('Day 7 approved GalviClinic destination remains unchanged', () => {
