@@ -870,7 +870,7 @@ const GALVISCORE_FOLLOWUP_QUESTIONS={revenue_range:{question_id:'gs_revenue_rang
 function pickFollowUpQuestions(scoreResult){ const lowest=scoreResult.galviscore_lowest_category; const primary=GALVISCORE_FOLLOWUP_QUESTIONS[lowest]; return [primary||GALVISCORE_FOLLOWUP_QUESTIONS.primary_goal].slice(0,2); }
 function renderClinicalFollowUp(scoreResult){ hideGalviScoreScreens(); const sessionId=scoreResult.session_id||getStoredSessionId(); const followups=pickFollowUpQuestions(scoreResult); const container=document.getElementById('followup-question-container'); container.innerHTML=''; followups.forEach(q=>{const label=document.createElement('label'); label.setAttribute('for',q.question_id); label.textContent=q.label; const textarea=document.createElement('textarea'); textarea.id=q.question_id; textarea.name=q.question_id; textarea.dataset.questionId=q.question_id; textarea.dataset.confidenceImpact=q.confidence_impact; textarea.required=true; container.appendChild(label); container.appendChild(textarea);}); document.getElementById('galviscore-followup')?.classList.remove('hidden'); fireGalviEvent('clinical_followup_viewed',{session_id:sessionId,stage:'GalviScore Clinical Follow-Up'}); updateJourneyStage(sessionId,'GalviScore Clinical Follow-Up'); document.getElementById('galviscore-followup')?.scrollIntoView({behavior:'smooth'}); }
 async function saveClinicalFollowUp(sessionId,q,answer){ fireGalviEvent('clinical_followup_submitted',{session_id:sessionId,question_id:q.question_id}); return postGalviScoreEvent({event_name:'clinical_followup_submitted',session_id:sessionId,stage:'GalviScore',question_id:q.question_id,answer,confidence_impact:q.confidence_impact}); }
-function renderUnlockedGalviScore(result){ showGalviCareState('GALVISCORE_RESULT'); document.getElementById('galviscore-score').textContent=result.galviscore_score; document.getElementById('galviscore-confidence').textContent=`${result.galviscore_confidence}%`; document.getElementById('galviscore-classification').textContent=result.galviscore_classification; document.getElementById('galviscore-lowest-category').textContent=labelize(result.galviscore_lowest_category); renderCategoryBars(result.category_scores||{}); renderPriorities(result.galviscore_top_priorities||''); fireGalviEvent('diagnostic_viewed',{product:'galviscore',session_id:result.session_id,stage:'GalviScore'}); setAnalyticsState({galviscore_result_viewed:true,galviscore_result_viewed_at:Date.now(),last_step:'galviscore_result_viewed'}); updateJourneyStage(result.session_id,'GalviScore',{payment_galviscore:result.payment_galviscore||'paid'}); updatePersistentGalviScore(result.galviscore_score); document.getElementById('galviscore-result')?.scrollIntoView({behavior:'smooth'}); }
+function renderUnlockedGalviScore(result){ showGalviCareState('GALVISCORE_RESULT'); document.getElementById('galviscore-score').textContent=result.galviscore_score; document.getElementById('galviscore-confidence').textContent=`${result.galviscore_confidence}%`; document.getElementById('galviscore-classification').textContent=result.galviscore_classification; document.getElementById('galviscore-lowest-category').textContent=labelize(result.galviscore_lowest_category); renderCategoryBars(result.category_scores||{}); renderPriorities(result.galviscore_top_priorities||''); fireGalviEvent('diagnostic_viewed',{product:'galviscore',session_id:result.session_id,stage:'GalviScore'}); setAnalyticsState({galviscore_result_viewed:true,galviscore_result_viewed_at:Date.now(),last_step:'galviscore_result_viewed'}); updateJourneyStage(result.session_id,'GalviScore',{payment_galviscore:result.payment_galviscore||'paid'}); updatePersistentGalviScore(result.galviscore_score); updatePersistentGalviScore(result.galviscore_score); document.getElementById('galviscore-result')?.scrollIntoView({behavior:'smooth'}); }
 function renderCategoryBars(categoryScores){ const container=document.getElementById('galviscore-category-bars'); container.innerHTML=''; Object.entries(categoryScores).forEach(([key,value])=>{const score=Math.max(0,Math.min(100,Number(value||0))); const row=document.createElement('div'); row.className='category-row'; row.innerHTML=`<div class="category-label"><strong>${labelize(key)}</strong><span>${score}/100</span></div><div class="category-bar"><div class="category-fill" style="width:${score}%"></div></div>`; container.appendChild(row);}); }
 function renderPriorities(priorityText){ const list=document.getElementById('galviscore-priorities'); list.innerHTML=''; String(priorityText||'').split('\n').filter(Boolean).slice(0,3).forEach(item=>{const li=document.createElement('li'); li.textContent=item; list.appendChild(li);}); }
 function renderTriageRepair(scoreResult){ hideGalviCareCustomerStates(); clearGalviCareReturnPending(); document.getElementById('galviscore-repair')?.classList.remove('hidden'); fireGalviEvent('galviscore_repair_required',{session_id:getStoredSessionId(),stage:'GalviTriage Repair',confidence:scoreResult.galviscore_confidence||0}); document.getElementById('galviscore-repair')?.scrollIntoView({behavior:'smooth'}); }
@@ -1119,7 +1119,7 @@ function pruneGalviPathInternalSections(panel){
       findings.appendChild(node);
     });
     const fill=(id,items)=>{ const host=el(id); host.innerHTML=''; (items||[]).forEach(x=>{ const li=document.createElement('li'); li.textContent=x; host.appendChild(li); }); };
-    fill('galvishot-actions', result.recommended_actions); fill('galvishot-risks', result.strategic_risks); fill('galvishot-assumptions', result.assumptions); humanizeList('galvishot-actions'); humanizeList('galvishot-risks');
+    fill('galvishot-actions', result.recommended_actions); fill('galvishot-risks', result.strategic_risks); fill('galvishot-assumptions', result.assumptions); humanizeList('galvishot-actions'); humanizeList('galvishot-risks'); humanizeList('galvishot-actions'); humanizeList('galvishot-risks');
     if(typeof fireGalviEvent==='function') fireGalviEvent('diagnostic_viewed',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Result',confidence:result.confidence});
     window.scrollTo({top:0,behavior:'smooth'});
   }
@@ -1319,17 +1319,17 @@ function pruneGalviPathInternalSections(panel){
             el('galvisight-interpretation').textContent=result.interpretation||'';
           }
 
-          const hypothesisCount=renderGalviSightHypotheses(result.hypotheses); cleanGalviSightCustomerHypotheses();
+          const hypothesisCount=renderGalviSightHypotheses(result.hypotheses); cleanGalviSightCustomerHypotheses(); cleanGalviSightCustomerHypotheses();
           setSectionVisibility('galvisight-hypotheses-section',hypothesisCount>0);
 
           const riskCount=renderTextList('galvisight-risks',result.risks,(item)=>item?.statement||item?.risk||item);
-          setSectionVisibility('galvisight-risks-section',riskCount>0); humanizeList('galvisight-risks');
+          setSectionVisibility('galvisight-risks-section',riskCount>0); humanizeList('galvisight-risks'); humanizeList('galvisight-risks');
 
           const opportunityCount=renderTextList('galvisight-opportunities',result.opportunities,(item)=>item?.statement||item?.opportunity||item);
           setSectionVisibility('galvisight-opportunities-section',opportunityCount>0);
 
           const actionCount=renderTextList('galvisight-actions',result.recommended_actions,(item)=>item?.action||item?.statement||item);
-          setSectionVisibility('galvisight-actions-section',actionCount>0); humanizeList('galvisight-actions');
+          setSectionVisibility('galvisight-actions-section',actionCount>0); humanizeList('galvisight-actions'); humanizeList('galvisight-actions');
 
           const assumptionCount=renderTextList('galvisight-assumptions',result.assumptions,(item)=>item?.statement||item);
           setSectionVisibility('galvisight-assumptions-section',false);
@@ -1650,7 +1650,7 @@ function pruneGalviPathInternalSections(panel){
           throw new Error(`GalviPath returned an unsupported status: ${response.status||result.status||'unknown'}`);
         }
 
-        renderGalviPathResult(result); pruneGalviPathInternalSections(el('galvipath-result-panel'));
+        renderGalviPathResult(result); pruneGalviPathInternalSections(el('galvipath-result-panel')); pruneGalviPathInternalSections(el('galvipath-result-panel'));
 
         if(stateMessage){
           stateMessage.textContent='Your GalviPath™ is ready.';
