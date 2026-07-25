@@ -1,19 +1,23 @@
 name: Finalize GalviCare Day 7A and Deploy QA
 
-# Day 7A release convergence trigger. This workflow first commits the approved transformed
-# index.html to QA so every downstream CI workflow validates the same committed source of truth.
+# Immutable Day 7A release gate: test the exact committed QA source, deploy the
+# existing QA Worker, verify the live runtime, then release to Human E2E.
 on:
   workflow_dispatch:
   push:
     branches:
       - qa-revamped-galvicare-0-5
     paths:
-      - "scripts/apply-day7a-enhancements.mjs"
-      - "tests/day7-release-readiness.test.mjs"
+      - "index.html"
+      - "worker/**"
+      - "tests/**"
+      - "scripts/verify-qa-runtime.mjs"
+      - "wrangler.json"
+      - "package.json"
       - ".github/workflows/day7a-finalize-and-deploy.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: galvicare-day7a-finalize
@@ -21,56 +25,46 @@ concurrency:
 
 jobs:
   finalize-deploy-verify:
-    name: Finalize UI → Persist QA Source → Test → Deploy QA Worker → Verify Runtime
+    name: Test Committed QA Source → Deploy QA Worker → Verify Runtime
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
       - name: Checkout exact QA commit
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Verify QA branch and fresh release SHA
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Verify QA branch and release SHA
         shell: bash
         run: |
           echo "QA branch: ${GITHUB_REF_NAME}"
-          echo "Fresh release SHA: ${GITHUB_SHA}"
+          echo "Release SHA: ${GITHUB_SHA}"
           test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
-          test "${GITHUB_SHA}" != "93badf1ca609dd29690fc71224707169fd4b8ef7"
 
-      - name: Apply approved Day 7A customer-experience enhancements
-        run: node scripts/apply-day7a-enhancements.mjs
-
-      - name: Persist approved Day 7A index.html as QA source of truth
-        id: persist
+      - name: Verify committed Day 7A presentation is already present
         shell: bash
         run: |
-          if git diff --quiet -- index.html; then
-            echo "QA index.html already contains the approved Day 7A presentation."
-            echo "committed=false" >> "$GITHUB_OUTPUT"
-          else
-            git config user.name "galvicare-release-bot"
-            git config user.email "actions@users.noreply.github.com"
-            git add index.html
-            git commit -m "Day 7A: persist approved customer experience to QA"
-            git push origin HEAD:qa-revamped-galvicare-0-5
-            echo "committed=true" >> "$GITHUB_OUTPUT"
-          fi
+          grep -Fq "/* Day 7A customer presentation */" index.html
+          grep -Fq "GalviTriage™" index.html
+          grep -Fq "Your GalviScore™ is Ready" index.html
+          grep -Fq "Chart Your GalviPath™" index.html
 
-      - name: Run complete Day 7A gate against persisted enhanced source
+      - name: Run complete Day 7A source gate
+        shell: bash
         run: |
           node --check worker/worker.js
           node --check scripts/verify-qa-runtime.mjs
-          node --check scripts/apply-day7a-enhancements.mjs
           npm test
           npm run stabilization:gate
           git diff --check
+          test -z "$(git status --short)"
 
       - name: Deploy existing QA Worker
         uses: cloudflare/wrangler-action@v3
@@ -86,12 +80,13 @@ jobs:
 
       - name: Human E2E release gate
         if: success()
+        shell: bash
         run: |
           {
             echo "## GalviCare Day 7A Final QA PASS"
             echo ""
-            echo "- QA source unified on approved enhanced index.html: PASS"
-            echo "- Complete source gate: PASS"
+            echo "- QA stabilization/source gate: PASS"
+            echo "- Day 7A release workflow: PASS"
             echo "- QA Worker deployment: PASS"
             echo "- Live runtime verification: PASS"
             echo ""
