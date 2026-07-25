@@ -1,0 +1,51 @@
+name: Deploy GalviCare QA Worker
+
+on:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - "worker/**"
+      - "tests/**"
+      - "wrangler.json"
+      - ".github/workflows/deploy-galvicare-qa.yml"
+      - "scripts/verify-qa-runtime.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvicare-qa-worker
+  cancel-in-progress: true
+
+jobs:
+  test-deploy-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "22"
+
+      - name: Verify branch
+        run: test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
+
+      - name: Run GalviCare automated gate
+        run: |
+          npm test
+          npm run stabilization:gate
+          git diff --check
+
+      - name: Deploy existing QA Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.json
+
+      - name: Verify deployed QA runtime
+        env:
+          GALVICARE_QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
+        run: node scripts/verify-qa-runtime.mjs
