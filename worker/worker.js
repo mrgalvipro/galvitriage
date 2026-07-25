@@ -426,10 +426,8 @@ async function getSessionState(db, sessionId) {
       available.push(product);
     }
 
-    // Day 7 paid-return restoration:
-    // expose only server-authoritative entitlement/payment state.
-    // hasProductEntitlement() preserves exact-product authority and
-    // the approved GalviShot -> GalviSight/GalviPath continuity rule.
+    // Day 7 commercial closure:
+    // expose only server-authoritative exact-product entitlement/payment state.
     if (await hasProductEntitlement(db, sessionId, product)) {
       entitled.push(product);
     }
@@ -483,6 +481,8 @@ function paymentProductName(value) {
   const normalized = String(value || '').trim().toLowerCase();
   if (normalized === 'galviscore' || normalized === 'galvi_score') return 'GalviScore';
   if (normalized === 'galvishot' || normalized === 'galvi_shot') return 'GalviShot';
+  if (normalized === 'galvisight' || normalized === 'galvi_sight') return 'GalviSight';
+  if (normalized === 'galvipath' || normalized === 'galvi_path') return 'GalviPath';
   return '';
 }
 function stripeCheckoutSessionUrl(stripeSessionId) {
@@ -1941,6 +1941,7 @@ async function hasProductEntitlement(db, sessionId, product) {
     sessionId,
     product
   );
+
   if (
     entitlement &&
     acceptedEntitlementStatuses.includes(
@@ -1956,50 +1957,13 @@ async function hasProductEntitlement(db, sessionId, product) {
     sessionId,
     product
   );
-  if (
+
+  return Boolean(
     payment &&
     acceptedPaymentStatuses.includes(
       String(payment.payment_status || '').toLowerCase()
     )
-  ) {
-    return true;
-  }
-
-  // Day 7 continuity: only GalviSight/GalviPath may inherit the same-session,
-  // server-authoritative GalviShot entitlement/payment relationship.
-  if (product === 'GalviSight' || product === 'GalviPath') {
-    const shotEntitlement = await dbFirst(
-      db,
-      `SELECT * FROM entitlements WHERE session_id=? AND product=?`,
-      sessionId,
-      'GalviShot'
-    );
-    if (
-      shotEntitlement &&
-      acceptedEntitlementStatuses.includes(
-        String(shotEntitlement.entitlement_status || '').toLowerCase()
-      )
-    ) {
-      return true;
-    }
-
-    const shotPayment = await dbFirst(
-      db,
-      `SELECT * FROM payments WHERE session_id=? AND product=?`,
-      sessionId,
-      'GalviShot'
-    );
-    if (
-      shotPayment &&
-      acceptedPaymentStatuses.includes(
-        String(shotPayment.payment_status || '').toLowerCase()
-      )
-    ) {
-      return true;
-    }
-  }
-
-  return false;
+  );
 }
 async function storedDay4Result(db, sessionId, product) {
   const v = day4ProductVersion(product);
