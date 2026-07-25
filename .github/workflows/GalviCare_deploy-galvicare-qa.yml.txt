@@ -8,8 +8,8 @@ on:
       - "worker/**"
       - "tests/**"
       - "wrangler.json"
-      - ".github/workflows/deploy-galvicare-qa.yml"
       - "scripts/verify-qa-runtime.mjs"
+      - ".github/workflows/deploy-galvicare-qa.yml"
   workflow_dispatch:
 
 permissions:
@@ -20,32 +20,62 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  test-deploy-verify:
+  qa-release-gate:
+    name: Test → Deploy QA Worker → Verify Live Runtime
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - name: Checkout exact QA commit
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Verify branch
-        run: test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
-
-      - name: Run GalviCare automated gate
+      - name: Verify QA branch
+        shell: bash
         run: |
+          echo "Branch: ${GITHUB_REF_NAME}"
+          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
+
+      - name: Run complete Day 7A automated gate
+        shell: bash
+        run: |
+          node --check worker/worker.js
           npm test
           npm run stabilization:gate
           git diff --check
 
-      - name: Deploy existing QA Worker
+      - name: Deploy existing QA Worker from repository source
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.json
 
-      - name: Verify deployed QA runtime
+      - name: Verify exact deployed QA runtime
         env:
           GALVICARE_QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
         run: node scripts/verify-qa-runtime.mjs
+
+      - name: Day 7A deployment summary
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "## GalviCare Day 7A QA Deployment PASS"
+            echo ""
+            echo "- Branch: \`${GITHUB_REF_NAME}\`"
+            echo "- Commit: \`${GITHUB_SHA}\`"
+            echo "- Worker: \`galvicare-triage-intake\`"
+            echo "- Source tests: PASS"
+            echo "- Stabilization gate: PASS"
+            echo "- QA Worker deploy: PASS"
+            echo "- Live runtime marker: PASS"
+            echo "- GalviSight alias live: PASS"
+            echo "- GalviPath alias live: PASS"
+            echo ""
+            echo "**READY FOR FINAL DAY 7A HUMAN E2E**"
+          } >> "$GITHUB_STEP_SUMMARY"
