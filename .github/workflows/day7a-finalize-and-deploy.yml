@@ -1,7 +1,8 @@
 name: Finalize GalviCare Day 7A and Deploy QA
 
-# Day 7A release gate. It contains one narrowly scoped, idempotent source repair
-# for the approved GalviPath trademark literal, then tests/deploys only committed QA source.
+# Immutable Day 7A release gate. The approved Day 7A source is already committed.
+# This workflow tests that exact QA source, deploys the QA Worker, verifies runtime,
+# and releases the build to final Human E2E only when all gates pass.
 on:
   workflow_dispatch:
   push:
@@ -17,7 +18,7 @@ on:
       - ".github/workflows/day7a-finalize-and-deploy.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: galvicare-day7a-finalize
@@ -25,15 +26,13 @@ concurrency:
 
 jobs:
   finalize-deploy-verify:
-    name: Converge QA Source → Test → Deploy QA Worker → Verify Runtime
+    name: Test Committed QA Source → Deploy QA Worker → Verify Runtime
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
     steps:
       - name: Checkout exact QA commit
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
@@ -50,44 +49,7 @@ jobs:
           echo "Release SHA: ${GITHUB_SHA}"
           test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
 
-      - name: Converge approved GalviPath print label
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('index.html')
-          text = path.read_text(encoding='utf-8')
-          old = '>Print / Save GalviPath</button>'
-          new = '>Print / Save GalviPath™</button>'
-          if new in text:
-              print('Approved GalviPath print label already committed.')
-          elif old in text:
-              path.write_text(text.replace(old, new, 1), encoding='utf-8')
-              print('Applied approved one-line GalviPath print-label correction.')
-          else:
-              raise SystemExit('Unexpected source drift: GalviPath print button literal not found.')
-          PY
-
-      - name: Persist approved one-line source correction when required
-        id: converge
-        shell: bash
-        run: |
-          if git diff --quiet -- index.html; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Committed QA source already converged."
-          else
-            git diff --check
-            git config user.name "galvicare-release-bot"
-            git config user.email "actions@users.noreply.github.com"
-            git add index.html
-            git commit -m "Day 7A: correct GalviPath print trademark"
-            git push origin HEAD:qa-revamped-galvicare-0-5
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "Committed corrected QA source; fresh workflows will validate that exact commit."
-          fi
-
       - name: Verify committed Day 7A presentation
-        if: steps.converge.outputs.changed != 'true'
         shell: bash
         run: |
           grep -Fq "/* Day 7A customer presentation */" index.html
@@ -97,7 +59,6 @@ jobs:
           grep -Fq ">Print / Save GalviPath™</button>" index.html
 
       - name: Run complete Day 7A source gate
-        if: steps.converge.outputs.changed != 'true'
         shell: bash
         run: |
           node --check worker/worker.js
@@ -108,7 +69,6 @@ jobs:
           test -z "$(git status --short)"
 
       - name: Deploy existing QA Worker
-        if: steps.converge.outputs.changed != 'true'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -116,13 +76,12 @@ jobs:
           command: deploy --config wrangler.json
 
       - name: Verify exact deployed QA runtime
-        if: steps.converge.outputs.changed != 'true'
         env:
           GALVICARE_QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
         run: node scripts/verify-qa-runtime.mjs
 
       - name: Human E2E release gate
-        if: success() && steps.converge.outputs.changed != 'true'
+        if: success()
         shell: bash
         run: |
           {
