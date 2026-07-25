@@ -1,5 +1,7 @@
 name: Finalize GalviCare Day 7A and Deploy QA
 
+# Day 7A final fresh-run trigger. Do not use GitHub's "Re-run jobs" on an older run;
+# reruns are pinned to the original commit and cannot pick up later QA fixes.
 on:
   workflow_dispatch:
   push:
@@ -22,6 +24,7 @@ jobs:
     name: Finalize UI → Test → Deploy QA Worker → Verify Runtime
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - name: Checkout exact QA commit
         uses: actions/checkout@v4
@@ -33,8 +36,13 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Verify QA branch
-        run: test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
+      - name: Verify QA branch and release SHA
+        shell: bash
+        run: |
+          echo "QA branch: ${GITHUB_REF_NAME}"
+          echo "Fresh release SHA: ${GITHUB_SHA}"
+          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
+          test "${GITHUB_SHA}" != "93badf1ca609dd29690fc71224707169fd4b8ef7"
 
       - name: Apply approved Day 7A customer-experience enhancements
         run: node scripts/apply-day7a-enhancements.mjs
@@ -49,6 +57,7 @@ jobs:
           git diff --check
 
       - name: Persist verified Day 7A frontend to QA
+        shell: bash
         run: |
           if git diff --quiet -- index.html; then
             echo "QA index.html already contains the approved Day 7A presentation."
@@ -78,6 +87,7 @@ jobs:
           {
             echo "## GalviCare Day 7A Final QA PASS"
             echo ""
+            echo "- Fresh QA source SHA: \`${GITHUB_SHA}\`"
             echo "- Approved customer-experience enhancements: PASS"
             echo "- Complete source gate: PASS"
             echo "- QA Worker deployment: PASS"
