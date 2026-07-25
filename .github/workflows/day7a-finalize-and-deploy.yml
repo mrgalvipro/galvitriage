@@ -1,0 +1,87 @@
+name: Finalize GalviCare Day 7A and Deploy QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - "scripts/apply-day7a-enhancements.mjs"
+      - "tests/day7-release-readiness.test.mjs"
+      - ".github/workflows/day7a-finalize-and-deploy.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: galvicare-day7a-finalize
+  cancel-in-progress: true
+
+jobs:
+  finalize-deploy-verify:
+    name: Finalize UI → Test → Deploy QA Worker → Verify Runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact QA commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify QA branch
+        run: test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
+
+      - name: Apply approved Day 7A customer-experience enhancements
+        run: node scripts/apply-day7a-enhancements.mjs
+
+      - name: Run complete Day 7A gate
+        run: |
+          node --check worker/worker.js
+          node --check scripts/verify-qa-runtime.mjs
+          node --check scripts/apply-day7a-enhancements.mjs
+          npm test
+          npm run stabilization:gate
+          git diff --check
+
+      - name: Persist verified Day 7A frontend to QA
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "QA index.html already contains the approved Day 7A presentation."
+          else
+            git config user.name "galvicare-release-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add index.html
+            git commit -m "Day 7A: finalize customer experience for Human E2E"
+            git push origin HEAD:qa-revamped-galvicare-0-5
+          fi
+
+      - name: Deploy existing QA Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.json
+
+      - name: Verify exact deployed QA runtime
+        env:
+          GALVICARE_QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
+        run: node scripts/verify-qa-runtime.mjs
+
+      - name: Human E2E release gate
+        if: success()
+        run: |
+          {
+            echo "## GalviCare Day 7A Final QA PASS"
+            echo ""
+            echo "- Approved customer-experience enhancements: PASS"
+            echo "- Complete source gate: PASS"
+            echo "- QA Worker deployment: PASS"
+            echo "- Live runtime verification: PASS"
+            echo ""
+            echo "**READY FOR FINAL DAY 7A HUMAN E2E**"
+          } >> "$GITHUB_STEP_SUMMARY"
