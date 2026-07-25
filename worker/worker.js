@@ -35,6 +35,19 @@ const GALVICARE_BUILD = Object.freeze({
   legacy_make_api_enabled: false
 });
 
+const PAYMENT_PRODUCT_ALIASES = Object.freeze({
+  galviscore: 'GalviScore',
+  galvi_score: 'GalviScore',
+  galvishot: 'GalviShot',
+  galvi_shot: 'GalviShot',
+  galvisight: 'GalviSight',
+  galvi_sight: 'GalviSight',
+  galvipath: 'GalviPath',
+  galvi_path: 'GalviPath'
+});
+
+const DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1';
+
 const DAY1_ACTIONS = new Set([
   'health_check',
   'create_or_resume_session',
@@ -479,11 +492,7 @@ async function saveFcdNote(db, sessionId, payload) {
 
 function paymentProductName(value) {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'galviscore' || normalized === 'galvi_score') return 'GalviScore';
-  if (normalized === 'galvishot' || normalized === 'galvi_shot') return 'GalviShot';
-  if (normalized === 'galvisight' || normalized === 'galvi_sight') return 'GalviSight';
-  if (normalized === 'galvipath' || normalized === 'galvi_path') return 'GalviPath';
-  return '';
+  return PAYMENT_PRODUCT_ALIASES[normalized] || '';
 }
 function stripeCheckoutSessionUrl(stripeSessionId) {
   return `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(stripeSessionId)}`;
@@ -661,7 +670,17 @@ async function resolvePaymentReturn(env, payload) {
 async function handleDay1Action(env, payload, action) {
   const db = requireDb(env); const ts = nowIso();
   if (action === 'resolve_payment_return') return await resolvePaymentReturn(env, payload);
-  if (action === 'health_check') return jsonResponse({ success: true, action, service: 'GalviCare D1 foundation', schema_version: 'galvivault_schema_v0_5_1' }, 200, env);
+  if (action === 'health_check') return jsonResponse({
+    success: true,
+    action,
+    service: 'GalviCare D1 foundation',
+    schema_version: 'galvivault_schema_v0_5_1',
+    runtime_marker: DAY7A_RUNTIME_MARKER,
+    environment: GALVICARE_BUILD.environment,
+    branch: GALVICARE_BUILD.branch,
+    payment_return_products: Array.from(new Set(Object.values(PAYMENT_PRODUCT_ALIASES))),
+    payment_return_aliases: PAYMENT_PRODUCT_ALIASES
+  }, 200, env);
   if (action === 'create_or_resume_session') { const sid = normalizeSessionId(payload.session_id) || id('gt'); await dbRun(db, `INSERT INTO sessions(session_id,current_stage,status,source,created_at,updated_at,last_seen_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET current_stage=excluded.current_stage,updated_at=excluded.updated_at,last_seen_at=excluded.last_seen_at`, sid, payload.current_stage || 'Day 1 Browser QA', 'active', payload.source || 'day1_api', ts, ts, ts); return jsonResponse({ success: true, action, session_id: sid }, 200, env); }
   if (action === 'journey_event') { await dbRun(db, `INSERT INTO journey_events(event_id,session_id,event_name,product,current_stage,event_json,created_at) VALUES(?,?,?,?,?,?,?)`, id('evt'), normalizeSessionId(payload.session_id), payload.event_name || 'journey_event', payload.product || 'GalviCare', payload.current_stage || '', JSON.stringify(payload.event_data || payload), ts); return jsonResponse({ success: true, action, session_id: normalizeSessionId(payload.session_id) }, 200, env); }
   if (['get_session_state','get_clinical_summary','save_fcd_note'].includes(action)) { const sid = normalizeSessionId(payload.session_id || safe(payload, 'session.session_id')); if (!required(sid)) return jsonResponse({ success:false, action, message:'Missing session_id' }, 400, env); if (action !== 'get_session_state' && !requireFcdAccess(env, payload)) return jsonResponse({ success:false, action, message:'FCD access token required' }, 403, env); if (action === 'get_session_state') { const state = await getSessionState(db, sid); if (!state) return jsonResponse({ success:false, action, message:'GalviCare session not found', session_id:sid }, 404, env); return jsonResponse({ action, ...state }, 200, env); } if (action === 'get_clinical_summary') { const summary = await clinicalSummary(db, sid); if (!summary) return jsonResponse({ success:false, action, message:'GalviCare session not found', session_id:sid }, 404, env); return jsonResponse({ action, ...summary }, 200, env); } return jsonResponse({ action, ...(await saveFcdNote(db, sid, payload)) }, 200, env); }
