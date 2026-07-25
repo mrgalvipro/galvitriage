@@ -44,10 +44,7 @@ function sessionValues(ctx) {
 }
 
 test('valid stored session is reused even after GalviTriage submission', () => {
-  const ctx = createSessionContext({
-    galvicare_session_id: 'gt_existing_123',
-    galvitriage_session_submitted: 'true'
-  });
+  const ctx = createSessionContext({ galvicare_session_id: 'gt_existing_123', galvitriage_session_submitted: 'true' });
   assert.equal(ctx.getOrCreateSessionId(), 'gt_existing_123');
   assert.deepEqual(sessionValues(ctx), ['gt_existing_123', 'gt_existing_123', 'gt_existing_123']);
 });
@@ -91,9 +88,15 @@ test('GalviShot uses upstream canonical session and does not create one', () => 
   assert.match(html, /callGalviCareApi\(\{ action, session_id: sessionId\(\), current_stage: 'GalviShot'/);
 });
 
-test('GalviSight handoff retains the same canonical session path', () => {
-  assert.match(html, /el\('continue-galvisight'\)[\s\S]*setShotStage\('GalviSight Handoff'\)/);
+test('GalviSight handoff retains the canonical session but now stops at the commercial paywall first', () => {
+  assert.match(html, /el\('continue-galvisight'\)[\s\S]*showGalviSightPaywall\(\)/);
+  assert.match(html, /function showGalviSightPaywall\(\)[\s\S]*setShotStage\('GalviSight Paywall'\)/);
   assert.match(html, /function setShotStage\(stage\)[\s\S]*updateJourneyStage\(sessionId\(\), stage\)/);
+});
+
+test('GalviPath handoff retains the canonical session but stops at its commercial paywall first', () => {
+  assert.match(html, /el\('continue-galvipath'\)[\s\S]*showGalviPathPaywall\(\)/);
+  assert.match(html, /function showGalviPathPaywall\(\)[\s\S]*setShotStage\('GalviPath Paywall'\)/);
 });
 
 test('startNewGalviCareAssessment is the only explicit replacement operation', () => {
@@ -124,8 +127,11 @@ test('complete simulated journey uses exactly one session ID', () => {
   const scoreResult = ctx.getStoredSessionId();
   const shotPaywall = ctx.getStoredSessionId();
   const shotResult = ctx.getStoredSessionId();
-  const sight = ctx.getStoredSessionId();
-  assert.equal(new Set([triage, vitals, scorePaywall, scoreResult, shotPaywall, shotResult, sight]).size, 1);
+  const sightPaywall = ctx.getStoredSessionId();
+  const sightResult = ctx.getStoredSessionId();
+  const pathPaywall = ctx.getStoredSessionId();
+  const pathResult = ctx.getStoredSessionId();
+  assert.equal(new Set([triage, vitals, scorePaywall, scoreResult, shotPaywall, shotResult, sightPaywall, sightResult, pathPaywall, pathResult]).size, 1);
 });
 
 test('index.html does not expose QA secrets, D1 identifiers, or proprietary deterministic logic', () => {
