@@ -1,7 +1,7 @@
 name: Finalize GalviCare Day 7A and Deploy QA
 
-# Day 7A final fresh-run trigger. Do not use GitHub's "Re-run jobs" on an older run;
-# reruns are pinned to the original commit and cannot pick up later QA fixes.
+# Fresh Day 7A finalization run. This workflow first commits the approved transformed
+# index.html to QA so every downstream CI workflow validates the same source of truth.
 on:
   workflow_dispatch:
   push:
@@ -21,7 +21,7 @@ concurrency:
 
 jobs:
   finalize-deploy-verify:
-    name: Finalize UI → Test → Deploy QA Worker → Verify Runtime
+    name: Finalize UI → Persist QA Source → Test → Deploy QA Worker → Verify Runtime
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -36,7 +36,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Verify QA branch and release SHA
+      - name: Verify QA branch and fresh release SHA
         shell: bash
         run: |
           echo "QA branch: ${GITHUB_REF_NAME}"
@@ -47,7 +47,23 @@ jobs:
       - name: Apply approved Day 7A customer-experience enhancements
         run: node scripts/apply-day7a-enhancements.mjs
 
-      - name: Run complete Day 7A gate
+      - name: Persist approved Day 7A index.html as QA source of truth
+        id: persist
+        shell: bash
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "QA index.html already contains the approved Day 7A presentation."
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+          else
+            git config user.name "galvicare-release-bot"
+            git config user.email "actions@users.noreply.github.com"
+            git add index.html
+            git commit -m "Day 7A: persist approved customer experience to QA"
+            git push origin HEAD:qa-revamped-galvicare-0-5
+            echo "committed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run complete Day 7A gate against persisted enhanced source
         run: |
           node --check worker/worker.js
           node --check scripts/verify-qa-runtime.mjs
@@ -55,19 +71,6 @@ jobs:
           npm test
           npm run stabilization:gate
           git diff --check
-
-      - name: Persist verified Day 7A frontend to QA
-        shell: bash
-        run: |
-          if git diff --quiet -- index.html; then
-            echo "QA index.html already contains the approved Day 7A presentation."
-          else
-            git config user.name "galvicare-release-bot"
-            git config user.email "actions@users.noreply.github.com"
-            git add index.html
-            git commit -m "Day 7A: finalize customer experience for Human E2E"
-            git push origin HEAD:qa-revamped-galvicare-0-5
-          fi
 
       - name: Deploy existing QA Worker
         uses: cloudflare/wrangler-action@v3
@@ -87,8 +90,7 @@ jobs:
           {
             echo "## GalviCare Day 7A Final QA PASS"
             echo ""
-            echo "- Fresh QA source SHA: \`${GITHUB_SHA}\`"
-            echo "- Approved customer-experience enhancements: PASS"
+            echo "- QA source unified on approved enhanced index.html: PASS"
             echo "- Complete source gate: PASS"
             echo "- QA Worker deployment: PASS"
             echo "- Live runtime verification: PASS"
