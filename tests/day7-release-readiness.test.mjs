@@ -23,9 +23,11 @@ test('Day 7 exact-product entitlement no longer inherits GalviShot continuity', 
 });
 
 test('Day 7 Worker accepts GalviSight and GalviPath product names for paid-return verification', () => {
-  const paymentNames = block(worker, 'function paymentProductName', 'function stripeCheckoutSessionUrl');
-  assert.match(paymentNames, /galvisight[\s\S]*return 'GalviSight'/);
-  assert.match(paymentNames, /galvipath[\s\S]*return 'GalviPath'/);
+  const aliases = block(worker, 'const PAYMENT_PRODUCT_ALIASES', 'const DAY7A_RUNTIME_MARKER');
+  assert.match(aliases, /galvisight: 'GalviSight'/);
+  assert.match(aliases, /galvi_sight: 'GalviSight'/);
+  assert.match(aliases, /galvipath: 'GalviPath'/);
+  assert.match(aliases, /galvi_path: 'GalviPath'/);
 });
 
 test('Day 7 downstream handler retains QA override and unauthorized HTTP 402', () => {
@@ -108,6 +110,40 @@ test('Day 7 product print controls are present', () => {
   assert.match(html, /id="print-galvishot"/);
   assert.match(html, /id="print-galvisight"/);
   assert.match(html, /Print \/ Save GalviPath/);
+});
+
+
+
+test('Day 7A payment-product aliases use one authoritative Worker contract', () => {
+  assert.match(worker, /const PAYMENT_PRODUCT_ALIASES = Object\.freeze\(\{/);
+  assert.match(worker, /galviscore: 'GalviScore'/);
+  assert.match(worker, /galvishot: 'GalviShot'/);
+  assert.match(worker, /galvisight: 'GalviSight'/);
+  assert.match(worker, /galvipath: 'GalviPath'/);
+
+  const paymentNameFn = block(
+    worker,
+    'function paymentProductName',
+    'function stripeCheckoutSessionUrl'
+  );
+
+  assert.match(paymentNameFn, /PAYMENT_PRODUCT_ALIASES\[normalized\] \|\| ''/);
+});
+
+test('Day 7A health_check exposes a deployment fingerprint and all paid-return products', () => {
+  assert.match(worker, /const DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1';/);
+
+  const day1Handler = block(
+    worker,
+    'async function handleDay1Action',
+    'async function handleDay2Action'
+  );
+
+  assert.match(day1Handler, /runtime_marker: DAY7A_RUNTIME_MARKER/);
+  assert.match(day1Handler, /payment_return_products: Array\.from\(new Set\(Object\.values\(PAYMENT_PRODUCT_ALIASES\)\)\)/);
+  assert.match(day1Handler, /payment_return_aliases: PAYMENT_PRODUCT_ALIASES/);
+  assert.match(day1Handler, /environment: GALVICARE_BUILD\.environment/);
+  assert.match(day1Handler, /branch: GALVICARE_BUILD\.branch/);
 });
 
 test('Day 7 approved GalviClinic destination remains unchanged', () => {
