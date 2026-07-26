@@ -1,0 +1,62 @@
+name: Day 7A Clinical Promotion
+
+on:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - "docs/day7a-promotion/**"
+      - ".github/workflows/day7a-clinical-promotion.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: day7a-clinical-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout QA
+        uses: actions/checkout@v4
+        with:
+          ref: qa-revamped-galvicare-0-5
+          fetch-depth: 0
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Reassemble and validate promotion logic
+        shell: bash
+        run: |
+          cat docs/day7a-promotion/promo-part-01.txt \
+              docs/day7a-promotion/promo-part-02.txt \
+              docs/day7a-promotion/promo-part-03.txt \
+              docs/day7a-promotion/promo-part-04.txt \
+              > scripts/promote-day7a-clinical-enhancements.mjs
+          node --check scripts/promote-day7a-clinical-enhancements.mjs
+      - name: Promote exact Day 7A enhancement source
+        run: node scripts/promote-day7a-clinical-enhancements.mjs
+      - name: Pre-commit integrity gate
+        shell: bash
+        run: |
+          node --check worker/worker.js
+          node --test tests/day7a-clinical-experience.test.mjs
+          git diff --check
+          grep -q "Your Digital Business Clinic" index.html
+          grep -q "GalviPath Check Up" index.html
+          grep -q "clinicalDimensionLanguage" worker/worker.js
+      - name: Commit promoted source of truth
+        shell: bash
+        run: |
+          rm -rf docs/day7a-promotion
+          rm -f scripts/promote-day7a-clinical-enhancements.mjs
+          rm -f .github/workflows/day7a-clinical-promotion.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Day 7A: promote validated clinical experience enhancements"
+          git push origin HEAD:qa-revamped-galvicare-0-5
