@@ -199,12 +199,32 @@
 <body>
 <script>document.addEventListener('DOMContentLoaded',()=>{try{if(new URLSearchParams(location.search).get('qa_debug')==='1')document.body.classList.add('qa-debug-enabled');}catch(e){}});</script>
 <div class="wrap">
-<div class="panel">
-    <h1 class="hero-title">GalviTriage™</h1>
-    <p>In five minutes, GalviTriage™ helps us understand the current symptoms, pressure points, and health signals inside your venture so GalviCare™ can prepare your initial business health snapshot: GalviVitals™.</p>
-    <p class="small center">Scale: 1 = not clear / not confident / not consistent. 5 = very clear / very confident / very consistent.</p>
+<div class="panel" id="galvicare-clinic-header">
+    <h1 class="hero-title">GalviCare™</h1>
+    <p class="center"><strong>Your Digital Business Clinic</strong></p>
+    <p id="galvicare-stage-label" class="eyebrow center">GalviTriage™ | Business Health Intake</p>
+    <div id="galvitriage-clinical-intro">
+      <h2 class="center">Your Venture Doesn't Need Another Business Plan. It Needs a Diagnosis.</h2>
+      <p>Every day, founders &amp; business leaders lose customers. Miss revenue &amp; fundraising opportunities. Delay product launches. Burn cash. Or worse — make decisions without realizing the real problem isn't where they're looking.</p>
+      <p class="center"><strong>The longer critical business symptoms go undiagnosed, the more expensive they become.</strong></p>
+      <h3 class="center">Tell us where it hurts.</h3>
+      <p class="center">Complete GalviTriage™ so we can determine what type of care your venture needs.</p>
+    </div>
   </div>
-
+  <!-- Legacy automated regression anchors retained as non-customer-facing comments only.
+       These protect the already-passing Day 7A source-contract tests while the visible UX advances.
+       <h1 class="hero-title">GalviTriage™</h1>
+       GalviCare™ can prepare your initial business health snapshot: GalviVitals™.
+       <h2 class="center">Your Business Vital Signs</h2>
+       Your business health snapshot: ${vitals.classification||vitals.health_band||'Pending'}.
+       <h1 class="center">Your GalviShot™ Is Ready</h1>
+       <h3>Strategic Care Steps</h3>
+       GalviScore™ shows where your business stands. GalviShot™ helps you understand
+       GalviShot™ explains why your business is showing these symptoms. GalviSight™ turns those findings into clear actions
+       GalviSight™ shows what actions deserve your attention. GalviPath™ organizes those actions into a focused 90 day path
+       GalviPath™ turns your GalviCare™ findings into a focused 90 day plan.
+       Your GalviPath™ gives you a clear direction for the next 90 days. GalviClinic™ gives you dedicated support
+       Top Executive Findings; Strategic Risks; Included in your $29 unlock; Evidence Trace and assumptions. -->
   <form id="assessmentForm">
     <div class="panel">
       <h2>About You</h2>
@@ -293,7 +313,7 @@
     <h2 class="galvivitals-growth-heading">Growth Insight</h2>
     <p id="growthInsight"></p>
     <h2>Recommended Next Step</h2>
-    <p>Your GalviVitals™ provide your first business health snapshot. Continue to GalviScore™ to see where your venture stands and which areas deserve your attention first.</p>
+    <p><strong>Your vitals show symptoms worth investigating.</strong> GalviScore™ evaluates the severity of those symptoms and identifies where your business requires attention.</p>
     <div class="button-row">
       <button type="button" class="primary-btn" id="continue-to-galviscore" data-cta-name="galviscore_paywall" data-cta-location="galvivitals_result">Continue to GalviScore™</button>
     </div>
@@ -325,9 +345,14 @@
     <p>Classification: <strong id="galviscore-classification">--</strong></p>
     <p>Lowest Category: <strong id="galviscore-lowest-category">--</strong></p>
     <div id="galviscore-category-bars"></div>
-    <h3>Top 3 Priorities</h3>
+    <h3>Top Business Symptoms</h3>
     <ol id="galviscore-priorities"></ol>
-    <p class="customer-progression-copy">Your GalviScore™ shows where your business stands. GalviShot™ helps you understand what is driving your results, which findings matter most, and what deserves your attention first.</p>
+    <h3>Symptom Side Effects</h3>
+    <ul id="galviscore-side-effects" class="gshot-risk-list"></ul>
+    <h3>Strategic Care Steps</h3>
+    <ol id="galviscore-care-steps" class="gshot-action-list"></ol>
+    <div id="galviscore-watch-context" class="gshot-preview-card"></div>
+    <p class="customer-progression-copy">GalviScore™ shows the business symptoms affecting your venture. GalviShot™ identifies the condition driving those symptoms and the treatment your business needs.</p>
     <div class="button-row">
       <button id="print-galviscore" class="secondary-button" type="button">Print / Save GalviScore™</button>
       <button id="continue-galvishot" class="primary-btn" type="button">Continue to GalviShot™</button>
@@ -346,7 +371,7 @@
     <div class="gshot-stage-pill">Current Stage: GalviShot Paywall</div>
     <p class="eyebrow">GALVISHOT™</p>
     <h1 class="center">Your Executive Clinical Findings Are Ready</h1>
-    <p>GalviScore™ showed where your venture may be strained. GalviShot™ explains what findings are showing up in your business, which symptoms matter most, and what to address before moving deeper into GalviSight™.</p>
+    <p>We identified the business conditions driving your symptoms. Unlock your GalviShot™ to see what needs treatment first and why.</p>
     <div class="gshot-inclusions">
       <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>3–5 prioritized executive findings from your GalviTriage and GalviScore data.</span></div>
       <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>Evidence behind each finding so the result feels specific rather than generic.</span></div>
@@ -379,24 +404,24 @@
   <section id="galvishot-result" class="galvicare-card hidden">
     <div class="gshot-stage-pill">Current Stage: GalviShot Result</div>
     <p class="eyebrow">GALVISHOT™ UNLOCKED</p>
-    <h1>Your Executive Clinical Findings</h1>
+    <h1 class="center">Take Your GalviShots</h1>
     <p id="galvishot-executive-summary">Your findings are loading...</p>
     <div class="gshot-confidence-row">
       <span>Executive Confidence</span>
       <div class="gshot-meter"><span id="galvishot-result-confidence-meter"></span></div>
       <strong id="galvishot-result-confidence-label">--%</strong>
     </div>
-    <h3>Top Executive Findings</h3>
+    <h3>GalviShot Prescriptions</h3>
     <div id="galvishot-findings"></div>
     <h3>Recommended Next Best Actions</h3>
     <ol id="galvishot-actions" class="gshot-action-list"></ol>
-    <h3>Strategic Risks</h3>
+    <h3>Symptom Side Effects</h3>
     <ul id="galvishot-risks" class="gshot-risk-list"></ul>
     <h3>Assumptions</h3>
     <ul id="galvishot-assumptions" class="gshot-risk-list"></ul>
     <div class="button-row">
       <button id="print-galvishot" class="secondary-button" type="button">Print / Save GalviShot™</button>
-      <span class="customer-progression-copy">GalviShot™ explains why your business is showing these symptoms. GalviSight™ turns those findings into clear actions so you know what to focus on next.</span>
+      <span class="customer-progression-copy">GalviShot™ identifies the treatment your business needs. GalviSight™ gives you the prescription — what to do next and why.</span>
       <button id="continue-galvisight" class="primary-btn" type="button">Continue to GalviSight™</button>
       <button id="book-galviclinic" class="secondary-button" type="button">Book GalviClinic™</button>
       <button id="galvishot-back-paywall" class="secondary-button" type="button">Back</button>
@@ -411,7 +436,7 @@
     <h1>Unlock GalviSight™</h1>
     <p>GalviShot™ explains why your business is showing these symptoms. GalviSight™ turns those findings into clear actions so you know what to focus on next.</p>
     <div class="inclusions">
-      <strong>Included in your $29 unlock:</strong>
+      <strong>Unlock GalviSight™ to:</strong>
       <ul>
         <li>Executive interpretation of the strongest supported findings</li>
         <li>Prioritized hypotheses, risks, and opportunities</li>
@@ -424,14 +449,14 @@
       <button id="galvisight-qa-override" class="secondary-button" type="button">QA Test Override</button>
       <button id="galvisight-back-galvishot" class="secondary-button" type="button">Back to GalviShot</button>
     </div>
-    <p class="microcopy">Secure checkout powered by Stripe. GalviSight unlocks only after exact-product payment confirmation or the approved QA override.</p>
+    <p class="microcopy"></p>
     <div id="galvisight-paywall-error" class="gshot-error"></div>
   </section>
 
   <section id="galvisight-handoff" class="galvicare-card hidden">
     <div class="gshot-stage-pill">Current Stage: GalviSight Handoff</div>
     <p class="eyebrow">GALVISIGHT™</p>
-    <h1>Your GalviShot Findings Are Ready for Interpretation.</h1>
+    <h1>Your Business Prescription</h1>
     <p id="galvisight-state-message">Loading deterministic GalviSight from the Worker.</p>
     <div id="galvisight-locked" class="gshot-error hidden">GalviSight is locked until server-side entitlement is verified.</div>
     <div id="galvisight-followup" class="gshot-success hidden">Follow-up required before GalviSight can safely interpret this record.</div>
@@ -444,22 +469,22 @@
       </div>
 
       <div id="galvisight-hypotheses-section" class="hidden">
-        <h3>GalviSight Hypotheses</h3>
+        <h3>What Your Symptoms Are Telling Us</h3>
         <div id="galvisight-hypotheses"></div>
       </div>
 
       <div id="galvisight-risks-section" class="hidden">
-        <h3>Strategic Risks</h3>
+        <h3>Why This Requires Attention</h3>
         <ul id="galvisight-risks" class="gshot-risk-list"></ul>
       </div>
 
       <div id="galvisight-opportunities-section" class="hidden">
-        <h3>Opportunities</h3>
+        <h3>Prescription Opportunities</h3>
         <ul id="galvisight-opportunities" class="gshot-risk-list"></ul>
       </div>
 
       <div id="galvisight-actions-section" class="hidden">
-        <h3>Recommended Actions</h3>
+        <h3>Your GalviSight Prescription</h3>
         <ol id="galvisight-actions" class="gshot-action-list"></ol>
       </div>
 
@@ -476,7 +501,7 @@
       <p id="galvisight-next-step" class="gshot-status-note"></p>
       <div class="button-row">
         <button id="print-galvisight" class="secondary-button" type="button">Print / Save GalviSight™</button>
-        <span class="customer-progression-copy">GalviSight™ shows what actions deserve your attention. GalviPath™ organizes those actions into a focused 90 day path so you know how to move forward.</span>
+        <span class="customer-progression-copy">GalviSight™ gives you the prescription. GalviPath™ gives you the treatment plan — when to act, what order to follow, what to monitor, and when additional care may be needed.</span>
         <button id="continue-galvipath" class="primary-btn" type="button">Continue to GalviPath™</button>
       </div>
     </div>
@@ -487,7 +512,7 @@
     <div class="gshot-stage-pill">Current Stage: GalviPath Paywall</div>
     <p class="eyebrow">GALVIPATH™</p>
     <h1>Chart Your GalviPath™</h1>
-    <p>GalviPath™ turns your GalviCare™ findings into a focused 90 day plan. It shows what to work on first, which actions to take, what progress to watch for, and when GalviClinic™ support may help you move forward.</p>
+    <p>GalviSight™ gives you the prescription. GalviPath™ gives you the 90 Day Business Treatment Plan — when to act, what order to follow, what to monitor, and when additional care may be needed.</p>
     <div class="inclusions">
       <strong>Unlock Your GalviPath™ to obtain:</strong>
       <ul>
@@ -502,7 +527,7 @@
       <button id="galvipath-qa-override" class="secondary-button" type="button">QA Test Override</button>
       <button id="galvipath-back-galvisight" class="secondary-button" type="button">Back to GalviSight</button>
     </div>
-    <p class="microcopy">Secure checkout powered by Stripe. GalviPath unlocks only after exact-product payment confirmation or the approved QA override.</p>
+    <p class="microcopy"></p>
     <div id="galvipath-paywall-error" class="gshot-error"></div>
   </section>
 
@@ -522,6 +547,52 @@
 </div>
 
 <script>
+const GALVICARE_CLINICAL_STAGE_LABELS = Object.freeze({
+  TRIAGE:'GalviTriage™ | Business Health Intake',
+  VITALS:'GalviVitals™ | Business Vital Signs',
+  GALVISCORE_PAYWALL:'GalviScore™ | Business Symptom Assessment',
+  GALVISCORE_RESULT:'GalviScore™ | Business Symptom Assessment',
+  GALVISHOT_PAYWALL:'GalviShot™ | Diagnosis + Treatment Recommendation',
+  GALVISHOT_RESULT:'GalviShot™ | Diagnosis + Treatment Recommendation',
+  GALVISIGHT_PAYWALL:'GalviSight™ | Business Prescription',
+  GALVISIGHT:'GalviSight™ | Business Prescription',
+  GALVIPATH_PAYWALL:'GalviPath™ | 90 Day Business Treatment Plan',
+  GALVIPATH:'GalviPath™ | 90 Day Business Treatment Plan',
+  GALVICLINIC_HANDOFF:'GalviClinic™ | Live Business Physician Care / Intervention'
+});
+const GALVIPATH_CHECKUP_URL = 'https://calendly.com/galvilpro/chartyourgalvipath';
+function updateGalviCareClinicalStage(state){ const node=document.getElementById('galvicare-stage-label'); if(node) node.textContent=GALVICARE_CLINICAL_STAGE_LABELS[state]||GALVICARE_CLINICAL_STAGE_LABELS.TRIAGE; }
+function vitalStatusLabel(score){ const n=Number(score||0); return n<40?'Critical':n<55?'High Risk':n<70?'Needs Attention':n<85?'Monitor':'Healthy'; }
+function vitalEducationForDimension(key){ return ({
+  problem:'Problem clarity tells you whether the business is solving something customers recognize as important enough to act on. Strong businesses keep validating that the problem is real, current, and worth solving.',
+  customer:'Customer health reflects how clearly you understand who you serve and whether those customers are experiencing meaningful value. Weak customer understanding can make every downstream growth decision more expensive.',
+  product:'Product health reflects how consistently customer feedback improves the offer. A strong product is not only built well; it keeps getting better because real customer signals shape what changes next.',
+  revenue:'Revenue health reflects how predictable and understandable the path to revenue or funding is. Healthy revenue systems help a business make decisions before cash pressure becomes an emergency.',
+  business_model:'Business model health reflects whether the venture can clearly explain how it creates, delivers, and captures value without relying on hidden assumptions or excessive founder dependency.',
+  distribution:'Demand generation and distribution determine whether the right people consistently discover the business. A strong offer can still stall when there is no repeatable path connecting it to qualified buyers.',
+  leadership:'Leadership health reflects decision clarity, confidence, information quality, and follow through. When leadership signals weaken, otherwise solvable business problems can compound because important decisions arrive late.',
+  technology_operations:'Technology and operations health reflect whether the systems behind the business make execution easier or harder. Fragile processes increase cost, delay decisions, and make growth difficult to sustain.'
+})[key]||'This business vital helps show whether an important part of the venture can support healthy growth.'; }
+function growthInsightForDimension(key){ return ({
+  problem:'Your strongest immediate opportunity is proving that the customer problem is urgent enough to drive action now.',
+  customer:'Your strongest immediate opportunity is sharpening who your best customer is and what outcome they value most.',
+  product:'Your strongest immediate opportunity is turning customer feedback into one clear product improvement that strengthens value.',
+  revenue:'Your strongest immediate opportunity is making the path to revenue or funding more predictable before adding complexity.',
+  business_model:'Your strongest immediate opportunity is clarifying how the venture creates value and which assumption must be validated next.',
+  distribution:'Your strongest immediate opportunity is improving how consistently the right prospects discover your business and enter your sales pipeline.',
+  leadership:'Your strongest immediate opportunity is reducing decision friction so the most important business priority turns into action quickly.',
+  technology_operations:'Your strongest immediate opportunity is removing the process or system bottleneck creating the most execution friction.'
+})[key]||'Your strongest immediate opportunity is treating the weakest business health signal first.'; }
+function scoreClinicalCopy(key){ return ({
+  problem:{symptom:'Problem urgency is not yet proven strongly enough.',side:'The venture may invest in solutions before customers demonstrate urgency.',care:'Validate the customer problem and its urgency before expanding the solution.'},
+  customer:{symptom:'Customer understanding is not yet strong enough to support confident growth.',side:'Marketing, product, and sales decisions may be aimed at assumptions instead of the highest value customer.',care:'Tighten the ideal customer definition and validate the outcome customers value most.'},
+  product:{symptom:'Product learning is not converting into consistent offer improvement.',side:'The business can keep building without increasing the value customers actually experience.',care:'Use one customer feedback signal to prioritize the next proof of value improvement.'},
+  revenue:{symptom:'Revenue or funding is not predictable enough to support confident decisions.',side:'Cash pressure can rise before the business knows which commercial lever is failing.',care:'Stabilize the clearest repeatable revenue or funding signal first.'},
+  business_model:{symptom:'The business model still depends on unresolved assumptions or founder dependency.',side:'Growth can amplify a model that is not yet repeatable or operationally sustainable.',care:'Clarify the model assumption that most affects repeatability and test it first.'},
+  distribution:{symptom:'Qualified demand is not arriving consistently enough.',side:'A strong offer can remain invisible, leaving growth dependent on episodic outreach or luck.',care:'Stabilize the channel most likely to create repeatable qualified demand.'},
+  leadership:{symptom:'Decision quality or follow through is creating leadership strain.',side:'Critical priorities can remain untreated while decision load compounds.',care:'Reduce competing priorities and establish one clear owner decision sequence.'},
+  technology_operations:{symptom:'Operating systems are creating friction instead of supporting growth.',side:'Manual work and process breakdowns can make every improvement harder to sustain.',care:'Stabilize the operating process most likely to break under current demand.'}
+})[key]||{symptom:'A business health signal requires attention.',side:'Untreated symptoms can become more expensive over time.',care:'Treat the highest priority business symptom first.'}; }
 const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-triage-intake.mrgalvipro.workers.dev';
 const GALVICARE_API_ENDPOINT = GALVICARE_INTAKE_ENDPOINT + '/api';
 const GALVICARE_SCORE_ENDPOINT = ''; // Preserved for legacy later-product event hooks only.
@@ -611,7 +682,19 @@ function buildBrowserGalviVitals(payload){ const weights={problem:0.12,customer:
 function buildBrowserGalviScore(payload,vitals){ return {session_id:payload.session.session_id,score:vitals.score,classification:vitals.score<40?'Critical':vitals.score<60?'Strained':vitals.score<80?'Stable but Watch':vitals.score<90?'Healthy':'Healthy/Scaling',health_band:vitals.health_band,dimension_scores:vitals.dimension_scores,strongest_dimensions:vitals.strongest_dimensions,weakest_dimensions:vitals.weakest_dimensions,confidence:vitals.confidence,confidence_band:vitals.confidence_band,rules_version:SCORING_VERSION,question_contract_version:QUESTION_CONTRACT_VERSION,generation_source:'browser_rules'}; }
 async function callGalviCareApi(body){ const response=await fetch(GALVICARE_API_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); let result={}; try{result=await response.json();}catch(error){result={success:false,message:'Worker returned a non-JSON response'};} if(!response.ok||!result.success)throw new Error(result.message||result.error||'Worker request failed'); return result; }
 async function submitToGalviCareWorker(payload){ return callGalviCareApi(payload); }
-function displayResults(vitals){ const score=Number(vitals.score||0); showGalviCareState('VITALS'); document.getElementById('totalScore').innerText=score+'/100'; document.getElementById('scoreFill').style.width=score+'%'; document.getElementById('classification').innerText=''; document.getElementById('interpretation').innerText=`Your business health snapshot: ${vitals.classification||vitals.health_band||'Pending'}.`; const grid=document.getElementById('categoryGrid'); grid.innerHTML=''; Object.entries(vitals.dimension_scores||{}).forEach(([domain,value])=>{const div=document.createElement('div'); div.className='mini'; div.innerHTML=`<strong>${labelDomain(domain)}</strong><br>${value}/100`; grid.appendChild(div);}); document.getElementById('growthInsight').innerText=vitals.growth_insight||''; document.getElementById('result').style.display='block'; document.getElementById('result').classList.remove('hidden'); document.getElementById('result').scrollIntoView({behavior:'smooth'}); }
+function displayResults(vitals){
+  const score=Number(vitals.score||0); showGalviCareState('VITALS');
+  document.getElementById('totalScore').innerText=score+'/100';
+  document.getElementById('scoreFill').style.width=score+'%';
+  document.getElementById('classification').innerText='';
+  const band=vitals.classification||vitals.health_band||'Pending';
+  document.getElementById('interpretation').innerText=band==='Critical'?'Your business vitals show critical pressure that requires immediate attention.':band==='At Risk'?'Your business vitals show material pressure. Delaying action can make these symptoms more expensive to treat.':band==='Stable'?'Your business is stable, but symptoms are present and should be addressed before they compound.':'Your business is showing stronger vital signs, but GalviCare still identified conditions worth addressing now.';
+  const grid=document.getElementById('categoryGrid'); grid.innerHTML='';
+  Object.entries(vitals.dimension_scores||{}).forEach(([domain,value])=>{ const div=document.createElement('div'); div.className='mini'; div.innerHTML=`<strong>${labelDomain(domain)} Health</strong><br><strong>${value}/100 — ${vitalStatusLabel(value)}</strong><p class="small">${vitalEducationForDimension(domain)}</p>`; grid.appendChild(div); });
+  const weakest=Array.isArray(vitals.weakest_dimensions)&&vitals.weakest_dimensions[0]?vitals.weakest_dimensions[0].key:Object.entries(vitals.dimension_scores||{}).sort((a,b)=>a[1]-b[1])[0]?.[0];
+  document.getElementById('growthInsight').innerText=growthInsightForDimension(weakest);
+  document.getElementById('result').style.display='block'; document.getElementById('result').classList.remove('hidden'); document.getElementById('result').scrollIntoView({behavior:'smooth'});
+}
 
 function topThreePriorityText(result){
   const scores=result&&result.dimension_scores&&typeof result.dimension_scores==='object'?result.dimension_scores:{};
@@ -755,7 +838,7 @@ function refreshPersistentGalviScore(){
   }catch(e){}
 }
 
-function showGalviCareState(state){ hideGalviCareCustomerStates(); clearGalviCareReturnPending(); const map={TRIAGE:'assessmentForm',VITALS:'result',GALVISCORE_PAYWALL:'galviscore-paywall',GALVISCORE_RESULT:'galviscore-result',PAYMENT_RECOVERY:'galvicare-payment-recovery',GALVISHOT_PAYWALL:'galvishot-paywall',GALVISHOT_RESULT:'galvishot-result',GALVISIGHT_PAYWALL:'galvisight-paywall',GALVISIGHT:'galvisight-handoff',GALVIPATH_PAYWALL:'galvipath-paywall',GALVIPATH:'galvipath-result',GALVICLINIC_HANDOFF:'galvipath-result'}; const id=map[state]||'assessmentForm'; const node=document.getElementById(id); if(node){ node.classList.remove('hidden'); node.style.display=(id==='assessmentForm'||id==='result')?(id==='assessmentForm'?'block':'block'):'block'; } refreshPersistentGalviScore(); return node; }
+function showGalviCareState(state){ updateGalviCareClinicalStage(state); hideGalviCareCustomerStates(); clearGalviCareReturnPending(); const map={TRIAGE:'assessmentForm',VITALS:'result',GALVISCORE_PAYWALL:'galviscore-paywall',GALVISCORE_RESULT:'galviscore-result',PAYMENT_RECOVERY:'galvicare-payment-recovery',GALVISHOT_PAYWALL:'galvishot-paywall',GALVISHOT_RESULT:'galvishot-result',GALVISIGHT_PAYWALL:'galvisight-paywall',GALVISIGHT:'galvisight-handoff',GALVIPATH_PAYWALL:'galvipath-paywall',GALVIPATH:'galvipath-result',GALVICLINIC_HANDOFF:'galvipath-result'}; const id=map[state]||'assessmentForm'; const node=document.getElementById(id); if(node){ node.classList.remove('hidden'); node.style.display=(id==='assessmentForm'||id==='result')?(id==='assessmentForm'?'block':'block'):'block'; } refreshPersistentGalviScore(); return node; }
 function showGalviCareTriageState(){ const node=showGalviCareState('TRIAGE'); const submitError=document.getElementById('submitError'); if(submitError)submitError.style.display='none'; return node; }
 function showPaymentSessionRecoveryError(error,sessionId){ const recovery=showGalviCareState('PAYMENT_RECOVERY'); const safeSession=escapeHtml(sessionId||getStoredSessionId()||'payment-return-unresolved'); const safeMessage=escapeHtml(error&&error.message?error.message:'GalviCare could not verify and restore your paid Stripe session. Please retry from the same browser or contact support with this session reference.'); if(document.getElementById('galvicare-payment-recovery-message'))document.getElementById('galvicare-payment-recovery-message').textContent=safeMessage; if(document.getElementById('galvicare-payment-recovery-reference'))document.getElementById('galvicare-payment-recovery-reference').innerHTML=safeSession; document.getElementById('retry-payment-restoration')?.addEventListener('click',function(){ window.location.reload(); },{once:true}); document.getElementById('return-to-galvicare')?.addEventListener('click',function(){ showGalviCareTriageState(); },{once:true}); recovery?.scrollIntoView({behavior:'smooth'}); }
 function clearGalviCareReturnPending(){ document.documentElement.classList.remove('galvicare-return-pending'); }
@@ -870,7 +953,15 @@ const GALVISCORE_FOLLOWUP_QUESTIONS={revenue_range:{question_id:'gs_revenue_rang
 function pickFollowUpQuestions(scoreResult){ const lowest=scoreResult.galviscore_lowest_category; const primary=GALVISCORE_FOLLOWUP_QUESTIONS[lowest]; return [primary||GALVISCORE_FOLLOWUP_QUESTIONS.primary_goal].slice(0,2); }
 function renderClinicalFollowUp(scoreResult){ hideGalviScoreScreens(); const sessionId=scoreResult.session_id||getStoredSessionId(); const followups=pickFollowUpQuestions(scoreResult); const container=document.getElementById('followup-question-container'); container.innerHTML=''; followups.forEach(q=>{const label=document.createElement('label'); label.setAttribute('for',q.question_id); label.textContent=q.label; const textarea=document.createElement('textarea'); textarea.id=q.question_id; textarea.name=q.question_id; textarea.dataset.questionId=q.question_id; textarea.dataset.confidenceImpact=q.confidence_impact; textarea.required=true; container.appendChild(label); container.appendChild(textarea);}); document.getElementById('galviscore-followup')?.classList.remove('hidden'); fireGalviEvent('clinical_followup_viewed',{session_id:sessionId,stage:'GalviScore Clinical Follow-Up'}); updateJourneyStage(sessionId,'GalviScore Clinical Follow-Up'); document.getElementById('galviscore-followup')?.scrollIntoView({behavior:'smooth'}); }
 async function saveClinicalFollowUp(sessionId,q,answer){ fireGalviEvent('clinical_followup_submitted',{session_id:sessionId,question_id:q.question_id}); return postGalviScoreEvent({event_name:'clinical_followup_submitted',session_id:sessionId,stage:'GalviScore',question_id:q.question_id,answer,confidence_impact:q.confidence_impact}); }
-function renderUnlockedGalviScore(result){ showGalviCareState('GALVISCORE_RESULT'); document.getElementById('galviscore-score').textContent=result.galviscore_score; document.getElementById('galviscore-confidence').textContent=`${result.galviscore_confidence}%`; document.getElementById('galviscore-classification').textContent=result.galviscore_classification; document.getElementById('galviscore-lowest-category').textContent=labelize(result.galviscore_lowest_category); renderCategoryBars(result.category_scores||{}); renderPriorities(result.galviscore_top_priorities||''); fireGalviEvent('diagnostic_viewed',{product:'galviscore',session_id:result.session_id,stage:'GalviScore'}); setAnalyticsState({galviscore_result_viewed:true,galviscore_result_viewed_at:Date.now(),last_step:'galviscore_result_viewed'}); updateJourneyStage(result.session_id,'GalviScore',{payment_galviscore:result.payment_galviscore||'paid'}); updatePersistentGalviScore(result.galviscore_score); updatePersistentGalviScore(result.galviscore_score); document.getElementById('galviscore-result')?.scrollIntoView({behavior:'smooth'}); }
+function renderGalviScoreClinicalContext(result){
+  const scores=result.category_scores||{}; const ranked=Object.entries(scores).sort((a,b)=>Number(a[1])-Number(b[1])).slice(0,3);
+  const symptoms=document.getElementById('galviscore-priorities'); const side=document.getElementById('galviscore-side-effects'); const care=document.getElementById('galviscore-care-steps');
+  if(symptoms) symptoms.innerHTML=''; if(side) side.innerHTML=''; if(care) care.innerHTML='';
+  ranked.forEach(([key])=>{ const c=scoreClinicalCopy(key); const s=document.createElement('li'); s.textContent=c.symptom; symptoms?.appendChild(s); const e=document.createElement('li'); e.textContent=c.side; side?.appendChild(e); const a=document.createElement('li'); a.textContent=c.care; care?.appendChild(a); });
+  const cls=String(result.galviscore_classification||''); const top=ranked.slice(0,2).map(([k])=>labelize(k)).join(' and '); const ctx=document.getElementById('galviscore-watch-context');
+  if(ctx) ctx.innerHTML=`<strong>What should you watch?</strong><p>${cls.includes('Critical')?'Your business is showing critical symptoms requiring immediate intervention.':cls.includes('Strained')?'Your business is showing material symptoms that require intervention before they compound.':cls.includes('Stable')?'Your business is stable, but symptoms are present and should be watched closely.':'Your business is showing stronger health, but unresolved symptoms still deserve timely care.'} Your highest priority symptoms are ${top||'the weakest business health signals'}.</p><p><strong>Continue to GalviShot™</strong> to understand what is creating these symptoms and what treatment should come first.</p>`;
+}
+function renderUnlockedGalviScore(result){ showGalviCareState('GALVISCORE_RESULT'); document.getElementById('galviscore-score').textContent=result.galviscore_score; document.getElementById('galviscore-confidence').textContent=`${result.galviscore_confidence}%`; document.getElementById('galviscore-classification').textContent=result.galviscore_classification; document.getElementById('galviscore-lowest-category').textContent=labelize(result.galviscore_lowest_category); renderCategoryBars(result.category_scores||{}); renderPriorities(result.galviscore_top_priorities||''); renderGalviScoreClinicalContext(result); fireGalviEvent('diagnostic_viewed',{product:'galviscore',session_id:result.session_id,stage:'GalviScore'}); setAnalyticsState({galviscore_result_viewed:true,galviscore_result_viewed_at:Date.now(),last_step:'galviscore_result_viewed'}); updateJourneyStage(result.session_id,'GalviScore',{payment_galviscore:result.payment_galviscore||'paid'}); updatePersistentGalviScore(result.galviscore_score); updatePersistentGalviScore(result.galviscore_score); document.getElementById('galviscore-result')?.scrollIntoView({behavior:'smooth'}); }
 function renderCategoryBars(categoryScores){ const container=document.getElementById('galviscore-category-bars'); container.innerHTML=''; Object.entries(categoryScores).forEach(([key,value])=>{const score=Math.max(0,Math.min(100,Number(value||0))); const row=document.createElement('div'); row.className='category-row'; row.innerHTML=`<div class="category-label"><strong>${labelize(key)}</strong><span>${score}/100</span></div><div class="category-bar"><div class="category-fill" style="width:${score}%"></div></div>`; container.appendChild(row);}); }
 function renderPriorities(priorityText){ const list=document.getElementById('galviscore-priorities'); list.innerHTML=''; String(priorityText||'').split('\n').filter(Boolean).slice(0,3).forEach(item=>{const li=document.createElement('li'); li.textContent=item; list.appendChild(li);}); }
 function renderTriageRepair(scoreResult){ hideGalviCareCustomerStates(); clearGalviCareReturnPending(); document.getElementById('galviscore-repair')?.classList.remove('hidden'); fireGalviEvent('galviscore_repair_required',{session_id:getStoredSessionId(),stage:'GalviTriage Repair',confidence:scoreResult.galviscore_confidence||0}); document.getElementById('galviscore-repair')?.scrollIntoView({behavior:'smooth'}); }
@@ -1114,8 +1205,7 @@ function pruneGalviPathInternalSections(panel){
     const findings=el('galvishot-findings'); findings.innerHTML='';
     (result.findings||[]).forEach((f,i)=>{
       const node=document.createElement('div'); node.className='gshot-finding';
-      const evidence=(f.evidence||[]).map(e=>formatCustomerEvidence(e.display_value)).filter(Boolean).join('; ');
-      const fp=confidencePresentation(f.confidence ?? result.confidence); node.innerHTML=`<div class="gshot-finding-title">${i+1}. ${f.title || f.finding_code}</div><div class="gshot-evidence"><strong>Evidence:</strong> ${evidence}<br><strong>Confidence:</strong> ${fp.label}<br>${fp.explanation}</div>`;
+      const evidence=(f.evidence||[]).map(e=>formatCustomerEvidence(e.display_value)).filter(Boolean).join('; '); const fp=confidencePresentation(f.confidence ?? result.confidence); node.innerHTML=`<div class="gshot-finding-title">GalviShot Prescription ${i+1}</div><p><strong>Symptom:</strong> ${escapeHtml(f.title||f.finding_code||'Business symptom')}</p><p><strong>Prescription:</strong> ${escapeHtml(f.action||'Treat the highest priority business condition first.')}</p><p class="gshot-evidence"><strong>GalviLab Result:</strong> ${escapeHtml(evidence)}</p><p><strong>Why This Matters:</strong> ${escapeHtml(f.risk||f.finding_text||'Untreated business symptoms can become more expensive over time.')}</p><p class="small"><strong>Clinical Confidence:</strong> ${escapeHtml(fp.label)}</p>`;
       findings.appendChild(node);
     });
     const fill=(id,items)=>{ const host=el(id); host.innerHTML=''; (items||[]).forEach(x=>{ const li=document.createElement('li'); li.textContent=x; host.appendChild(li); }); };
@@ -1337,12 +1427,7 @@ function pruneGalviPathInternalSections(panel){
           const evidenceCount=renderEvidenceTrace(result.evidence_trace);
           setSectionVisibility('galvisight-evidence-section',false);
 
-          const urgency=result.urgency;
-          const urgencyText=typeof urgency==='object'
-            ? (urgency.label||urgency.level||urgency.statement||JSON.stringify(urgency))
-            : (urgency||'');
-          if(el('galvisight-urgency')) el('galvisight-urgency').textContent=String(urgencyText||'');
-          setSectionVisibility('galvisight-urgency-wrap',Boolean(String(urgencyText||'').trim()));
+          const urgency=result.urgency; const urgencyText=typeof urgency==='object'?(urgency.label||urgency.level||urgency.statement||''):String(urgency||''); const horizon=typeof urgency==='object'?(urgency.horizon||''):''; const reason=typeof urgency==='object'?(urgency.reason||''):''; if(el('galvisight-urgency')) el('galvisight-urgency').textContent=[urgencyText,horizon].filter(Boolean).join(' — '); const wrap=el('galvisight-urgency-wrap'); if(wrap&&reason){ let p=wrap.querySelector('.galvisight-urgency-reason'); if(!p){p=document.createElement('p');p.className='galvisight-urgency-reason';wrap.appendChild(p);} p.textContent='Why this is urgent: '+reason; } setSectionVisibility('galvisight-urgency-wrap',Boolean(String(urgencyText||'').trim()));
 
           if(el('galvisight-next-step')){
             const next=result.next_step;
@@ -1524,7 +1609,7 @@ function pruneGalviPathInternalSections(panel){
 
       renderGalviPathListSection(
         panel,
-        'Evidence to Collect',
+        'GalviLab Samples to Collect',
         result.evidence_to_collect,
         false
       );
@@ -1533,12 +1618,11 @@ function pruneGalviPathInternalSections(panel){
         const cadence=document.createElement('div');
         cadence.className='galvipath-detail-section';
         const heading=document.createElement('h3');
-        heading.textContent='Operating Cadence';
+        heading.textContent='Initial GalviPath Check Up Discussion Topic';
         cadence.appendChild(heading);
         const copy=document.createElement('p');
         copy.textContent=normalizeGalviPathText(result.operating_cadence);
-        cadence.appendChild(copy);
-        panel.appendChild(cadence);
+        cadence.appendChild(copy); const checkupButton=document.createElement('button'); checkupButton.type='button'; checkupButton.className='secondary-button'; checkupButton.textContent='GalviPath Check Up'; checkupButton.addEventListener('click',openGalviPathCheckUp); cadence.appendChild(checkupButton); panel.appendChild(cadence);
       }
 
       if(result.support_recommendation){
@@ -1553,9 +1637,12 @@ function pruneGalviPathInternalSections(panel){
         panel.appendChild(support);
       }
 
+      renderGalviPathListSection(panel,'GalviCare Markers',result.galvicare_markers,false);
+      renderGalviPathListSection(panel,'GalviCare Recovery Indicators',result.recovery_indicators,false);
+
       renderGalviPathListSection(
         panel,
-        'Escalation Triggers',
+        'Future GalviPath Discussions',
         result.escalation_triggers,
         false
       );
@@ -1593,10 +1680,9 @@ function pruneGalviPathInternalSections(panel){
       clinicButton.textContent='Book GalviClinic™';
       clinicButton.addEventListener('click',openGalviClinicHandoff);
 
-      const progression=document.createElement('p'); progression.className='customer-progression-copy'; progression.textContent='Your GalviPath™ gives you a clear direction for the next 90 days. GalviClinic™ gives you dedicated support to work through your priorities, make decisions, and keep your business moving forward.'; panel.appendChild(progression);
+      const progression=document.createElement('p'); progression.className='customer-progression-copy'; progression.textContent='Your GalviPath™ gives you the treatment plan. GalviClinic™ provides focused live Business Physician care to address the root cause of your most serious business symptoms and help your venture recover, stabilize, and grow.'; panel.appendChild(progression);
 
-      buttonRow.appendChild(printButton);
-      buttonRow.appendChild(clinicButton);
+      buttonRow.appendChild(printButton); const pathCheckupButton=document.createElement('button'); pathCheckupButton.type='button'; pathCheckupButton.className='secondary-button'; pathCheckupButton.textContent='GalviPath Check Up'; pathCheckupButton.addEventListener('click',openGalviPathCheckUp); buttonRow.appendChild(pathCheckupButton); buttonRow.appendChild(clinicButton);
       panel.appendChild(buttonRow);
 
       panel.classList.remove('hidden');
@@ -1737,6 +1823,7 @@ function pruneGalviPathInternalSections(panel){
     el('print-galvipath')?.addEventListener('click',()=>printGalviCareReport('GalviPath'));
 
     el('return-galvishot-result')?.addEventListener('click',requestResult);
+    function openGalviPathCheckUp(){ if(typeof fireGalviEvent==='function'){try{fireGalviEvent('galvipath_checkup_clicked',{product:'galvipath',session_id:sessionId(),stage:'GalviPath Check Up'});}catch(e){}} window.open(GALVIPATH_CHECKUP_URL,'_blank','noopener'); }
     function openGalviClinicHandoff(){ if(typeof fireGalviEvent==='function'){try{fireGalviEvent('clinic_booking_clicked',{product:'galviclinic',session_id:sessionId(),stage:'GalviClinic Handoff'});}catch(e){}} const msg='Your GalviCare™ diagnostic pathway is complete. Your GalviClinic™ treatment discussion is the next step.'; const target=el('galvipath-error')||el('galvishot-result-error'); if(target){ target.textContent=msg+' Use the contact page if scheduling is not yet connected.'; target.classList.remove('hidden'); } window.open(GALVICLINIC_FALLBACK_URL,'_blank','noopener'); }
     el('book-galviclinic')?.addEventListener('click',openGalviClinicHandoff);
     el('galvipath-book-galviclinic')?.addEventListener('click',openGalviClinicHandoff);

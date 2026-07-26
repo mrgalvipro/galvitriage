@@ -1,8 +1,0 @@
-/home/runner/work/galvitriage/galvitriage/scripts/promote-day7a-clinical-enhancements.mjs:239
-}`);
-   ^
-
-SyntaxError: Unexpected token ';'
-    at checkSyntax (node:internal/main/check_syntax:74:5)
-
-Node.js v22.23.1

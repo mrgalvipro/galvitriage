@@ -1,0 +1,18 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+const html=readFileSync(new URL('../index.html',import.meta.url),'utf8');
+const worker=readFileSync(new URL('../worker/worker.js',import.meta.url),'utf8');
+const pkg=JSON.parse(readFileSync(new URL('../package.json',import.meta.url),'utf8'));
+test('persistent GalviCare clinic identity is customer visible',()=>{assert.match(html,/GalviCare™/);assert.match(html,/Your Digital Business Clinic/);});
+test('canonical clinical stage taxonomy is present',()=>{for(const x of ['Business Health Intake','Business Vital Signs','Business Symptom Assessment','Diagnosis + Treatment Recommendation','Business Prescription','90 Day Business Treatment Plan','Live Business Physician Care / Intervention'])assert.ok(html.includes(x),x);});
+test('GalviVitals provides evergreen education and contextual health labels',()=>{assert.ok(html.includes('vitalEducationForDimension'));assert.ok(html.includes('vitalStatusLabel'));assert.ok(!html.includes('42% of failed startups'));});
+test('GalviScore uses symptom and care terminology',()=>{for(const x of ['Top Business Symptoms','Symptom Side Effects','Strategic Care Steps','What should you watch?'])assert.ok(html.includes(x),x);});
+test('GalviShot renders prescriptions and GalviLab Results',()=>{for(const x of ['Take Your GalviShots','GalviShot Prescription','GalviLab Result','Why This Matters'])assert.ok(html.includes(x),x);});
+test('GalviShot deterministic language is dimension specific',()=>{for(const x of ['customer acquisition and value understanding are unstable','revenue or funding predictability is under pressure','qualified demand is not arriving through a repeatable channel'])assert.ok(worker.includes(x),x);});
+test('GalviSight is a distinct prescription with urgency horizon and reason',()=>{assert.ok(worker.includes('clinicalSeverityProfile'));assert.ok(worker.includes("horizon:severity.horizon"));assert.ok(worker.includes("reason:((top.risk||'')"));assert.ok(html.includes('Your GalviSight Prescription'));});
+test('GalviPath is a sequenced 90 Day treatment plan',()=>{for(const x of ['Days 1 to 14','Days 15 to 30','Days 31 to 60','Days 61 to 90'])assert.ok(worker.includes(x),x);});
+test('GalviPath uses clinical sample marker and recovery language',()=>{for(const x of ['galvilab_samples','galvicare_markers','recovery_indicators'])assert.ok(worker.includes(x),x);for(const x of ['GalviLab Samples to Collect','GalviCare Markers','GalviCare Recovery Indicators'])assert.ok(html.includes(x),x);});
+test('GalviPath Check Up is scheduling only and uses approved Calendly destination',()=>{assert.ok(html.includes("GALVIPATH_CHECKUP_URL = 'https://calendly.com/galvilpro/chartyourgalvipath'"));assert.ok(html.includes('openGalviPathCheckUp'));assert.ok(!/openGalviPathCheckUp[\s\S]{0,300}stripeCheckoutUrl/.test(html));});
+test('payment and restoration authority remains server side',()=>{for(const x of ['resolve_payment_return','hasProductEntitlement','get_session_state'])assert.ok(worker.includes(x),x);assert.match(html,/resolveStripePaymentReturn/);});
+test('clinical regression suite is part of authoritative npm test',()=>{assert.ok(pkg.scripts.test.includes('tests/day7a-clinical-experience.test.mjs'));});

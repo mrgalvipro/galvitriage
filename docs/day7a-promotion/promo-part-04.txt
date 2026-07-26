@@ -1,7 +1,0 @@
-  ['Your Digital Business Clinic','clinic identity'],['Top Business Symptoms','score symptoms'],['Take Your GalviShots','shot heading'],['GalviLab Result','lab result'],['Your GalviSight Prescription','sight prescription'],['GalviPath Check Up','path checkup'],['GalviCare Recovery Indicators','recovery indicators']
-]) ensureIncludes(html,needle,label);
-for (const [needle,label] of [['clinicalDimensionLanguage','worker clinical library'],['clinicalSeverityProfile','worker urgency'],['galvicare_markers','worker markers'],['recovery_indicators','worker recovery']]) ensureIncludes(worker,needle,label);
-write('index.html', html);
-write('worker/worker.js', worker);
-write('package.json', JSON.stringify(pkg,null,2)+'\n');
-console.log('DAY 7A clinical enhancement promotion applied.');
