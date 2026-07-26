@@ -29,6 +29,7 @@ jobs:
         run: npm install --ignore-scripts
 
       - name: Run Worker syntax and QA tests
+        # Authoritative gate: test the committed QA source directly; do not mutate source here.
         run: npm run stabilization:gate
 
       - name: Reject committed secret files
