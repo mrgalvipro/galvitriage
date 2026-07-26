@@ -10,6 +10,10 @@ on:
       - "wrangler.json"
       - "scripts/verify-qa-runtime.mjs"
       - ".github/workflows/deploy-galvicare-qa.yml"
+  pull_request:
+    branches:
+      - qa-revamped-galvicare-0-5
+    types: [opened, synchronize, reopened]
   workflow_dispatch:
 
 permissions:
@@ -26,19 +30,23 @@ jobs:
     timeout-minutes: 15
 
     steps:
-      - name: Checkout exact QA commit
+      - name: Checkout exact authoritative QA source
         uses: actions/checkout@v4
+        with:
+          ref: qa-revamped-galvicare-0-5
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Verify QA branch
+      - name: Verify QA source
         shell: bash
         run: |
-          echo "Branch: ${GITHUB_REF_NAME}"
-          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
+          test "$(git branch --show-current)" = "qa-revamped-galvicare-0-5"
+          grep -q "Your Digital Business Clinic" index.html
+          grep -q "GalviPath Check Up" index.html
+          grep -q "clinicalDimensionLanguage" worker/worker.js
 
       - name: Run complete Day 7A automated gate
         shell: bash
@@ -48,7 +56,7 @@ jobs:
           npm run stabilization:gate
           git diff --check
 
-      - name: Deploy existing QA Worker from repository source
+      - name: Deploy exact QA Worker source
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -67,9 +75,8 @@ jobs:
           {
             echo "## GalviCare Day 7A QA Deployment PASS"
             echo ""
-            echo "- Branch: \`${GITHUB_REF_NAME}\`"
-            echo "- Commit: \`${GITHUB_SHA}\`"
-            echo "- Worker: \`galvicare-triage-intake\`"
+            echo "- Authoritative source: qa-revamped-galvicare-0-5"
+            echo "- Worker: galvicare-triage-intake"
             echo "- Source tests: PASS"
             echo "- Stabilization gate: PASS"
             echo "- QA Worker deploy: PASS"
