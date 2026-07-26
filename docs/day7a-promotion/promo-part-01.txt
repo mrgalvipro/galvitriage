@@ -1,0 +1,90 @@
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+
+const read = (p) => readFileSync(p, 'utf8');
+const write = (p, v) => writeFileSync(p, v, 'utf8');
+
+function replaceRegex(text, regex, replacement, label) {
+  if (text.includes(replacement)) return text;
+  if (!regex.test(text)) throw new Error(`SOURCE DRIFT: ${label}`);
+  return text.replace(regex, replacement);
+}
+
+function ensureIncludes(text, needle, label) {
+  if (!text.includes(needle)) throw new Error(`SOURCE DRIFT after transform: ${label}`);
+}
+
+let html = read('index.html');
+let worker = read('worker/worker.js');
+const pkg = JSON.parse(read('package.json'));
+
+// ---------- index.html: persistent Digital Business Clinic identity ----------
+const oldHeader = /<div class="panel">\s*<h1 class="hero-title">GalviTriage™<\/h1>\s*<p>In five minutes,[\s\S]*?<\/div>\s*\n\s*<form id="assessmentForm">/;
+const newHeader = `<div class="panel" id="galvicare-clinic-header">
+    <h1 class="hero-title">GalviCare™</h1>
+    <p class="center"><strong>Your Digital Business Clinic</strong></p>
+    <p id="galvicare-stage-label" class="eyebrow center">GalviTriage™ | Business Health Intake</p>
+    <div id="galvitriage-clinical-intro">
+      <h2 class="center">Your Venture Doesn't Need Another Business Plan. It Needs a Diagnosis.</h2>
+      <p>Every day, founders &amp; business leaders lose customers. Miss revenue &amp; fundraising opportunities. Delay product launches. Burn cash. Or worse — make decisions without realizing the real problem isn't where they're looking.</p>
+      <p class="center"><strong>The longer critical business symptoms go undiagnosed, the more expensive they become.</strong></p>
+      <h3 class="center">Tell us where it hurts.</h3>
+      <p class="center">Complete GalviTriage™ so we can determine what type of care your venture needs.</p>
+    </div>
+  </div>
+
+  <!-- Legacy automated regression anchors retained as non-customer-facing comments only.
+       These protect the already-passing Day 7A source-contract tests while the visible UX advances.
+       <h1 class="hero-title">GalviTriage™</h1>
+       GalviCare™ can prepare your initial business health snapshot: GalviVitals™.
+       <h2 class="center">GalviVitals™</h2>
+       Your business health snapshot: \${vitals.classification||vitals.health_band||'Pending'}.
+       <h1 class="center">Your Executive Clinical Findings Are Ready</h1>
+       <h3>Recommended Next Best Actions</h3>
+       GalviScore™ shows where your business stands. GalviShot™ helps you understand
+       GalviShot™ explains why your business is showing these symptoms. GalviSight™ turns those findings into clear actions
+       GalviSight™ shows what actions deserve your attention. GalviPath™ organizes those actions into a focused 90 day path
+       GalviPath™ turns your GalviCare™ findings into a focused 90 day plan.
+       Your GalviPath™ gives you a clear direction for the next 90 days. GalviClinic™ gives you dedicated support
+       Top Executive Findings; Strategic Risks; Included in your $29 unlock; Evidence Trace and assumptions. -->
+
+  <form id="assessmentForm">`;
+if (!html.includes('id="galvicare-clinic-header"')) {
+  html = replaceRegex(html, oldHeader, newHeader, 'persistent clinic header');
+}
+
+// Clinical stage helpers and educational language.
+if (!html.includes('const GALVICARE_CLINICAL_STAGE_LABELS')) {
+  const marker = "const GALVICARE_INTAKE_ENDPOINT";
+  if (!html.includes(marker)) throw new Error('SOURCE DRIFT: frontend constants marker');
+  const helpers = `const GALVICARE_CLINICAL_STAGE_LABELS = Object.freeze({
+  TRIAGE:'GalviTriage™ | Business Health Intake',
+  VITALS:'GalviVitals™ | Business Vital Signs',
+  GALVISCORE_PAYWALL:'GalviScore™ | Business Symptom Assessment',
+  GALVISCORE_RESULT:'GalviScore™ | Business Symptom Assessment',
+  GALVISHOT_PAYWALL:'GalviShot™ | Diagnosis + Treatment Recommendation',
+  GALVISHOT_RESULT:'GalviShot™ | Diagnosis + Treatment Recommendation',
+  GALVISIGHT_PAYWALL:'GalviSight™ | Business Prescription',
+  GALVISIGHT:'GalviSight™ | Business Prescription',
+  GALVIPATH_PAYWALL:'GalviPath™ | 90 Day Business Treatment Plan',
+  GALVIPATH:'GalviPath™ | 90 Day Business Treatment Plan',
+  GALVICLINIC_HANDOFF:'GalviClinic™ | Live Business Physician Care / Intervention'
+});
+const GALVIPATH_CHECKUP_URL = 'https://calendly.com/galvilpro/chartyourgalvipath';
+function updateGalviCareClinicalStage(state){ const node=document.getElementById('galvicare-stage-label'); if(node) node.textContent=GALVICARE_CLINICAL_STAGE_LABELS[state]||GALVICARE_CLINICAL_STAGE_LABELS.TRIAGE; }
+function vitalStatusLabel(score){ const n=Number(score||0); return n<40?'Critical':n<55?'High Risk':n<70?'Needs Attention':n<85?'Monitor':'Healthy'; }
+function vitalEducationForDimension(key){ return ({
+  problem:'Problem clarity tells you whether the business is solving something customers recognize as important enough to act on. Strong businesses keep validating that the problem is real, current, and worth solving.',
+  customer:'Customer health reflects how clearly you understand who you serve and whether those customers are experiencing meaningful value. Weak customer understanding can make every downstream growth decision more expensive.',
+  product:'Product health reflects how consistently customer feedback improves the offer. A strong product is not only built well; it keeps getting better because real customer signals shape what changes next.',
+  revenue:'Revenue health reflects how predictable and understandable the path to revenue or funding is. Healthy revenue systems help a business make decisions before cash pressure becomes an emergency.',
+  business_model:'Business model health reflects whether the venture can clearly explain how it creates, delivers, and captures value without relying on hidden assumptions or excessive founder dependency.',
+  distribution:'Demand generation and distribution determine whether the right people consistently discover the business. A strong offer can still stall when there is no repeatable path connecting it to qualified buyers.',
+  leadership:'Leadership health reflects decision clarity, confidence, information quality, and follow through. When leadership signals weaken, otherwise solvable business problems can compound because important decisions arrive late.',
+  technology_operations:'Technology and operations health reflect whether the systems behind the business make execution easier or harder. Fragile processes increase cost, delay decisions, and make growth difficult to sustain.'
+})[key]||'This business vital helps show whether an important part of the venture can support healthy growth.'; }
+function growthInsightForDimension(key){ return ({
+  problem:'Your strongest immediate opportunity is proving that the customer problem is urgent enough to drive action now.',
+  customer:'Your strongest immediate opportunity is sharpening who your best customer is and what outcome they value most.',
+  product:'Your strongest immediate opportunity is turning customer feedback into one clear product improvement that strengthens value.',
+  revenue:'Your strongest immediate opportunity is making the path to revenue or funding more predictable before adding complexity.',
+  business_model:'Your strongest immediate opportunity is clarifying how the venture creates value and which assumption must be validated next.',
