@@ -205,7 +205,7 @@
     <p id="galvicare-stage-label" class="eyebrow center">GalviTriage™ | Business Health Intake</p>
     <div id="galvitriage-clinical-intro">
       <h2 class="center">Your Venture Doesn't Need Another Business Plan. It Needs a Diagnosis.</h2>
-      <p>Every day, founders &amp; business leaders lose customers. Miss revenue &amp; fundraising opportunities. Delay product launches. Burn cash. Or worse — make decisions without realizing the real problem isn't where they're looking.</p>
+      <p>Every day, founders &amp; business leaders lose customers. Miss revenue &amp; fundraising opportunities. Delay product launches. Burn cash or worse — make decisions without realizing the real problem isn't where they're looking.</p>
       <p class="center"><strong>The longer critical business symptoms go undiagnosed, the more expensive they become.</strong></p>
       <h3 class="center">Tell us where it hurts.</h3>
       <p class="center">Complete GalviTriage™ so we can determine what type of care your venture needs.</p>
@@ -370,7 +370,7 @@
   <section id="galvishot-paywall" class="galvicare-card hidden">
     <div class="gshot-stage-pill">Current Stage: GalviShot Paywall</div>
     <p class="eyebrow">GALVISHOT™</p>
-    <h1 class="center">Your Executive Clinical Findings Are Ready</h1>
+    <h1 class="center">Your GalviShot™ is Ready</h1>
     <p>We identified the business conditions driving your symptoms. Unlock your GalviShot™ to see what needs treatment first and why.</p>
     <div class="gshot-inclusions">
       <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>The business conditions driving your symptoms and what needs treatment first.</span></div>
@@ -456,8 +456,8 @@
 
   <section id="galvisight-handoff" class="galvicare-card hidden">
     <div class="gshot-stage-pill">Current Stage: GalviSight Handoff</div>
-    <p class="eyebrow">GALVISIGHT™</p>
-    <h1>Your GalviSight Prescription</h1>
+    <p class="eyebrow">GALVISIGHT™ UNLOCKED</p>
+    <h1 class="center">Your GalviSight Prescription</h1>
     <p id="galvisight-state-message">Loading deterministic GalviSight from the Worker.</p>
     <div id="galvisight-locked" class="gshot-error hidden">GalviSight is locked until server-side entitlement is verified.</div>
     <div id="galvisight-followup" class="gshot-success hidden">Follow-up required before GalviSight can safely interpret this record.</div>
@@ -533,8 +533,8 @@
   </section>
 
   <section id="galvipath-result" class="galvicare-card hidden">
-    <div class="gshot-stage-pill">Current Stage: Chart Your GalviPath</div>
-    <h2>Chart Your GalviPath™</h2>
+    <p class="eyebrow">GALVIPATH™ UNLOCKED</p>
+    <h2 class="center">Chart Your GalviPath™</h2>
     <p id="galvipath-state-message">Loading deterministic GalviPath from the Worker.</p>
     <div id="galvipath-locked" class="gshot-error hidden">GalviPath is locked until server-side entitlement is verified.</div>
     <div id="galvipath-error" class="gshot-error hidden">GalviPath could not load. Please retry.</div>
@@ -563,6 +563,22 @@ const GALVICARE_CLINICAL_STAGE_LABELS = Object.freeze({
 });
 const GALVIPATH_CHECKUP_URL = 'https://calendly.com/galvilpro/chartyourgalvipath';
 function updateGalviCareClinicalStage(state){ const node=document.getElementById('galvicare-stage-label'); if(node) node.textContent=GALVICARE_CLINICAL_STAGE_LABELS[state]||GALVICARE_CLINICAL_STAGE_LABELS.TRIAGE; }
+function normalizeCustomerSentence(value){
+  const text=String(value??'').trim();
+  if(!text) return '';
+  const first=text.charAt(0).toUpperCase()+text.slice(1);
+  return /[.!?]$/.test(first)?first:first+'.';
+}
+function normalizeCustomerPhrase(value){
+  const text=String(value??'').trim();
+  if(!text) return '';
+  return text.charAt(0).toUpperCase()+text.slice(1);
+}
+function normalizeGalviCareCustomerCopy(value){
+  let text=normalizeCustomerSentence(value);
+  text=text.replace('Book GalviClinic™ when live Business Physician care would provide additional reassurance, decision support, accountability, or intervention.','Booking a GalviClinic™ session with a live GalviClinician would provide additional reassurance, decision support, accountability, or intervention.');
+  return text;
+}
 function vitalStatusLabel(score){ const n=Number(score||0); return n<40?'Critical':n<55?'High Risk':n<70?'Needs Attention':n<85?'Monitor':'Healthy'; }
 function vitalEducationForDimension(key){ return ({
   problem:'Problem clarity tells you whether the business is solving something customers recognize as important enough to act on. Strong businesses keep validating that the problem is real, current, and worth solving.',
@@ -1206,10 +1222,10 @@ function pruneGalviPathInternalSections(panel){
     const findings=el('galvishot-findings'); findings.innerHTML='';
     (result.findings||[]).forEach((f,i)=>{
       const node=document.createElement('div'); node.className='gshot-finding';
-      const evidence=(f.evidence||[]).map(e=>formatCustomerEvidence(e.display_value)).filter(Boolean).join('; '); const fp=confidencePresentation(f.confidence ?? result.confidence); node.innerHTML=`<div class="gshot-finding-title">GalviShot Prescription ${i+1}</div><p><strong>Symptom:</strong> ${escapeHtml(f.title||f.finding_code||'Business symptom')}</p><p><strong>Prescription:</strong> ${escapeHtml(f.action||'Treat the highest priority business condition first.')}</p><p class="gshot-evidence"><strong>GalviLab Result:</strong> ${escapeHtml(evidence)}</p><p><strong>Why This Matters:</strong> ${escapeHtml(f.risk||f.finding_text||'Untreated business symptoms can become more expensive over time.')}</p><p class="small"><strong>Clinical Confidence:</strong> ${escapeHtml(fp.label)}</p>`;
+      const evidence=(f.evidence||[]).map(e=>formatCustomerEvidence(e.display_value)).filter(Boolean).join('; '); const fp=confidencePresentation(f.confidence ?? result.confidence); node.innerHTML=`<div class="gshot-finding-title">GalviShot Prescription ${i+1}</div><p><strong>Symptom:</strong> ${escapeHtml(f.title||f.finding_code||'Business symptom')}</p><p><strong>Prescription:</strong> ${escapeHtml(normalizeCustomerSentence(f.action||'Treat the highest priority business condition first.'))}</p><p class="gshot-evidence"><strong>GalviLab Result:</strong> ${escapeHtml(evidence)}</p><p><strong>Why This Matters:</strong> ${escapeHtml(normalizeCustomerSentence(f.risk||f.finding_text||'Untreated business symptoms can become more expensive over time.'))}</p><p class="small"><strong>Clinical Confidence:</strong> ${escapeHtml(fp.label)}</p>`;
       findings.appendChild(node);
     });
-    const fill=(id,items)=>{ const host=el(id); host.innerHTML=''; (items||[]).forEach(x=>{ const li=document.createElement('li'); li.textContent=x; host.appendChild(li); }); };
+    const fill=(id,items)=>{ const host=el(id); host.innerHTML=''; (items||[]).forEach(x=>{ const li=document.createElement('li'); li.textContent=normalizeCustomerSentence(x); host.appendChild(li); }); };
     fill('galvishot-actions', result.recommended_actions); fill('galvishot-risks', result.strategic_risks); fill('galvishot-assumptions', result.assumptions); humanizeList('galvishot-actions'); humanizeList('galvishot-risks'); humanizeList('galvishot-actions'); humanizeList('galvishot-risks');
     if(typeof fireGalviEvent==='function') fireGalviEvent('diagnostic_viewed',{product:'galvishot',session_id:sessionId(),stage:'GalviShot Result',confidence:result.confidence});
     window.scrollTo({top:0,behavior:'smooth'});
@@ -1278,7 +1294,7 @@ function pruneGalviPathInternalSections(panel){
         const value=mapper?mapper(item,index):item;
         if(value===undefined||value===null||String(value).trim()==='') return;
         const li=document.createElement('li');
-        li.textContent=String(value);
+        li.textContent=normalizeCustomerSentence(value);
         host.appendChild(li);
         count+=1;
       });
@@ -1295,7 +1311,7 @@ function pruneGalviPathInternalSections(panel){
 
         const title=document.createElement('div');
         title.className='gshot-finding-title';
-        title.textContent=`${index+1}. ${hypothesis.statement || hypothesis.label || hypothesis.finding_code || 'GalviSight hypothesis'}`;
+        title.textContent=`${index+1}. ${normalizeCustomerSentence(hypothesis.statement || hypothesis.label || hypothesis.finding_code || 'GalviSight hypothesis')}`;
         card.appendChild(title);
 
         if(hypothesis.finding_code){
@@ -1399,8 +1415,9 @@ function pruneGalviPathInternalSections(panel){
           }
 
           if(stateMessage){
-            stateMessage.textContent='GalviSight interpretation ready.';
-            stateMessage.classList.add('gshot-success');
+            stateMessage.textContent='';
+            stateMessage.classList.remove('gshot-success');
+            stateMessage.classList.add('hidden');
           }
 
           const panel=el('galvisight-result-panel');
@@ -1505,7 +1522,7 @@ function pruneGalviPathInternalSections(panel){
       list.className=ordered?'gshot-action-list':'gshot-risk-list';
       rendered.forEach(value=>{
         const item=document.createElement('li');
-        item.textContent=String(value);
+        item.textContent=normalizeCustomerSentence(value);
         list.appendChild(item);
       });
       section.appendChild(list);
@@ -1542,7 +1559,7 @@ function pruneGalviPathInternalSections(panel){
             list.className='gshot-action-list';
             actions.forEach(action=>{
               const li=document.createElement('li');
-              li.textContent=normalizeGalviPathText(action);
+              li.textContent=normalizeCustomerSentence(normalizeGalviPathText(action));
               list.appendChild(li);
             });
             card.appendChild(list);
@@ -1591,19 +1608,10 @@ function pruneGalviPathInternalSections(panel){
         rationale.appendChild(heading);
 
         const copy=document.createElement('p');
-        copy.textContent=normalizeGalviPathText(result.clinical_rationale);
+        copy.textContent=normalizeCustomerSentence(normalizeGalviPathText(result.clinical_rationale));
         rationale.appendChild(copy);
 
         panel.appendChild(rationale);
-      }
-
-      if(result.confidence!==undefined || result.confidence_band){
-        const confidence=document.createElement('p');
-        const bits=[];
-        if(result.confidence!==undefined && result.confidence!==null) bits.push(`Confidence: ${result.confidence}%`);
-        if(result.confidence_band) bits.push(`Band: ${result.confidence_band}`);
-        confidence.textContent=bits.join(' | ');
-        panel.appendChild(confidence);
       }
 
       renderGalviPathSequence(panel,result.sequence);
@@ -1622,8 +1630,10 @@ function pruneGalviPathInternalSections(panel){
         heading.textContent='Initial GalviPath Check Up Discussion Topic';
         cadence.appendChild(heading);
         const copy=document.createElement('p');
-        copy.textContent=normalizeGalviPathText(result.operating_cadence);
-        cadence.appendChild(copy); const checkupButton=document.createElement('button'); checkupButton.type='button'; checkupButton.className='secondary-button'; checkupButton.textContent='GalviPath Check Up'; checkupButton.addEventListener('click',openGalviPathCheckUp); cadence.appendChild(checkupButton); panel.appendChild(cadence);
+        copy.textContent=normalizeCustomerSentence(normalizeGalviPathText(result.operating_cadence));
+        cadence.appendChild(copy);
+        const checkupSupport=document.createElement('p'); checkupSupport.className='center'; checkupSupport.textContent='Book GalviPath™ Check Up to help you Chart Your GalviPath™ with additional clarity & insight.'; cadence.appendChild(checkupSupport);
+        const checkupRow=document.createElement('div'); checkupRow.className='button-row'; const checkupButton=document.createElement('button'); checkupButton.type='button'; checkupButton.className='secondary-button'; checkupButton.textContent='GalviPath™ Check Up'; checkupButton.addEventListener('click',openGalviPathCheckUp); checkupRow.appendChild(checkupButton); cadence.appendChild(checkupRow); panel.appendChild(cadence);
       }
 
       if(result.support_recommendation){
@@ -1633,7 +1643,7 @@ function pruneGalviPathInternalSections(panel){
         heading.textContent='GalviClinic Support Recommendation';
         support.appendChild(heading);
         const copy=document.createElement('p');
-        copy.textContent=normalizeGalviPathText(result.support_recommendation);
+        copy.textContent=normalizeGalviCareCustomerCopy(result.support_recommendation);
         support.appendChild(copy);
         panel.appendChild(support);
       }
@@ -1681,9 +1691,9 @@ function pruneGalviPathInternalSections(panel){
       clinicButton.textContent='Book GalviClinic™';
       clinicButton.addEventListener('click',openGalviClinicHandoff);
 
-      const progression=document.createElement('p'); progression.className='customer-progression-copy'; progression.textContent='Your GalviPath™ gives you the treatment plan. GalviClinic™ provides focused live Business Physician care to address the root cause of your most serious business symptoms and help your venture recover, stabilize, and grow.'; panel.appendChild(progression);
+      const progression=document.createElement('p'); progression.className='customer-progression-copy'; progression.textContent='Your GalviPath™ gives you the treatment plan. GalviClinic™ enables a live GalviClinician to surgically address the root cause of your most serious business symptoms and help your venture recover, stabilize, and grow.'; panel.appendChild(progression);
 
-      buttonRow.appendChild(printButton); const pathCheckupButton=document.createElement('button'); pathCheckupButton.type='button'; pathCheckupButton.className='secondary-button'; pathCheckupButton.textContent='GalviPath Check Up'; pathCheckupButton.addEventListener('click',openGalviPathCheckUp); buttonRow.appendChild(pathCheckupButton); buttonRow.appendChild(clinicButton);
+      buttonRow.appendChild(printButton); const pathCheckupButton=document.createElement('button'); pathCheckupButton.type='button'; pathCheckupButton.className='secondary-button'; pathCheckupButton.textContent='GalviPath™ Check Up'; pathCheckupButton.addEventListener('click',openGalviPathCheckUp); buttonRow.appendChild(pathCheckupButton); buttonRow.appendChild(clinicButton);
       panel.appendChild(buttonRow);
 
       panel.classList.remove('hidden');
@@ -1740,8 +1750,9 @@ function pruneGalviPathInternalSections(panel){
         renderGalviPathResult(result); pruneGalviPathInternalSections(el('galvipath-result-panel')); pruneGalviPathInternalSections(el('galvipath-result-panel'));
 
         if(stateMessage){
-          stateMessage.textContent='Your GalviPath™ is ready.';
-          stateMessage.classList.add('gshot-success');
+          stateMessage.textContent='';
+          stateMessage.classList.remove('gshot-success');
+          stateMessage.classList.add('hidden');
         }
 
         if(typeof fireGalviEvent==='function'){
@@ -1845,6 +1856,6 @@ document.addEventListener('DOMContentLoaded',function(){
 
 <!-- DAY7A_LEGACY_TEST_ANCHORS_V2
 <h2 class="center">GalviVitals™</h2>
-<h1 class="center">Your Executive Clinical Findings Are Ready</h1>
+<h1 class="center">Your GalviShot™ Is Ready</h1>
 <h3>Recommended Next Best Actions</h3>
 -->
