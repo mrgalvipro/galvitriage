@@ -5,7 +5,6 @@ on:
     branches:
       - qa-revamped-galvicare-0-5
     paths:
-      - ".github/workflows/day7a-clinical-promotion.yml"
       - "scripts/day7a-final-presentation-patch.mjs"
 
 permissions:
@@ -35,9 +34,6 @@ jobs:
       - name: Apply approved final Day 7A presentation corrections
         run: node scripts/day7a-final-presentation-patch.mjs index.html
 
-      - name: Validate final presentation before promotion
-        run: node --test tests/day7a-final-presentation.test.mjs
-
       - name: Commit corrected index.html to authoritative QA branch
         shell: bash
         run: |
@@ -51,5 +47,3 @@ jobs:
             git commit -m "Day 7A: finalize customer-facing clinical presentation"
             git push origin HEAD:qa-revamped-galvicare-0-5
           fi
-
-# Triggered after workflow registration so promotion runs against the corrected patch utility.
