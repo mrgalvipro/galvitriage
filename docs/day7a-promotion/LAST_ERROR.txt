@@ -1,12 +1,8 @@
-file:///home/runner/work/galvitriage/galvitriage/scripts/promote-day7a-clinical-enhancements.mjs:10
-  if (!text.includes(needle)) throw new Error(`SOURCE DRIFT after transform: ${label}`);
-                                    ^
+/home/runner/work/galvitriage/galvitriage/scripts/promote-day7a-clinical-enhancements.mjs:239
+}`);
+   ^
 
-Error: SOURCE DRIFT after transform: worker markers
-    at ensureIncludes (file:///home/runner/work/galvitriage/galvitriage/scripts/promote-day7a-clinical-enhancements.mjs:10:37)
-    at file:///home/runner/work/galvitriage/galvitriage/scripts/promote-day7a-clinical-enhancements.mjs:235:215
-    at ModuleJob.run (node:internal/modules/esm/module_job:343:25)
-    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:681:26)
-    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:117:5)
+SyntaxError: Unexpected token ';'
+    at checkSyntax (node:internal/main/check_syntax:74:5)
 
 Node.js v22.23.1
