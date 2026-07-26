@@ -31,19 +31,26 @@ jobs:
         with:
           node-version: "22"
 
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
       - name: Apply approved final Day 7A presentation corrections
         run: node scripts/day7a-final-presentation-patch.mjs index.html
 
-      - name: Commit corrected index.html to authoritative QA branch
+      - name: Run authoritative stabilization gate against corrected source
+        run: npm run stabilization:gate
+
+      - name: Commit corrected index.html and machine-verifiable readiness marker
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html
+          printf 'DAY7A_AUTOMATED_GATE=PASS\nSOURCE_SHA=%s\nTEST_COMMAND=npm run stabilization:gate\n' "$(git rev-parse HEAD)" > DAY7A_AUTOMATED_GATE_PASS.txt
+          git add index.html DAY7A_AUTOMATED_GATE_PASS.txt
           git diff --cached --check
           if git diff --cached --quiet; then
-            echo "index.html already matches the approved Day 7A presentation contract."
+            echo "Corrected source and readiness marker already committed."
           else
-            git commit -m "Day 7A: finalize customer-facing clinical presentation"
+            git commit -m "Day 7A: pass authoritative automated gate"
             git push origin HEAD:qa-revamped-galvicare-0-5
           fi
