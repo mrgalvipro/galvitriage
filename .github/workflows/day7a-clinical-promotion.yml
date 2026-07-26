@@ -1,6 +1,10 @@
 name: Day 7A Clinical Promotion
 
 on:
+  pull_request:
+    branches:
+      - qa-revamped-galvicare-0-5
+    types: [opened, synchronize, reopened]
   push:
     branches:
       - qa-revamped-galvicare-0-5
@@ -17,10 +21,11 @@ concurrency:
 
 jobs:
   promote:
+    if: github.event_name == 'pull_request' || github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout QA
+      - name: Checkout authoritative QA source
         uses: actions/checkout@v4
         with:
           ref: qa-revamped-galvicare-0-5
@@ -38,7 +43,7 @@ jobs:
               docs/day7a-promotion/promo-part-04.txt \
               > scripts/promote-day7a-clinical-enhancements.mjs
           node --check scripts/promote-day7a-clinical-enhancements.mjs
-      - name: Promote exact Day 7A enhancement source
+      - name: Promote Day 7A enhancement source
         run: node scripts/promote-day7a-clinical-enhancements.mjs
       - name: Pre-commit integrity gate
         shell: bash
@@ -49,7 +54,7 @@ jobs:
           grep -q "Your Digital Business Clinic" index.html
           grep -q "GalviPath Check Up" index.html
           grep -q "clinicalDimensionLanguage" worker/worker.js
-      - name: Commit promoted source of truth
+      - name: Commit one authoritative QA source state
         shell: bash
         run: |
           rm -rf docs/day7a-promotion
