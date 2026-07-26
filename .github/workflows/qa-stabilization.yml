@@ -9,7 +9,7 @@ on:
       - qa-revamped-galvicare-0-5
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   stabilization:
@@ -19,10 +19,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: qa-revamped-galvicare-0-5
-          token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -32,22 +28,8 @@ jobs:
       - name: Install dependencies
         run: npm install --ignore-scripts
 
-      - name: Apply approved final Day 7A presentation corrections
-        run: node scripts/day7a-final-presentation-patch.mjs index.html
-
-      - name: Commit corrected authoritative source before testing
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add index.html
-          if ! git diff --cached --quiet; then
-            git diff --cached --check
-            git commit -m "Day 7A: finalize customer-facing clinical presentation"
-            git push origin HEAD:qa-revamped-galvicare-0-5
-          fi
-
-      - name: Run Worker syntax and complete QA stabilization
+      - name: Run Worker syntax and QA tests
+        # Authoritative gate: test the committed QA source directly; never mutate source here.
         run: npm run stabilization:gate
 
       - name: Reject committed secret files
