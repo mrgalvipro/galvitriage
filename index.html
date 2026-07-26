@@ -373,10 +373,10 @@
     <h1 class="center">Your Executive Clinical Findings Are Ready</h1>
     <p>We identified the business conditions driving your symptoms. Unlock your GalviShot™ to see what needs treatment first and why.</p>
     <div class="gshot-inclusions">
-      <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>3–5 prioritized executive findings from your GalviTriage and GalviScore data.</span></div>
-      <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>Evidence behind each finding so the result feels specific rather than generic.</span></div>
-      <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>Strategic risks, bottlenecks, assumptions, and next-best actions.</span></div>
-      <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>Clear handoff into GalviSight™ for executive interpretation.</span></div>
+      <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>The business conditions driving your symptoms and what needs treatment first.</span></div>
+      <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>GalviLab Results supporting each diagnosis.</span></div>
+      <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>Your GalviShot Prescriptions and why each treatment matters.</span></div>
+      <div class="gshot-inclusion"><span class="gshot-check">✓</span><span>A clear handoff into GalviSight™ for your business prescription.</span></div>
     </div>
     <div id="galvishot-followup" class="gshot-followup hidden">
       <p class="eyebrow">GALVIENGINE CLINICAL FOLLOW-UP</p>
@@ -398,7 +398,7 @@
       <button id="galvishot-live-test-override" class="secondary-button" type="button">QA Test Override</button>
       <button id="galvishot-back-score" class="secondary-button" type="button">Back to GalviScore</button>
     </div>
-    <p class="gshot-status-note">Secure checkout powered by Stripe. The full GalviShot appears after payment confirmation. QA override is for controlled testing only.</p>
+    <p class="gshot-status-note"></p>
     <div id="galvishot-paywall-error" class="gshot-error"></div>
   </section>
   <section id="galvishot-result" class="galvicare-card hidden">
@@ -417,7 +417,7 @@
     <ol id="galvishot-actions" class="gshot-action-list"></ol>
     <h3>Symptom Side Effects</h3>
     <ul id="galvishot-risks" class="gshot-risk-list"></ul>
-    <h3>Assumptions</h3>
+    <h3 class="hidden">Assumptions</h3>
     <ul id="galvishot-assumptions" class="gshot-risk-list"></ul>
     <div class="button-row">
       <button id="print-galvishot" class="secondary-button" type="button">Print / Save GalviShot™</button>
@@ -438,10 +438,11 @@
     <div class="inclusions">
       <strong>Unlock GalviSight™ to:</strong>
       <ul>
-        <li>Executive interpretation of the strongest supported findings</li>
-        <li>Prioritized hypotheses, risks, and opportunities</li>
-        <li>Recommended actions and urgency</li>
-        <li>Evidence trace and assumptions</li>
+        <li>Understand what your symptoms are telling us</li>
+        <li>See what requires attention first</li>
+        <li>Know exactly What to Do Next</li>
+        <li>Understand how urgently you should act</li>
+        <li>See which GalviLab Results support your prescription</li>
       </ul>
     </div>
     <div class="button-row">
@@ -456,7 +457,7 @@
   <section id="galvisight-handoff" class="galvicare-card hidden">
     <div class="gshot-stage-pill">Current Stage: GalviSight Handoff</div>
     <p class="eyebrow">GALVISIGHT™</p>
-    <h1>Your Business Prescription</h1>
+    <h1>Your GalviSight Prescription</h1>
     <p id="galvisight-state-message">Loading deterministic GalviSight from the Worker.</p>
     <div id="galvisight-locked" class="gshot-error hidden">GalviSight is locked until server-side entitlement is verified.</div>
     <div id="galvisight-followup" class="gshot-success hidden">Follow-up required before GalviSight can safely interpret this record.</div>
@@ -465,7 +466,7 @@
       <p id="galvisight-interpretation"></p>
 
       <div id="galvisight-urgency-wrap" class="gshot-preview-card hidden">
-        <strong>Urgency:</strong> <span id="galvisight-urgency"></span>
+        <strong>Why This Is Urgent:</strong> <span id="galvisight-urgency"></span>
       </div>
 
       <div id="galvisight-hypotheses-section" class="hidden">
@@ -484,7 +485,7 @@
       </div>
 
       <div id="galvisight-actions-section" class="hidden">
-        <h3>Your GalviSight Prescription</h3>
+        <h3>What to Do Next</h3>
         <ol id="galvisight-actions" class="gshot-action-list"></ol>
       </div>
 
