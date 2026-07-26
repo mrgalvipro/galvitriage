@@ -1,0 +1,655 @@
+
+> stabilization:gate
+> npm run check && npm test
+
+
+> check
+> node --check worker/worker.js
+
+
+> test
+> node --test tests/day2-worker.test.mjs tests/day3-worker.test.mjs tests/day3-security-gate.test.mjs tests/day4-worker.test.mjs tests/session-continuity.test.mjs tests/day6-routing-restoration.test.mjs tests/day6-fcd.test.mjs tests/payment-return.test.mjs tests/day6-critical-path.test.mjs tests/day7-release-readiness.test.mjs tests/day7a-clinical-experience.test.mjs tests/day7a-final-presentation.test.mjs
+
+TAP version 13
+# Subtest: Day 1 /api route regression uses D1 handlers
+ok 1 - Day 1 /api route regression uses D1 handlers
+  ---
+  duration_ms: 54.200161
+  type: 'test'
+  ...
+# Subtest: Day 2 deterministic actions reject invalid payloads safely
+ok 2 - Day 2 deterministic actions reject invalid payloads safely
+  ---
+  duration_ms: 3.345251
+  type: 'test'
+  ...
+# Subtest: Day 2 submit stores triage, vitals, and score without outbound fetch
+ok 3 - Day 2 submit stores triage, vitals, and score without outbound fetch
+  ---
+  duration_ms: 7.398117
+  type: 'test'
+  ...
+# Subtest: Day 2 duplicate submission is idempotent and prevents duplicate stored results
+ok 4 - Day 2 duplicate submission is idempotent and prevents duplicate stored results
+  ---
+  duration_ms: 5.893166
+  type: 'test'
+  ...
+# Subtest: Day 2 returning founder reuses canonical founder across a new session without FK failure
+ok 5 - Day 2 returning founder reuses canonical founder across a new session without FK failure
+  ---
+  duration_ms: 12.459635
+  type: 'test'
+  ...
+# Subtest: Day 2 retrieval returns stored triage and product results
+ok 6 - Day 2 retrieval returns stored triage and product results
+  ---
+  duration_ms: 22.912762
+  type: 'test'
+  ...
+# Subtest: Root journey_event keeps legacy GalviSight forwarding and is not merged with /api journey_event
+ok 7 - Root journey_event keeps legacy GalviSight forwarding and is not merged with /api journey_event
+  ---
+  duration_ms: 7.526008
+  type: 'test'
+  ...
+# Subtest: Root legacy intake does not write to mocked D1 when Airtable credentials are absent
+ok 8 - Root legacy intake does not write to mocked D1 when Airtable credentials are absent
+  ---
+  duration_ms: 9.639905
+  type: 'test'
+  ...
+# Subtest: Browser Day 2 QA path renders GalviVitals before non-blocking Worker persistence
+ok 9 - Browser Day 2 QA path renders GalviVitals before non-blocking Worker persistence
+  ---
+  duration_ms: 11.246569
+  type: 'test'
+  ...
+# Subtest: Worker locks the exact Product Owner approved 20-question key/order/dimension mapping
+ok 10 - Worker locks the exact Product Owner approved 20-question key/order/dimension mapping
+  ---
+  duration_ms: 1.579502
+  type: 'test'
+  ...
+# Subtest: triage_completeness reports complete and incomplete Day 2 intake without outbound fetch
+ok 11 - triage_completeness reports complete and incomplete Day 2 intake without outbound fetch
+  ---
+  duration_ms: 4.423427
+  type: 'test'
+  ...
+# Subtest: Root submit_triage remains legacy and isolated from the /api D1 submit handler
+ok 12 - Root submit_triage remains legacy and isolated from the /api D1 submit handler
+  ---
+  duration_ms: 1.447656
+  type: 'test'
+  ...
+# Subtest: browser contains presentation and transport logic only
+ok 13 - browser contains presentation and transport logic only
+  ---
+  duration_ms: 1.341427
+  type: 'test'
+  ...
+# Subtest: browser sends Day 3 requests only to the Worker API endpoint
+ok 14 - browser sends Day 3 requests only to the Worker API endpoint
+  ---
+  duration_ms: 0.491923
+  type: 'test'
+  ...
+# Subtest: Worker owns deterministic GalviShot evaluation and D1 evidence persistence
+ok 15 - Worker owns deterministic GalviShot evaluation and D1 evidence persistence
+  ---
+  duration_ms: 0.493875
+  type: 'test'
+  ...
+# Subtest: Worker does not route /api GalviShot actions through legacy diagnostics
+ok 16 - Worker does not route /api GalviShot actions through legacy diagnostics
+  ---
+  duration_ms: 0.309601
+  type: 'test'
+  ...
+# Subtest: no literal QA override secret is committed to browser source
+ok 17 - no literal QA override secret is committed to browser source
+  ---
+  duration_ms: 0.388489
+  type: 'test'
+  ...
+# Subtest: Worker API responses include baseline security headers without changing CORS or build identity
+ok 18 - Worker API responses include baseline security headers without changing CORS or build identity
+  ---
+  duration_ms: 50.020827
+  type: 'test'
+  ...
+# Subtest: Worker health exposes non-sensitive Day 3 build identity and headers
+ok 19 - Worker health exposes non-sensitive Day 3 build identity and headers
+  ---
+  duration_ms: 1.586973
+  type: 'test'
+  ...
+# Subtest: Day 3 locks unpaid GalviShot and omits paid result content
+ok 20 - Day 3 locks unpaid GalviShot and omits paid result content
+  ---
+  duration_ms: 6.545067
+  type: 'test'
+  ...
+# Subtest: Day 3 QA override is environment scoped and production rejects it
+ok 21 - Day 3 QA override is environment scoped and production rejects it
+  ---
+  duration_ms: 4.267295
+  type: 'test'
+  ...
+# Subtest: Day 3 stored GalviShot retrieval requires entitlement or QA override
+ok 22 - Day 3 stored GalviShot retrieval requires entitlement or QA override
+  ---
+  duration_ms: 19.185036
+  type: 'test'
+  ...
+# Subtest: Day 3 creates deterministic stored evidence-linked GalviShot once
+ok 23 - Day 3 creates deterministic stored evidence-linked GalviShot once
+  ---
+  duration_ms: 13.571782
+  type: 'test'
+  ...
+# Subtest: Day 3 follow-up save upserts and low-confidence record withholds final result
+ok 24 - Day 3 follow-up save upserts and low-confidence record withholds final result
+  ---
+  duration_ms: 17.06933
+  type: 'test'
+  ...
+# Subtest: Day 3 /api router is closed to unsupported actions without legacy fallback
+ok 25 - Day 3 /api router is closed to unsupported actions without legacy fallback
+  ---
+  duration_ms: 0.650558
+  type: 'test'
+  ...
+# Subtest: Day 3 GalviShot actions outside /api return legacy route disabled
+ok 26 - Day 3 GalviShot actions outside /api return legacy route disabled
+  ---
+  duration_ms: 0.932548
+  type: 'test'
+  ...
+# Subtest: Day 3 frontend contains no browser finding generator or payment unlock from URL
+ok 27 - Day 3 frontend contains no browser finding generator or payment unlock from URL
+  ---
+  duration_ms: 7.760767
+  type: 'test'
+  ...
+# Subtest: Day 4 locks unpaid Sight and Path and production rejects QA override
+ok 28 - Day 4 locks unpaid Sight and Path and production rejects QA override
+  ---
+  duration_ms: 58.793396
+  type: 'test'
+  ...
+# Subtest: Day 4 GalviSight is deterministic, evidence traced, clinically interpreted, and idempotent without outbound calls
+ok 29 - Day 4 GalviSight is deterministic, evidence traced, clinically interpreted, and idempotent without outbound calls
+  ---
+  duration_ms: 13.24851
+  type: 'test'
+  ...
+# Subtest: Day 4 supports low-confidence follow-up and facilitator-review states
+ok 30 - Day 4 supports low-confidence follow-up and facilitator-review states
+  ---
+  duration_ms: 3.591849
+  type: 'test'
+  ...
+# Subtest: Day 4 GalviPath returns exactly one pathway with the approved ordered 90 Day treatment sequence
+ok 31 - Day 4 GalviPath returns exactly one pathway with the approved ordered 90 Day treatment sequence
+  ---
+  duration_ms: 12.709036
+  type: 'test'
+  ...
+# Subtest: Day 4 preserves legacy root GalviSight route and browser stays renderer-only
+ok 32 - Day 4 preserves legacy root GalviSight route and browser stays renderer-only
+  ---
+  duration_ms: 2.336199
+  type: 'test'
+  ...
+# Subtest: Day 6 D1 configuration preserves the existing QA database binding
+ok 33 - Day 6 D1 configuration preserves the existing QA database binding
+  ---
+  duration_ms: 1.153608
+  type: 'test'
+  ...
+# Subtest: Day 6 browser GalviVitals renders before non-blocking Worker persistence can fail
+ok 34 - Day 6 browser GalviVitals renders before non-blocking Worker persistence can fail
+  ---
+  duration_ms: 0.566393
+  type: 'test'
+  ...
+# Subtest: Day 6 HE-2 returning-founder fix resolves canonical founder before venture persistence
+ok 35 - Day 6 HE-2 returning-founder fix resolves canonical founder before venture persistence
+  ---
+  duration_ms: 5.595123
+  type: 'test'
+  ...
+# Subtest: Day 6 get_session_state restores downstream product availability
+ok 36 - Day 6 get_session_state restores downstream product availability
+  ---
+  duration_ms: 45.30556
+  type: 'test'
+  ...
+# Subtest: Day 6 FCD summary reads stored data only and uses not-yet-available fallbacks
+ok 37 - Day 6 FCD summary reads stored data only and uses not-yet-available fallbacks
+  ---
+  duration_ms: 3.026708
+  type: 'test'
+  ...
+# Subtest: Day 6 facilitator capture stores separate FCD note and does not mutate product result
+ok 38 - Day 6 facilitator capture stores separate FCD note and does not mutate product result
+  ---
+  duration_ms: 1.841452
+  type: 'test'
+  ...
+# Subtest: Day 6 protected FCD actions reject missing token when configured
+ok 39 - Day 6 protected FCD actions reject missing token when configured
+  ---
+  duration_ms: 0.975933
+  type: 'test'
+  ...
+# Subtest: Day 6 \#continue-galvisight has one effective transition owner with in-flight guard
+ok 40 - Day 6 \#continue-galvisight has one effective transition owner with in-flight guard
+  ---
+  duration_ms: 2.724016
+  type: 'test'
+  ...
+# Subtest: Day 6 downstream CTAs route once, recover visibly, and analytics is non-blocking
+ok 41 - Day 6 downstream CTAs route once, recover visibly, and analytics is non-blocking
+  ---
+  duration_ms: 0.84626
+  type: 'test'
+  ...
+# Subtest: Day 6 refresh restoration reuses only stored and entitled downstream state instead of restarting GalviTriage
+ok 42 - Day 6 refresh restoration reuses only stored and entitled downstream state instead of restarting GalviTriage
+  ---
+  duration_ms: 1.663047
+  type: 'test'
+  ...
+# Subtest: Day 6 print rules are product scoped and never globally reveal hidden application states
+ok 43 - Day 6 print rules are product scoped and never globally reveal hidden application states
+  ---
+  duration_ms: 0.385203
+  type: 'test'
+  ...
+# Subtest: Day 6 P0 Stripe success restores GalviScore from Worker before normal journey restart
+ok 44 - Day 6 P0 Stripe success restores GalviScore from Worker before normal journey restart
+  ---
+  duration_ms: 2.780311
+  type: 'test'
+  ...
+# Subtest: Day 6 P0 non-success queries keep normal routing path
+ok 45 - Day 6 P0 non-success queries keep normal routing path
+  ---
+  duration_ms: 0.42962
+  type: 'test'
+  ...
+# Subtest: Day 6 product contract does not use GalviScore confidence thresholds as paid-access gates
+ok 46 - Day 6 product contract does not use GalviScore confidence thresholds as paid-access gates
+  ---
+  duration_ms: 0.502107
+  type: 'test'
+  ...
+# Subtest: Day 6 QA override no longer falsifies GalviScore confidence
+ok 47 - Day 6 QA override no longer falsifies GalviScore confidence
+  ---
+  duration_ms: 0.467096
+  type: 'test'
+  ...
+# Subtest: Day 6 complete low, mid, and high GalviScores are valid renderable results
+ok 48 - Day 6 complete low, mid, and high GalviScores are valid renderable results
+  ---
+  duration_ms: 0.551801
+  type: 'test'
+  ...
+# Subtest: Day 6 GalviShot paid return restores result path instead of restarting triage
+ok 49 - Day 6 GalviShot paid return restores result path instead of restarting triage
+  ---
+  duration_ms: 0.639553
+  type: 'test'
+  ...
+# Subtest: Day 6 normal clean URL restores exactly GalviTriage presentation when no route owns the page
+ok 50 - Day 6 normal clean URL restores exactly GalviTriage presentation when no route owns the page
+  ---
+  duration_ms: 1.056503
+  type: 'test'
+  ...
+# Subtest: Day 6 incomplete or unentitled existing session falls through without replacing the canonical session
+ok 51 - Day 6 incomplete or unentitled existing session falls through without replacing the canonical session
+  ---
+  duration_ms: 1.087149
+  type: 'test'
+  ...
+# Subtest: Day 6 payment-return resolver failure displays standalone visible recovery and not Triage repair
+ok 52 - Day 6 payment-return resolver failure displays standalone visible recovery and not Triage repair
+  ---
+  duration_ms: 0.526945
+  type: 'test'
+  ...
+# Subtest: Day 6 payment-return paths clear return-pending after success or visible failure
+ok 53 - Day 6 payment-return paths clear return-pending after success or visible failure
+  ---
+  duration_ms: 0.708686
+  type: 'test'
+  ...
+# Subtest: Day 7 exact-product entitlement remains product scoped
+ok 54 - Day 7 exact-product entitlement remains product scoped
+  ---
+  duration_ms: 3.133497
+  type: 'test'
+  ...
+# Subtest: Day 7 Worker supports all required paid-return aliases and runtime marker
+ok 55 - Day 7 Worker supports all required paid-return aliases and runtime marker
+  ---
+  duration_ms: 0.347978
+  type: 'test'
+  ...
+# Subtest: Day 7 approved Stripe TEST links remain unchanged
+ok 56 - Day 7 approved Stripe TEST links remain unchanged
+  ---
+  duration_ms: 0.187189
+  type: 'test'
+  ...
+# Subtest: Day 7 canonical customer URL and GalviClinic destination remain unchanged
+ok 57 - Day 7 canonical customer URL and GalviClinic destination remain unchanged
+  ---
+  duration_ms: 0.171335
+  type: 'test'
+  ...
+# Subtest: Day 7 downstream transitions retain exact-product paywall stops
+ok 58 - Day 7 downstream transitions retain exact-product paywall stops
+  ---
+  duration_ms: 0.350122
+  type: 'test'
+  ...
+# Subtest: Day 7 exact entitlement restoration exists for all paid products
+ok 59 - Day 7 exact entitlement restoration exists for all paid products
+  ---
+  duration_ms: 0.22834
+  type: 'test'
+  ...
+# Subtest: Day 7A persistent GalviCare clinic identity and Triage framing are final
+ok 60 - Day 7A persistent GalviCare clinic identity and Triage framing are final
+  ---
+  duration_ms: 0.24814
+  type: 'test'
+  ...
+# Subtest: Day 7A GalviVitals presentation is educational and clinically staged
+ok 61 - Day 7A GalviVitals presentation is educational and clinically staged
+  ---
+  duration_ms: 0.258045
+  type: 'test'
+  ...
+# Subtest: Day 7A GalviScore uses symptom and care language while preserving Top 3 logic
+ok 62 - Day 7A GalviScore uses symptom and care language while preserving Top 3 logic
+  ---
+  duration_ms: 0.551801
+  type: 'test'
+  ...
+# Subtest: Day 7A GalviShot presentation is diagnosis and treatment recommendation
+ok 63 - Day 7A GalviShot presentation is diagnosis and treatment recommendation
+  ---
+  duration_ms: 0.647865
+  type: 'test'
+  ...
+# Subtest: Day 7A GalviSight presentation is a distinct prescription
+ok 64 - Day 7A GalviSight presentation is a distinct prescription
+  ---
+  duration_ms: 0.334178
+  type: 'test'
+  ...
+# Subtest: Day 7A GalviPath presentation is the 90 Day treatment plan
+ok 65 - Day 7A GalviPath presentation is the 90 Day treatment plan
+  ---
+  duration_ms: 0.352575
+  type: 'test'
+  ...
+# Subtest: Day 7A customer view hides QA/internal sections while retaining debug support
+ok 66 - Day 7A customer view hides QA/internal sections while retaining debug support
+  ---
+  duration_ms: 0.12085
+  type: 'test'
+  ...
+# Subtest: Day 7A persistent GalviScore reference exists downstream
+ok 67 - Day 7A persistent GalviScore reference exists downstream
+  ---
+  duration_ms: 0.14782
+  type: 'test'
+  ...
+# Subtest: Day 7A canonical clinical stage taxonomy is present
+ok 68 - Day 7A canonical clinical stage taxonomy is present
+  ---
+  duration_ms: 0.180759
+  type: 'test'
+  ...
+# Subtest: Day 7A deterministic clinical differentiation helpers exist
+ok 69 - Day 7A deterministic clinical differentiation helpers exist
+  ---
+  duration_ms: 0.329981
+  type: 'test'
+  ...
+# Subtest: Day 7 paid product print controls remain product scoped
+ok 70 - Day 7 paid product print controls remain product scoped
+  ---
+  duration_ms: 0.140079
+  type: 'test'
+  ...
+# Subtest: persistent GalviCare clinic identity is customer visible
+ok 71 - persistent GalviCare clinic identity is customer visible
+  ---
+  duration_ms: 1.543098
+  type: 'test'
+  ...
+# Subtest: canonical clinical stage taxonomy is present
+ok 72 - canonical clinical stage taxonomy is present
+  ---
+  duration_ms: 0.404322
+  type: 'test'
+  ...
+# Subtest: GalviVitals provides evergreen education and contextual health labels
+ok 73 - GalviVitals provides evergreen education and contextual health labels
+  ---
+  duration_ms: 0.235591
+  type: 'test'
+  ...
+# Subtest: GalviScore uses symptom and care terminology
+ok 74 - GalviScore uses symptom and care terminology
+  ---
+  duration_ms: 0.227859
+  type: 'test'
+  ...
+# Subtest: GalviShot renders prescriptions and GalviLab Results
+ok 75 - GalviShot renders prescriptions and GalviLab Results
+  ---
+  duration_ms: 0.408348
+  type: 'test'
+  ...
+# Subtest: GalviShot deterministic language is dimension specific
+ok 76 - GalviShot deterministic language is dimension specific
+  ---
+  duration_ms: 0.244174
+  type: 'test'
+  ...
+# Subtest: GalviSight is a distinct prescription with urgency horizon and reason
+ok 77 - GalviSight is a distinct prescription with urgency horizon and reason
+  ---
+  duration_ms: 0.336912
+  type: 'test'
+  ...
+# Subtest: GalviPath is a sequenced 90 Day treatment plan
+ok 78 - GalviPath is a sequenced 90 Day treatment plan
+  ---
+  duration_ms: 0.359305
+  type: 'test'
+  ...
+# Subtest: GalviPath uses clinical sample marker and recovery language
+ok 79 - GalviPath uses clinical sample marker and recovery language
+  ---
+  duration_ms: 0.911067
+  type: 'test'
+  ...
+# Subtest: GalviPath Check Up is scheduling only and uses approved Calendly destination
+ok 80 - GalviPath Check Up is scheduling only and uses approved Calendly destination
+  ---
+  duration_ms: 0.787903
+  type: 'test'
+  ...
+# Subtest: payment and restoration authority remains server side
+ok 81 - payment and restoration authority remains server side
+  ---
+  duration_ms: 0.244454
+  type: 'test'
+  ...
+# Subtest: clinical regression suite is part of authoritative npm test
+ok 82 - clinical regression suite is part of authoritative npm test
+  ---
+  duration_ms: 0.141691
+  type: 'test'
+  ...
+# Subtest: Final Day 7A GalviTriage copy is normalized
+ok 83 - Final Day 7A GalviTriage copy is normalized
+  ---
+  duration_ms: 1.359695
+  type: 'test'
+  ...
+# Subtest: Final Day 7A GalviShot paywall uses approved heading
+ok 84 - Final Day 7A GalviShot paywall uses approved heading
+  ---
+  duration_ms: 0.335289
+  type: 'test'
+  ...
+# Subtest: Final Day 7A GalviSight uses unlocked result hierarchy
+ok 85 - Final Day 7A GalviSight uses unlocked result hierarchy
+  ---
+  duration_ms: 0.271915
+  type: 'test'
+  ...
+# Subtest: Final Day 7A GalviPath uses unlocked result hierarchy
+ok 86 - Final Day 7A GalviPath uses unlocked result hierarchy
+  ---
+  duration_ms: 1.763036
+  type: 'test'
+  ...
+# Subtest: Final Day 7A GalviPath Check Up retains approved scheduling destination
+ok 87 - Final Day 7A GalviPath Check Up retains approved scheduling destination
+  ---
+  duration_ms: 0.365104
+  type: 'test'
+  ...
+# Subtest: Final Day 7A customer-facing care role is GalviClinician
+ok 88 - Final Day 7A customer-facing care role is GalviClinician
+  ---
+  duration_ms: 0.353507
+  type: 'test'
+  ...
+# Subtest: Final Day 7A includes customer grammar normalization helpers
+ok 89 - Final Day 7A includes customer grammar normalization helpers
+  ---
+  duration_ms: 0.327247
+  type: 'test'
+  ...
+# Subtest: Stripe checkout launches carry GalviCare session correlation
+ok 90 - Stripe checkout launches carry GalviCare session correlation
+  ---
+  duration_ms: 1.580023
+  type: 'test'
+  ...
+# Subtest: Worker resolves paid Stripe return to authoritative GalviCare session and persists entitlement idempotently
+ok 91 - Worker resolves paid Stripe return to authoritative GalviCare session and persists entitlement idempotently
+  ---
+  duration_ms: 30.364164
+  type: 'test'
+  ...
+# Subtest: Worker denies unpaid, missing session, and wrong-product Stripe returns
+ok 92 - Worker denies unpaid, missing session, and wrong-product Stripe returns
+  ---
+  duration_ms: 3.848952
+  type: 'test'
+  ...
+# Subtest: Frontend paid return uses Worker resolver before restoring results and never uses Triage repair for missing localStorage
+ok 93 - Frontend paid return uses Worker resolver before restoring results and never uses Triage repair for missing localStorage
+  ---
+  duration_ms: 1.640853
+  type: 'test'
+  ...
+# Subtest: Day 6 paid GalviScore return preserves original GalviCare session through restoration
+ok 94 - Day 6 paid GalviScore return preserves original GalviCare session through restoration
+  ---
+  duration_ms: 0.829134
+  type: 'test'
+  ...
+# Subtest: valid stored session is reused even after GalviTriage submission
+ok 95 - valid stored session is reused even after GalviTriage submission
+  ---
+  duration_ms: 4.954759
+  type: 'test'
+  ...
+# Subtest: drift across session keys is repaired from the first valid stored session
+ok 96 - drift across session keys is repaired from the first valid stored session
+  ---
+  duration_ms: 1.051386
+  type: 'test'
+  ...
+# Subtest: placeholder and malformed sessions are rejected
+ok 97 - placeholder and malformed sessions are rejected
+  ---
+  duration_ms: 1.344472
+  type: 'test'
+  ...
+# Subtest: submit_triage browser session ID becomes canonical before submission is marked complete
+ok 98 - submit_triage browser session ID becomes canonical before submission is marked complete
+  ---
+  duration_ms: 0.630509
+  type: 'test'
+  ...
+# Subtest: analytics does not create a replacement session after submission
+ok 99 - analytics does not create a replacement session after submission
+  ---
+  duration_ms: 1.807682
+  type: 'test'
+  ...
+# Subtest: GalviShot uses upstream canonical session and does not create one
+ok 100 - GalviShot uses upstream canonical session and does not create one
+  ---
+  duration_ms: 0.619803
+  type: 'test'
+  ...
+# Subtest: GalviSight handoff retains the canonical session but now stops at the commercial paywall first
+ok 101 - GalviSight handoff retains the canonical session but now stops at the commercial paywall first
+  ---
+  duration_ms: 0.98059
+  type: 'test'
+  ...
+# Subtest: GalviPath handoff retains the canonical session but stops at its commercial paywall first
+ok 102 - GalviPath handoff retains the canonical session but stops at its commercial paywall first
+  ---
+  duration_ms: 0.598111
+  type: 'test'
+  ...
+# Subtest: startNewGalviCareAssessment is the only explicit replacement operation
+ok 103 - startNewGalviCareAssessment is the only explicit replacement operation
+  ---
+  duration_ms: 1.715174
+  type: 'test'
+  ...
+# Subtest: complete simulated journey uses exactly one session ID
+ok 104 - complete simulated journey uses exactly one session ID
+  ---
+  duration_ms: 1.594004
+  type: 'test'
+  ...
+# Subtest: index.html does not expose QA secrets, D1 identifiers, or proprietary deterministic logic
+ok 105 - index.html does not expose QA secrets, D1 identifiers, or proprietary deterministic logic
+  ---
+  duration_ms: 0.686463
+  type: 'test'
+  ...
+1..105
+# tests 105
+# suites 0
+# pass 105
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 614.440916
+
+EXIT_CODE=0
+SOURCE_SHA=573d4d6170cb98e15c2ef7f344ea1009ce0c2fe1
