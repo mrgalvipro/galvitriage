@@ -1,1 +1,2 @@
 Trigger the Day 7A clinical promotion workflow from a pull_request event. No application source is authored on this branch.
+Retry 2 after compacting workflow logs.
