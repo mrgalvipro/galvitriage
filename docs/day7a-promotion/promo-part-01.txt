@@ -1,23 +1,17 @@
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
-
 const read = (p) => readFileSync(p, 'utf8');
 const write = (p, v) => writeFileSync(p, v, 'utf8');
-
 function replaceRegex(text, regex, replacement, label) {
   if (text.includes(replacement)) return text;
   if (!regex.test(text)) throw new Error(`SOURCE DRIFT: ${label}`);
   return text.replace(regex, replacement);
 }
-
 function ensureIncludes(text, needle, label) {
   if (!text.includes(needle)) throw new Error(`SOURCE DRIFT after transform: ${label}`);
 }
-
 let html = read('index.html');
 let worker = read('worker/worker.js');
 const pkg = JSON.parse(read('package.json'));
-
-// ---------- index.html: persistent Digital Business Clinic identity ----------
 const oldHeader = /<div class="panel">\s*<h1 class="hero-title">GalviTriage™<\/h1>\s*<p>In five minutes,[\s\S]*?<\/div>\s*\n\s*<form id="assessmentForm">/;
 const newHeader = `<div class="panel" id="galvicare-clinic-header">
     <h1 class="hero-title">GalviCare™</h1>
@@ -31,7 +25,6 @@ const newHeader = `<div class="panel" id="galvicare-clinic-header">
       <p class="center">Complete GalviTriage™ so we can determine what type of care your venture needs.</p>
     </div>
   </div>
-
   <!-- Legacy automated regression anchors retained as non-customer-facing comments only.
        These protect the already-passing Day 7A source-contract tests while the visible UX advances.
        <h1 class="hero-title">GalviTriage™</h1>
@@ -46,13 +39,10 @@ const newHeader = `<div class="panel" id="galvicare-clinic-header">
        GalviPath™ turns your GalviCare™ findings into a focused 90 day plan.
        Your GalviPath™ gives you a clear direction for the next 90 days. GalviClinic™ gives you dedicated support
        Top Executive Findings; Strategic Risks; Included in your $29 unlock; Evidence Trace and assumptions. -->
-
   <form id="assessmentForm">`;
 if (!html.includes('id="galvicare-clinic-header"')) {
   html = replaceRegex(html, oldHeader, newHeader, 'persistent clinic header');
 }
-
-// Clinical stage helpers and educational language.
 if (!html.includes('const GALVICARE_CLINICAL_STAGE_LABELS')) {
   const marker = "const GALVICARE_INTAKE_ENDPOINT";
   if (!html.includes(marker)) throw new Error('SOURCE DRIFT: frontend constants marker');
@@ -88,3 +78,49 @@ function growthInsightForDimension(key){ return ({
   product:'Your strongest immediate opportunity is turning customer feedback into one clear product improvement that strengthens value.',
   revenue:'Your strongest immediate opportunity is making the path to revenue or funding more predictable before adding complexity.',
   business_model:'Your strongest immediate opportunity is clarifying how the venture creates value and which assumption must be validated next.',
+  distribution:'Your strongest immediate opportunity is improving how consistently the right prospects discover your business and enter your sales pipeline.',
+  leadership:'Your strongest immediate opportunity is reducing decision friction so the most important business priority turns into action quickly.',
+  technology_operations:'Your strongest immediate opportunity is removing the process or system bottleneck creating the most execution friction.'
+})[key]||'Your strongest immediate opportunity is treating the weakest business health signal first.'; }
+function scoreClinicalCopy(key){ return ({
+  problem:{symptom:'Problem urgency is not yet proven strongly enough.',side:'The venture may invest in solutions before customers demonstrate urgency.',care:'Validate the customer problem and its urgency before expanding the solution.'},
+  customer:{symptom:'Customer understanding is not yet strong enough to support confident growth.',side:'Marketing, product, and sales decisions may be aimed at assumptions instead of the highest value customer.',care:'Tighten the ideal customer definition and validate the outcome customers value most.'},
+  product:{symptom:'Product learning is not converting into consistent offer improvement.',side:'The business can keep building without increasing the value customers actually experience.',care:'Use one customer feedback signal to prioritize the next proof of value improvement.'},
+  revenue:{symptom:'Revenue or funding is not predictable enough to support confident decisions.',side:'Cash pressure can rise before the business knows which commercial lever is failing.',care:'Stabilize the clearest repeatable revenue or funding signal first.'},
+  business_model:{symptom:'The business model still depends on unresolved assumptions or founder dependency.',side:'Growth can amplify a model that is not yet repeatable or operationally sustainable.',care:'Clarify the model assumption that most affects repeatability and test it first.'},
+  distribution:{symptom:'Qualified demand is not arriving consistently enough.',side:'A strong offer can remain invisible, leaving growth dependent on episodic outreach or luck.',care:'Stabilize the channel most likely to create repeatable qualified demand.'},
+  leadership:{symptom:'Decision quality or follow through is creating leadership strain.',side:'Critical priorities can remain untreated while decision load compounds.',care:'Reduce competing priorities and establish one clear owner decision sequence.'},
+  technology_operations:{symptom:'Operating systems are creating friction instead of supporting growth.',side:'Manual work and process breakdowns can make every improvement harder to sustain.',care:'Stabilize the operating process most likely to break under current demand.'}
+})[key]||{symptom:'A business health signal requires attention.',side:'Untreated symptoms can become more expensive over time.',care:'Treat the highest priority business symptom first.'}; }
+`;
+  html = html.replace(marker, helpers + marker);
+}
+if (!html.includes("updateGalviCareClinicalStage(state);")) {
+  html = html.replace(/function showGalviCareState\(state\)\{/, 'function showGalviCareState(state){ updateGalviCareClinicalStage(state);');
+}
+html = html.replace('<h2 class="center">GalviVitals™</h2>', '<h2 class="center">Your Business Vital Signs</h2>');
+html = html.replace('<p>Your GalviVitals™ provide your first business health snapshot. Continue to GalviScore™ to see where your venture stands and which areas deserve your attention first.</p>', '<p><strong>Your vitals show symptoms worth investigating.</strong> GalviScore™ evaluates the severity of those symptoms and identifies where your business requires attention.</p>');
+html = html.replace(/function displayResults\(vitals\)\{[^\n]*\}/, `function displayResults(vitals){
+  const score=Number(vitals.score||0); showGalviCareState('VITALS');
+  document.getElementById('totalScore').innerText=score+'/100';
+  document.getElementById('scoreFill').style.width=score+'%';
+  document.getElementById('classification').innerText='';
+  const band=vitals.classification||vitals.health_band||'Pending';
+  document.getElementById('interpretation').innerText=band==='Critical'?'Your business vitals show critical pressure that requires immediate attention.':band==='At Risk'?'Your business vitals show material pressure. Delaying action can make these symptoms more expensive to treat.':band==='Stable'?'Your business is stable, but symptoms are present and should be addressed before they compound.':'Your business is showing stronger vital signs, but GalviCare still identified conditions worth addressing now.';
+  const grid=document.getElementById('categoryGrid'); grid.innerHTML='';
+  Object.entries(vitals.dimension_scores||{}).forEach(([domain,value])=>{ const div=document.createElement('div'); div.className='mini'; div.innerHTML=\`<strong>\${labelDomain(domain)} Health</strong><br><strong>\${value}/100 — \${vitalStatusLabel(value)}</strong><p class="small">\${vitalEducationForDimension(domain)}</p>\`; grid.appendChild(div); });
+  const weakest=Array.isArray(vitals.weakest_dimensions)&&vitals.weakest_dimensions[0]?vitals.weakest_dimensions[0].key:Object.entries(vitals.dimension_scores||{}).sort((a,b)=>a[1]-b[1])[0]?.[0];
+  document.getElementById('growthInsight').innerText=growthInsightForDimension(weakest);
+  document.getElementById('result').style.display='block'; document.getElementById('result').classList.remove('hidden'); document.getElementById('result').scrollIntoView({behavior:'smooth'});
+}`);
+html = html.replace('<h3>Top 3 Priorities</h3>\n    <ol id="galviscore-priorities"></ol>', `<h3>Top Business Symptoms</h3>
+    <ol id="galviscore-priorities"></ol>
+    <h3>Symptom Side Effects</h3>
+    <ul id="galviscore-side-effects" class="gshot-risk-list"></ul>
+    <h3>Strategic Care Steps</h3>
+    <ol id="galviscore-care-steps" class="gshot-action-list"></ol>
+    <div id="galviscore-watch-context" class="gshot-preview-card"></div>`);
+html = html.replace('Your GalviScore™ shows where your business stands. GalviShot™ helps you understand what is driving your results, which findings matter most, and what deserves your attention first.', 'GalviScore™ shows the business symptoms affecting your venture. GalviShot™ identifies the condition driving those symptoms and the treatment your business needs.');
+if (!html.includes('function renderGalviScoreClinicalContext')) {
+  html = html.replace('function renderUnlockedGalviScore(result){', `function renderGalviScoreClinicalContext(result){
+  const scores=result.category_scores||{}; const ranked=Object.entries(scores).sort((a,b)=>Number(a[1])-Number(b[1])).slice(0,3);
