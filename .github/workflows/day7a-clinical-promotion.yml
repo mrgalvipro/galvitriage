@@ -14,7 +14,7 @@ jobs:
           ref: qa-revamped-galvicare-0-5
           fetch-depth: 1
           show-progress: false
-      - run: cat docs/day7a-promotion/promo-part-{01,02,03,04}.txt > scripts/promote-day7a-clinical-enhancements.mjs
+      - run: cat docs/day7a-promotion/promo-part-01.txt docs/day7a-promotion/promo-part-02.txt docs/day7a-promotion/promo-part-03.txt docs/day7a-promotion/promo-part-03b.txt docs/day7a-promotion/promo-part-04.txt > scripts/promote-day7a-clinical-enhancements.mjs
       - name: Promote
         id: promote
         continue-on-error: true
