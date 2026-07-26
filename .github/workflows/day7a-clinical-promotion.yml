@@ -51,3 +51,5 @@ jobs:
             git commit -m "Day 7A: finalize customer-facing clinical presentation"
             git push origin HEAD:qa-revamped-galvicare-0-5
           fi
+
+# Triggered after workflow registration so promotion runs against the corrected patch utility.
