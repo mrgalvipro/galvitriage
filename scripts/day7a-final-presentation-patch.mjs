@@ -36,4 +36,4 @@ for(const value of required) if(!html.includes(value)) throw new Error(`FINAL PR
 if(html.includes('Your Executive Clinical Findings Are Ready')) throw new Error('Obsolete GalviShot heading still exists.');
 fs.writeFileSync(file,html,'utf8');
 console.log('Day 7A final customer-facing presentation source prepared successfully.');
-// promotion-trigger-v2
+// authoritative-gate-trigger-v3
