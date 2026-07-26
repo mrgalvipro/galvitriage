@@ -1,0 +1,53 @@
+name: Day 7A Clinical Promotion
+
+on:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - ".github/workflows/day7a-clinical-promotion.yml"
+      - "scripts/day7a-final-presentation-patch.mjs"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: galvicare-day7a-clinical-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout authoritative QA branch
+        uses: actions/checkout@v4
+        with:
+          ref: qa-revamped-galvicare-0-5
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Apply approved final Day 7A presentation corrections
+        run: node scripts/day7a-final-presentation-patch.mjs index.html
+
+      - name: Validate final presentation before promotion
+        run: node --test tests/day7a-final-presentation.test.mjs
+
+      - name: Commit corrected index.html to authoritative QA branch
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "index.html already matches the approved Day 7A presentation contract."
+          else
+            git commit -m "Day 7A: finalize customer-facing clinical presentation"
+            git push origin HEAD:qa-revamped-galvicare-0-5
+          fi
