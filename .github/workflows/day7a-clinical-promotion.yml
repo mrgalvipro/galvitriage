@@ -37,20 +37,26 @@ jobs:
       - name: Apply approved final Day 7A presentation corrections
         run: node scripts/day7a-final-presentation-patch.mjs index.html
 
-      - name: Run authoritative stabilization gate against corrected source
-        run: npm run stabilization:gate
-
-      - name: Commit corrected index.html and machine-verifiable readiness marker
+      - name: Run gate and persist exact evidence
         shell: bash
         run: |
+          set +e
+          npm run stabilization:gate > DAY7A_GATE_EVIDENCE.txt 2>&1
+          code=$?
+          cat DAY7A_GATE_EVIDENCE.txt
+          printf '\nEXIT_CODE=%s\nSOURCE_SHA=%s\n' "$code" "$(git rev-parse HEAD)" >> DAY7A_GATE_EVIDENCE.txt
+          if [ "$code" -eq 0 ]; then
+            printf 'DAY7A_AUTOMATED_GATE=PASS\nSOURCE_SHA=%s\nTEST_COMMAND=npm run stabilization:gate\n' "$(git rev-parse HEAD)" > DAY7A_AUTOMATED_GATE_PASS.txt
+          else
+            rm -f DAY7A_AUTOMATED_GATE_PASS.txt
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          printf 'DAY7A_AUTOMATED_GATE=PASS\nSOURCE_SHA=%s\nTEST_COMMAND=npm run stabilization:gate\n' "$(git rev-parse HEAD)" > DAY7A_AUTOMATED_GATE_PASS.txt
-          git add index.html DAY7A_AUTOMATED_GATE_PASS.txt
+          git add index.html DAY7A_GATE_EVIDENCE.txt
+          if [ -f DAY7A_AUTOMATED_GATE_PASS.txt ]; then git add DAY7A_AUTOMATED_GATE_PASS.txt; else git add -u DAY7A_AUTOMATED_GATE_PASS.txt 2>/dev/null || true; fi
           git diff --cached --check
-          if git diff --cached --quiet; then
-            echo "Corrected source and readiness marker already committed."
-          else
-            git commit -m "Day 7A: pass authoritative automated gate"
+          if ! git diff --cached --quiet; then
+            git commit -m "Day 7A: persist authoritative gate evidence"
             git push origin HEAD:qa-revamped-galvicare-0-5
           fi
+          exit "$code"
