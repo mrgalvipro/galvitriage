@@ -616,9 +616,9 @@ function scoreClinicalCopy(key){ return ({
 const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-0-5-production.mrgalvipro.workers.dev';
 const GALVICARE_API_ENDPOINT = GALVICARE_INTAKE_ENDPOINT + '/api';
 const GALVICARE_SCORE_ENDPOINT = ''; // Preserved for legacy later-product event hooks only.
-const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/14A00kbivcypgoGfBY53000';
-const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/00w14odrG1QLdcu9dA53002';
-const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53003';
+const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00';
+const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/00w14odrG1QLdcu9dA53O02';
+const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03';
 const SCORING_VERSION = 'galviengine_score_v0_5_1';
 const QUESTION_CONTRACT_VERSION = 'galvitriage_questions_v0_5_1';
 const GALVI_ANALYTICS_VERSION = 'galvianalytics_0_5';
@@ -1120,7 +1120,7 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
 (function(){
   'use strict';
   const GSHOT = Object.freeze({
-    PAYMENT_LINK: 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253001',
+    PAYMENT_LINK: 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253O01',
     QA_OVERRIDE_TOKEN_KEY: 'galvishot_qa_override_token'
   });
 
