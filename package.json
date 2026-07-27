@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test tests/day2-worker.test.mjs tests/day3-worker.test.mjs tests/day3-security-gate.test.mjs tests/day4-worker.test.mjs tests/session-continuity.test.mjs tests/day6-routing-restoration.test.mjs tests/day6-fcd.test.mjs tests/payment-return.test.mjs tests/day6-critical-path.test.mjs tests/day7-release-readiness.test.mjs tests/day7a-clinical-experience.test.mjs tests/day7a-final-presentation.test.mjs tests/day7d-customer-intelligence.test.mjs",
-    "check": "node --check worker/worker.js && node --check worker/day7d-engine.js",
+    "test": "node --test tests/day2-worker.test.mjs tests/day3-worker.test.mjs tests/day3-security-gate.test.mjs tests/day4-worker.test.mjs tests/session-continuity.test.mjs tests/day6-routing-restoration.test.mjs tests/day6-fcd.test.mjs tests/payment-return.test.mjs tests/day6-critical-path.test.mjs tests/day7-release-readiness.test.mjs tests/day7a-clinical-experience.test.mjs tests/day7a-final-presentation.test.mjs tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs",
+    "check": "node --check worker/worker.js && node --check worker/day7d-engine.js && node --check day7d-browser-customer-intelligence.js",
     "test:day2": "node --test tests/day2-worker.test.mjs",
     "test:day3": "node --test tests/day3-worker.test.mjs",
     "test:security": "node --test tests/day3-security-gate.test.mjs",
@@ -15,11 +15,11 @@
     "test:day7b": "node --test tests/day7b-environment-isolation.test.mjs",
     "day7b:gate": "npm run stabilization:gate && npm run check:day7b && npm run test:day7b",
     "day7b:build-production-frontend": "node scripts/day7b-build-production-frontend.mjs",
-    "check:day7c": "node --check day7c-browser-observability.js && node --check scripts/day7b-build-qa-frontend.mjs",
+    "check:day7c": "node --check day7c-browser-observability.js && node --check day7d-browser-customer-intelligence.js && node --check scripts/day7b-build-qa-frontend.mjs",
     "test:day7c": "node --test tests/day7c-integration.test.mjs",
     "day7c:build-qa-frontend": "node scripts/day7b-build-qa-frontend.mjs",
     "day7c:gate": "npm run check:day7c && npm run test:day7c && npm run day7c:build-qa-frontend",
-    "test:day7d": "node --test tests/day7d-customer-intelligence.test.mjs",
+    "test:day7d": "node --test tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs",
     "day7d:preflight": "node scripts/day7d-preflight.mjs",
     "day7d:gate": "npm run day7d:preflight && npm run test:day7d && npm run stabilization:gate && npm run day7c:gate"
   }
