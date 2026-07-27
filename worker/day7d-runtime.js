@@ -15,9 +15,7 @@ function rewriteSql(sql) {
 function day7dDb(db) {
   return new Proxy(db, {
     get(target, prop, receiver) {
-      if (prop === 'prepare') {
-        return (sql) => target.prepare(rewriteSql(sql));
-      }
+      if (prop === 'prepare') return (sql) => target.prepare(rewriteSql(sql));
       const value = Reflect.get(target, prop, receiver);
       return typeof value === 'function' ? value.bind(target) : value;
     }
@@ -32,7 +30,7 @@ function json(body, status = 200) {
       'Access-Control-Allow-Origin': '*',
       'Access-Control-Allow-Headers': 'Content-Type',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Cache-Control': 'no-store',
+      'Cache-Control': 'no-store, no-cache, must-revalidate',
       'X-Galvi-Day7D-Rules': DAY7D_RULES_VERSION
     }
   });
@@ -53,16 +51,11 @@ export default {
     }
 
     const url = new URL(request.url);
-    if (request.method !== 'POST' || url.pathname !== '/api') {
-      return day7dWorker.fetch(request, env, ctx);
-    }
+    if (request.method !== 'POST' || url.pathname !== '/api') return day7dWorker.fetch(request, env, ctx);
 
     let payload;
-    try {
-      payload = await request.clone().json();
-    } catch {
-      return day7dWorker.fetch(request, env, ctx);
-    }
+    try { payload = await request.clone().json(); }
+    catch { return day7dWorker.fetch(request, env, ctx); }
 
     const action = String(payload?.action || '').trim();
 
@@ -77,38 +70,30 @@ export default {
           rules_version: DAY7D_RULES_VERSION,
           question_version: DAY7D_QUESTION_VERSION,
           entrypoint: 'worker/day7d-runtime.js',
-          schema_adapter: 'day7d_dedicated_tables_v1'
+          schema_adapter: 'day7d_dedicated_tables_v1',
+          worker_name: String(env.DAY7D_DEPLOY_TARGET || 'galvicare-triage-intake'),
+          deployment_sha: String(env.DAY7D_DEPLOY_SHA || ''),
+          release_contract: 'day7d_exact_version_100pct_v1'
         }
       }, response.status);
     }
 
     if (action === 'submit_triage') {
-      // Preserve the already-accepted Day 1–7C submit path against its original schema.
       const response = await day7dWorker.fetch(request.clone(), env, ctx);
       if (response.ok && env.DB) {
         const sid = String(payload?.session_id || payload?.session?.session_id || '').trim();
         if (sid) {
-          try {
-            await persistContext(day7dDb(env.DB), sid, payload);
-          } catch (error) {
-            console.error('Day 7D context persistence failed', error?.message || error);
-          }
+          try { await persistContext(day7dDb(env.DB), sid, payload); }
+          catch (error) { console.error('Day 7D context persistence failed', error?.message || error); }
         }
       }
       return response;
     }
 
-    if (!DAY7D_ACTIONS.has(action)) {
-      return day7dWorker.fetch(request, env, ctx);
-    }
-
-    if (!env.DB) {
-      return json({success:false,status:'error',action,message:'D1 binding DB is not configured'},500);
-    }
+    if (!DAY7D_ACTIONS.has(action)) return day7dWorker.fetch(request, env, ctx);
+    if (!env.DB) return json({success:false,status:'error',action,message:'D1 binding DB is not configured'},500);
 
     try {
-      // Only Day 7D intelligence actions receive the schema adapter. Legacy Day 1–7C
-      // actions continue to use their original clinical_evidence/clinical_observations tables.
       return await day7dWorker.fetch(request, {...env, DB: day7dDb(env.DB)}, ctx);
     } catch (error) {
       console.error('Day 7D runtime error', action, error?.stack || error?.message || error);
