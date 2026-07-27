@@ -195,6 +195,9 @@
 
 </style>
 <script>try{const p=new URLSearchParams(location.search);const product=(p.get('product')||'').toLowerCase();const paid=p.get('paid')||'';if((product==='galviscore'&&paid==='score_success')||(product==='galvishot'&&paid==='shot_success')||(product==='galvisight'&&paid==='sight_success')||(product==='galvipath'&&paid==='path_success'))document.documentElement.classList.add('galvicare-return-pending');}catch(e){}</script>
+<style id="day7b-production-hardening">
+[id$="-qa-override"], #qa-ribbon, .qa-ribbon, [data-qa-only="true"] { display:none !important; }
+</style>
 </head>
 <body>
 <script>document.addEventListener('DOMContentLoaded',()=>{try{if(new URLSearchParams(location.search).get('qa_debug')==='1')document.body.classList.add('qa-debug-enabled');}catch(e){}});</script>
@@ -610,12 +613,12 @@ function scoreClinicalCopy(key){ return ({
   leadership:{symptom:'Decision quality or follow through is creating leadership strain.',side:'Critical priorities can remain untreated while decision load compounds.',care:'Reduce competing priorities and establish one clear owner decision sequence.'},
   technology_operations:{symptom:'Operating systems are creating friction instead of supporting growth.',side:'Manual work and process breakdowns can make every improvement harder to sustain.',care:'Stabilize the operating process most likely to break under current demand.'}
 })[key]||{symptom:'A business health signal requires attention.',side:'Untreated symptoms can become more expensive over time.',care:'Treat the highest priority business symptom first.'}; }
-const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-triage-intake.mrgalvipro.workers.dev';
+const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-0-5-production.mrgalvipro.workers.dev';
 const GALVICARE_API_ENDPOINT = GALVICARE_INTAKE_ENDPOINT + '/api';
 const GALVICARE_SCORE_ENDPOINT = ''; // Preserved for legacy later-product event hooks only.
-const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01';
-const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_eVq3cw3R63YT6O6ahE53O03';
-const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_fZu14ofzO9jd8We1L853O05';
+const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/14A00kbivcypgoGfBY53000';
+const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/00w14odrG1QLdcu9dA53002';
+const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53003';
 const SCORING_VERSION = 'galviengine_score_v0_5_1';
 const QUESTION_CONTRACT_VERSION = 'galvitriage_questions_v0_5_1';
 const GALVI_ANALYTICS_VERSION = 'galvianalytics_0_5';
@@ -1117,7 +1120,7 @@ document.querySelectorAll('[data-cta-name]').forEach(function(el){ el.addEventLi
 (function(){
   'use strict';
   const GSHOT = Object.freeze({
-    PAYMENT_LINK: 'https://buy.stripe.com/test_00w14odrG1QLdcu9dA53O02',
+    PAYMENT_LINK: 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253001',
     QA_OVERRIDE_TOKEN_KEY: 'galvishot_qa_override_token'
   });
 
