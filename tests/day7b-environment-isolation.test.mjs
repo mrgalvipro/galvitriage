@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const qaWorker = readFileSync(new URL('../worker/worker.js', import.meta.url), 'utf8');
 const prodEntry = readFileSync(new URL('../worker/production-entry.js', import.meta.url), 'utf8');
-const qaWrangler = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
+const qaWrangler = readFileSync(new URL('../wrangler.json', import.meta.url), 'utf8');
 const prodWrangler = readFileSync(new URL('../wrangler.production.jsonc', import.meta.url), 'utf8');
 
 const PROD_D1_ID = '2fc954b7-00ca-405b-8313-f91e706845a2';
