@@ -150,6 +150,9 @@ export function chooseFollowups(r,existing={},product='GalviShot') {
   if(r.confidence<60) count=3;
   else if(r.confidence<80) count=2;
   else if(divergence) count=1;
+  // Day 7D product contract: every new clinical stage collects at least one
+  // stage-specific founder intelligence input before finalizing its deliverable.
+  if(Object.keys(existing||{}).length===0) count=Math.max(count,1);
   if(!count) return [];
   const dims=[r.weakest_dimension,r.stated?.biggest_challenge,'general'].filter(Boolean);
   const candidates=[];
