@@ -14,6 +14,10 @@
     "check:day7b": "node --check worker/worker.js && node --check worker/production-entry.js && node --check scripts/day7b-build-production-frontend.mjs",
     "test:day7b": "node --test tests/day7b-environment-isolation.test.mjs",
     "day7b:gate": "npm run stabilization:gate && npm run check:day7b && npm run test:day7b",
-    "day7b:build-production-frontend": "node scripts/day7b-build-production-frontend.mjs"
+    "day7b:build-production-frontend": "node scripts/day7b-build-production-frontend.mjs",
+    "check:day7c": "node --check day7c-browser-observability.js && node --check scripts/day7b-build-qa-frontend.mjs",
+    "test:day7c": "node --test tests/day7c-integration.test.mjs",
+    "day7c:build-qa-frontend": "node scripts/day7b-build-qa-frontend.mjs",
+    "day7c:gate": "npm run check:day7c && npm run test:day7c && npm run day7c:build-qa-frontend"
   }
 }
