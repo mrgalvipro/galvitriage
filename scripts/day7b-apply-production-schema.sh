@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Day 7B controlled Production-schema execution trigger. No QA data is copied.
 PROD_DB="galvivault-0-5-production"
 PROD_CONFIG="wrangler.production.jsonc"
 SCHEMA="migrations/production/0001_galvicare_0_5_production_baseline.sql"
