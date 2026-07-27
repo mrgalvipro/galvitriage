@@ -1,0 +1,42 @@
+name: GalviCare Day 7B Readiness
+
+on:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  day7b-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout current Day 7A branch
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install --ignore-scripts
+
+      - name: Preserve Day 7A and prove Day 7B source isolation
+        run: npm run day7b:gate
+
+      - name: Reject QA D1 binding in Production config
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -q 'cdf9042b-ab09-498a-ac66-010b6cce47d4' wrangler.production.jsonc; then
+            echo 'FAIL: Production config contains QA D1 ID.'
+            exit 1
+          fi
+          grep -q 'galvivault-0-5-production' wrangler.production.jsonc
+          grep -q 'worker/production-entry.js' wrangler.production.jsonc
+          echo 'PASS: Production runtime is independently targeted.'
