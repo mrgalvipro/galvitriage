@@ -96,8 +96,14 @@ jobs:
       - name: Preserve generated Production artifact
         run: cp index.production.html /tmp/index.production.html
 
-      - name: Checkout Production main
+      - name: Checkout Production main cleanly
         run: |
+          # npm install/ci can modify tracked package metadata during validation.
+          # The only generated release artifact that must cross branches is already
+          # preserved at /tmp/index.production.html, so discard all QA worktree
+          # mutations before switching to the authoritative Production branch.
+          git reset --hard HEAD
+          git clean -fd
           git fetch origin main
           git checkout -B main origin/main
 
