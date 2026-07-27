@@ -11,8 +11,9 @@
     "stabilization:gate": "npm run check && npm test",
     "test:session": "node --test tests/session-continuity.test.mjs",
     "test:day4": "node --test tests/day4-worker.test.mjs",
-    "check:day7b": "node --check worker/worker.js && node --check worker/production-entry.js",
+    "check:day7b": "node --check worker/worker.js && node --check worker/production-entry.js && node --check scripts/day7b-build-production-frontend.mjs",
     "test:day7b": "node --test tests/day7b-environment-isolation.test.mjs",
-    "day7b:gate": "npm run stabilization:gate && npm run check:day7b && npm run test:day7b"
+    "day7b:gate": "npm run stabilization:gate && npm run check:day7b && npm run test:day7b",
+    "day7b:build-production-frontend": "node scripts/day7b-build-production-frontend.mjs"
   }
 }
