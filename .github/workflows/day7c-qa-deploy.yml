@@ -5,14 +5,14 @@ on:
     branches: [qa-revamped-galvicare-0-5]
     paths:
       - '.github/workflows/day7c-qa-deploy.yml'
-      - 'day7c-browser-observability.js'
-      - 'migrations/0005_day7c_integration_trace.sql'
-      - 'tests/day7c-integration.test.mjs'
-      - 'scripts/day7b-build-qa-frontend.mjs'
+      - 'worker/worker.js'
       - 'wrangler.json'
       - 'wrangler.qa-frontend.jsonc'
       - 'qa-frontend-worker.js'
-      - 'worker/worker.js'
+      - 'scripts/day7b-build-qa-frontend.mjs'
+      - 'day7c-browser-observability.js'
+      - 'migrations/0005_day7c_integration_trace.sql'
+      - 'tests/day7c-integration.test.mjs'
       - 'package.json'
   workflow_dispatch:
 
@@ -29,7 +29,7 @@ env:
 
 jobs:
   verify-deploy-preflight:
-    name: Repair worker.js, deploy QA, certify integrations
+    name: Repair authoritative Worker, deploy QA, certify HubSpot GA4 Clarity
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -47,9 +47,10 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: Apply one authoritative Day 7C worker.js correction
+      - name: Apply one authoritative worker.js correction
         shell: bash
         run: |
+          set -euo pipefail
           python - <<'PY'
           from pathlib import Path
           import re
@@ -57,15 +58,21 @@ jobs:
           worker_path = Path('worker/worker.js')
           wrangler_path = Path('wrangler.json')
           worker = worker_path.read_text()
-          original = worker
 
           if "const DAY7C_HUBSPOT_ADAPTER_VERSION" not in worker:
+              marker = "const DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1';"
+              if marker not in worker:
+                  raise SystemExit('DAY7A runtime marker not found')
               worker = worker.replace(
-                  "const DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1';",
-                  "const DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1';\nconst DAY7C_HUBSPOT_ADAPTER_VERSION = 'day7c-hubspot-upsert-v3';\nconst DAY7C_HUBSPOT_TIMEOUT_MS = 5000;"
+                  marker,
+                  marker + "\nconst DAY7C_HUBSPOT_ADAPTER_VERSION = 'day7c-hubspot-direct-v1';\nconst DAY7C_HUBSPOT_TIMEOUT_MS = 5000;",
+                  1
               )
 
-          properties_pattern = re.compile(r"function buildHubSpotContactProperties\(\s*payload\s*\) \{.*?\n\}", re.S)
+          properties_pattern = re.compile(
+              r"function buildHubSpotContactProperties\(\s*payload\s*\) \{.*?\n\}",
+              re.S
+          )
           properties_replacement = '''function buildHubSpotContactProperties(payload) {
             const properties = {
               email: normalizeFounderEmail(safe(payload, 'founder.email')),
@@ -77,17 +84,23 @@ jobs:
               galvicare_environment: 'qa',
               galvicare_test_record: 'true'
             };
-            return Object.fromEntries(Object.entries(properties).filter(([, value]) => String(value || '').trim() !== ''));
+            return Object.fromEntries(
+              Object.entries(properties).filter(([, value]) => String(value || '').trim() !== '')
+            );
           }'''
           worker, count = properties_pattern.subn(properties_replacement, worker, count=1)
           if count != 1:
-              raise SystemExit('Could not replace buildHubSpotContactProperties')
+              raise SystemExit('buildHubSpotContactProperties replacement failed')
 
-          request_pattern = re.compile(r"async function hubspotRequest\(.*?\n\}\n\nasync function upsertHubSpotContact\(.*?\n\}", re.S)
-          request_replacement = '''async function hubspotRequest(env, path, method = 'POST', body = null) {
+          hubspot_pattern = re.compile(
+              r"async function hubspotRequest\(.*?\n\}\n\nasync function upsertHubSpotContact\(.*?\n\}",
+              re.S
+          )
+          hubspot_replacement = '''async function hubspotRequest(env, path, method = 'POST', body = null) {
             if (env.HUBSPOT_ENABLED !== 'true' || !env.HUBSPOT_PRIVATE_APP_TOKEN) {
               return { skipped: true, reason: 'HubSpot disabled or HUBSPOT_PRIVATE_APP_TOKEN missing' };
             }
+
             const controller = new AbortController();
             const timer = setTimeout(() => controller.abort(), DAY7C_HUBSPOT_TIMEOUT_MS);
             try {
@@ -100,10 +113,16 @@ jobs:
                 body: body !== null ? JSON.stringify(body) : undefined,
                 signal: controller.signal
               });
+
               let data = {};
               try { data = await response.json(); } catch { data = {}; }
+
               if (!response.ok) {
-                throw new Error(`HubSpot ${method} ${path} failed (${response.status}): ${String(data.message || data.category || 'unknown error').slice(0, 500)}`);
+                const error = new Error(
+                  `HubSpot ${method} ${path} failed (${response.status}): ${String(data.message || data.category || 'unknown error').slice(0, 500)}`
+                );
+                error.httpStatus = response.status;
+                throw error;
               }
               return data;
             } finally {
@@ -145,7 +164,7 @@ jobs:
                   'GET'
                 );
               } catch (lookupError) {
-                if (!String(lookupError.message || '').includes('(404)')) throw lookupError;
+                if (lookupError.httpStatus !== 404) throw lookupError;
               }
 
               let response;
@@ -160,24 +179,43 @@ jobs:
                 );
               } else {
                 operation = 'create';
-                response = await hubspotRequest(env, '/crm/v3/objects/contacts', 'POST', { properties });
+                response = await hubspotRequest(
+                  env,
+                  '/crm/v3/objects/contacts',
+                  'POST',
+                  { properties }
+                );
               }
 
               const externalId = String(response?.id || existing?.id || '');
               await recordDay7CIntegrationTrace(env, sessionId, 'delivered', externalId || null);
-              return { attempted: true, success: true, status: 'delivered', operation, contact_id: externalId };
+              return {
+                attempted: true,
+                success: true,
+                status: 'delivered',
+                operation,
+                contact_id: externalId
+              };
             } catch (error) {
               const status = error?.name === 'AbortError' ? 'timeout' : 'failed';
               await recordDay7CIntegrationTrace(env, sessionId, status);
               console.error('Day 7C HubSpot sync failed', error?.message || error);
-              return { attempted: true, success: false, status, error: String(error?.message || error).slice(0, 500) };
+              return {
+                attempted: true,
+                success: false,
+                status,
+                error: String(error?.message || error).slice(0, 500)
+              };
             }
           }'''
-          worker, count = request_pattern.subn(request_replacement, worker, count=1)
+          worker, count = hubspot_pattern.subn(hubspot_replacement, worker, count=1)
           if count != 1:
-              raise SystemExit('Could not replace HubSpot request/upsert implementation')
+              raise SystemExit('HubSpot request/upsert replacement failed')
 
-          day2_pattern = re.compile(r"async function handleDay2Action\(env, payload, action\) \{.*?\n\}\n\nconst GALVISHOT_ACTIONS", re.S)
+          day2_pattern = re.compile(
+              r"async function handleDay2Action\(env, payload, action\) \{.*?\n\}\n\nconst GALVISHOT_ACTIONS",
+              re.S
+          )
           day2_replacement = '''async function handleDay2Action(env, payload, action) {
             const db = requireDb(env); const sid = getPayloadSessionId(payload);
             if (action === 'triage_completeness') return jsonResponse({ success: true, action, session_id: sid, ...calculateCompleteness(payload) }, 200, env);
@@ -196,7 +234,7 @@ jobs:
                 triage: { session_id, question_contract_version: DAY2_QUESTION_CONTRACT_VERSION },
                 vitals,
                 score,
-                day7c: { hubspot, adapter: DAY7C_HUBSPOT_ADAPTER_VERSION }
+                day7c: { adapter: DAY7C_HUBSPOT_ADAPTER_VERSION, hubspot }
               }, 200, env, { 'X-GalviCare-Day7C-Adapter': DAY7C_HUBSPOT_ADAPTER_VERSION });
             }
             if (!required(sid)) return jsonResponse({ success: false, action, message: 'Missing session_id' }, 400, env);
@@ -213,74 +251,48 @@ jobs:
           const GALVISHOT_ACTIONS'''
           worker, count = day2_pattern.subn(day2_replacement, worker, count=1)
           if count != 1:
-              raise SystemExit('Could not replace handleDay2Action')
+              raise SystemExit('handleDay2Action replacement failed')
 
-          health_old = '''          supported_actions: [
-            ...GALVISHOT_ACTIONS,
-            ...GALVISIGHT_ACTIONS
-          ],
-
-          build:
-            GALVICARE_BUILD'''
-          health_new = '''          supported_actions: [
-            ...GALVISHOT_ACTIONS,
-            ...GALVISIGHT_ACTIONS
-          ],
-          day7c_hubspot_adapter: DAY7C_HUBSPOT_ADAPTER_VERSION,
-          hubspot_enabled: env.HUBSPOT_ENABLED === 'true',
-          hubspot_credential_present: Boolean(String(env.HUBSPOT_PRIVATE_APP_TOKEN || '').trim()),
-          day7c_environment: String(env.ENVIRONMENT || env.APP_ENV || GALVICARE_BUILD.environment),
-          ga4_measurement_id: String(env.GA4_MEASUREMENT_ID || ''),
-          clarity_project_id: String(env.CLARITY_PROJECT_ID || ''),
-
-          build:
-            GALVICARE_BUILD'''
-          if health_old not in worker:
-              raise SystemExit('Could not locate health response block')
-          worker = worker.replace(health_old, health_new, 1)
-
-          required_markers = [
-              "DAY7C_HUBSPOT_ADAPTER_VERSION = 'day7c-hubspot-upsert-v3'",
+          required = [
+              "DAY7C_HUBSPOT_ADAPTER_VERSION = 'day7c-hubspot-direct-v1'",
               "await upsertHubSpotContact(env, payload, session_id)",
-              "day7c_hubspot_adapter: DAY7C_HUBSPOT_ADAPTER_VERSION",
               "galvicare_test_record: 'true'",
               "recordDay7CIntegrationTrace"
           ]
-          for marker in required_markers:
+          for marker in required:
               if marker not in worker:
-                  raise SystemExit(f'Missing required worker marker after patch: {marker}')
+                  raise SystemExit(f'Missing corrected Worker marker: {marker}')
 
           worker_path.write_text(worker)
 
           wrangler = wrangler_path.read_text()
           wrangler = wrangler.replace('"main": "worker/day7c-entry.js"', '"main": "worker/worker.js"')
           if '"main": "worker/worker.js"' not in wrangler:
-              raise SystemExit('wrangler.json was not made authoritative to worker/worker.js')
+              raise SystemExit('wrangler.json did not become worker.js authoritative')
           wrangler_path.write_text(wrangler)
-
-          print('worker.js changed:', worker != original)
           PY
 
-      - name: Persist authoritative worker.js correction to QA branch
+      - name: Persist corrected authoritative Worker on existing QA branch
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- worker/worker.js wrangler.json; then
-            echo 'Authoritative worker.js correction already committed.'
-          else
+          if ! git diff --quiet -- worker/worker.js wrangler.json; then
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
             git add worker/worker.js wrangler.json
-            git commit -m 'Day 7C: integrate HubSpot directly into authoritative D1 worker'
+            git commit -m 'Day 7C: wire HubSpot directly into authoritative D1 submit_triage'
             git push origin HEAD:qa-revamped-galvicare-0-5
           fi
 
       - name: Critical-path source checks
+        shell: bash
         run: |
+          set -euo pipefail
           node --check worker/worker.js
           grep -q '"main": "worker/worker.js"' wrangler.json
-          grep -q 'day7c-hubspot-upsert-v3' worker/worker.js
+          grep -q 'day7c-hubspot-direct-v1' worker/worker.js
           grep -q 'await upsertHubSpotContact(env, payload, session_id)' worker/worker.js
+          grep -q 'galvicare_test_record' worker/worker.js
           grep -q 'recordDay7CIntegrationTrace' worker/worker.js
           grep -q '"ENVIRONMENT": "qa"' wrangler.json
           grep -q '"HUBSPOT_ENABLED": "true"' wrangler.json
@@ -318,24 +330,11 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.json
 
-      - name: Hard runtime gate - authoritative Worker / HubSpot configuration
+      - name: Automated HubSpot preflight through real submit_triage
         shell: bash
         run: |
           set -euo pipefail
           sleep 20
-          curl --fail --silent --show-error --retry 6 --retry-delay 3 "$QA_BACKEND_URL/health" -o /tmp/backend.json
-          cat /tmp/backend.json
-          grep -q '"day7c_hubspot_adapter":"day7c-hubspot-upsert-v3"' /tmp/backend.json
-          grep -q '"hubspot_enabled":true' /tmp/backend.json
-          grep -q '"hubspot_credential_present":true' /tmp/backend.json
-          grep -q '"day7c_environment":"qa"' /tmp/backend.json
-          grep -q '"ga4_measurement_id":"G-V5ZPM5L19T"' /tmp/backend.json
-          grep -q '"clarity_project_id":"xswd8m446z"' /tmp/backend.json
-
-      - name: Automated HubSpot delivery preflight through real submit_triage path
-        shell: bash
-        run: |
-          set -euo pipefail
           cat > /tmp/day7c-preflight.json <<'JSON'
           {
             "action":"submit_triage",
@@ -360,32 +359,32 @@ jobs:
           node - <<'NODE'
           const fs = require('fs');
           const body = JSON.parse(fs.readFileSync('/tmp/hubspot-preflight.json','utf8'));
-          if (body.success !== true) throw new Error('submit_triage preflight did not succeed');
-          if (body.day7c?.adapter !== 'day7c-hubspot-upsert-v3') throw new Error('authoritative Day 7C adapter missing');
+          if (body.success !== true) throw new Error('submit_triage preflight failed');
+          if (body.day7c?.adapter !== 'day7c-hubspot-direct-v1') throw new Error('direct Worker adapter marker missing');
           if (body.day7c?.hubspot?.success !== true) throw new Error(`HubSpot delivery failed: ${JSON.stringify(body.day7c?.hubspot || {})}`);
-          if (body.day7c?.hubspot?.status !== 'delivered') throw new Error('HubSpot delivery status is not delivered');
-          console.log('HubSpot real-path preflight PASS:', body.day7c.hubspot.operation, body.day7c.hubspot.contact_id);
+          if (body.day7c?.hubspot?.status !== 'delivered') throw new Error('HubSpot status not delivered');
+          if (!body.day7c?.hubspot?.contact_id) throw new Error('HubSpot contact_id missing');
+          console.log('HUBSPOT PREFLIGHT PASS', body.day7c.hubspot);
           NODE
 
-      - name: Hard runtime gate - GA4 and Clarity QA instrumentation
+      - name: GA4 and Clarity QA preflight
         shell: bash
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --retry 6 --retry-delay 3 "$QA_FRONTEND_URL" -o /tmp/frontend.html
           grep -q 'G-V5ZPM5L19T' /tmp/frontend.html
           grep -q 'xswd8m446z' /tmp/frontend.html
-          ! grep -q 'G-KXJFKN7RTS' /tmp/frontend.html
-          ! grep -q 'xjsdmprr4z' /tmp/frontend.html
           grep -q 'gtag' /tmp/frontend.html
           grep -q 'clarity' /tmp/frontend.html
+          ! grep -q 'G-KXJFKN7RTS' /tmp/frontend.html
+          ! grep -q 'xjsdmprr4z' /tmp/frontend.html
 
       - name: Certification summary
         run: |
-          echo '## Day 7C Critical-Path Runtime PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Authoritative QA backend: worker/worker.js' >> "$GITHUB_STEP_SUMMARY"
-          echo '- HubSpot real submit_triage delivery: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- HubSpot credential: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GA4 QA configuration: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Clarity QA configuration: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Day 7C Automated Preflight PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Authoritative backend: worker/worker.js' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Real submit_triage -> HubSpot delivery: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA GA4 instrumentation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA Clarity instrumentation: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR ONE FINAL HUMAN GALVITRIAGE → HUBSPOT → GA4 → CLARITY EVIDENCE RUN**' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR ONE FINAL HUMAN GALVITRIAGE → HUBSPOT → GA4 → CLARITY RUN**' >> "$GITHUB_STEP_SUMMARY"
