@@ -12,4 +12,195 @@ on:
       - "migrations/**"
       - "day7d-browser-customer-intelligence.js"
       - "wrangler.json"
-      - "wrangler
+      - "package.json"
+      - ".github/workflows/deploy-galvicare-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvicare-qa-single-authoritative-deployer
+  cancel-in-progress: true
+
+env:
+  QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
+
+jobs:
+  qa-release-gate:
+    name: Day 7D → Progressive Intelligence → Schema → Proven QA Deploy → Double Runtime Proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact QA commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Verify authoritative Day 7D source without infrastructure expansion
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
+          test -f worker/worker.js
+          test -f worker/day7d-engine.js
+          test -f day7d-browser-customer-intelligence.js
+          test -f migrations/0006_day7d_customer_intelligence.sql
+          test -f scripts/day7d-preflight.mjs
+          test -f scripts/verify-qa-runtime.mjs
+          test -f tests/day7d-customer-intelligence.test.mjs
+          test -f tests/day7d-customer-path-contract.test.mjs
+          grep -q '"name": "galvicare-triage-intake"' wrangler.json
+          grep -q '"main": "worker/day7d-engine.js"' wrangler.json
+          grep -q '"binding": "DB"' wrangler.json
+          grep -q '"database_name": "galvivault-0-5-qa"' wrangler.json
+          grep -q "day7d_progressive_customer_intelligence_v1" worker/day7d-engine.js
+          grep -q "progressive_followups:true" worker/day7d-engine.js
+          grep -q "evidence_versioned_results:true" worker/day7d-engine.js
+          grep -q "payment_intelligence_decoupled:true" worker/day7d-engine.js
+          echo 'PASS: Day 7D remains additive to the proven Day 7A-7C architecture.'
+
+      - name: Day 7D preflight
+        run: npm run day7d:preflight
+
+      - name: Focused Day 7D customer-intelligence tests
+        run: npm run test:day7d
+
+      - name: Full preserved Day 1-7C regression
+        run: npm run stabilization:gate
+
+      - name: Day 7C integration regression and proven QA frontend build
+        run: npm run day7c:gate
+
+      - name: Prove generated QA browser contains progressive intelligence adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist-qa/index.html
+          grep -q 'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS' dist-qa/index.html
+          grep -q 'needs_followup' dist-qa/index.html
+          grep -q 'galvishot-followup-questions' dist-qa/index.html
+          grep -q 'galvisight-followup-questions' dist-qa/index.html
+          grep -q 'galvipath-followup-questions' dist-qa/index.html
+          grep -q 'save_galvishot_followup' dist-qa/index.html
+          grep -q 'save_galvisight_followup' dist-qa/index.html
+          grep -q 'save_galvipath_followup' dist-qa/index.html
+          grep -q 'evidence_version_bumped' dist-qa/index.html
+          grep -q 'https://galvicare-triage-intake.mrgalvipro.workers.dev' dist-qa/index.html
+          echo 'PASS: generated QA browser contains Day 7D progressive intelligence without changing infrastructure.'
+
+      - name: Apply Day 7D schema to existing QA D1
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute galvivault-0-5-qa --remote --file=migrations/0006_day7d_customer_intelligence.sql --config wrangler.json
+
+      - name: Verify all three Day 7D tables exist in existing QA D1
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 execute galvivault-0-5-qa --remote --command="SELECT (SELECT COUNT(*) FROM day7d_context_evidence) AS context_rows, (SELECT COUNT(*) FROM clinical_evidence_versions) AS version_rows, (SELECT COUNT(*) FROM day7d_observations) AS observation_rows;" --config wrangler.json
+
+      - name: Deploy exact Day 7D API source using proven Day 7A-7C mechanism
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.json --var DAY7D_DEPLOY_SHA:${{ github.sha }} --var DAY7D_DEPLOY_TARGET:galvicare-triage-intake
+
+      - name: Confirm active Cloudflare API deployment
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deployments list --config wrangler.json
+
+      - name: Wait for exact Day 7D API runtime convergence
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          const url=process.env.QA_WORKER_URL;
+          const expectedSha=process.env.EXPECTED_SHA;
+          const deadline=Date.now()+90000;
+          let last=null;
+          while(Date.now()<deadline){
+            try{
+              const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`converge-${Date.now()}`})});
+              const body=await response.json();
+              last=body;
+              const d=body?.day7d;
+              if(response.ok && body?.success===true && d?.enabled===true && d?.entrypoint==='worker/day7d-engine.js' && d?.schema_adapter==='day7d_dedicated_tables_v1' && d?.release_contract==='day7d_progressive_customer_intelligence_v1' && d?.deployment_sha===expectedSha){
+                console.log(`PASS: exact Day 7D runtime converged at ${expectedSha}`);
+                process.exit(0);
+              }
+            }catch(error){last={error:String(error?.message||error)};}
+            await new Promise(resolve=>setTimeout(resolve,3000));
+          }
+          throw new Error(`Exact Day 7D runtime did not converge within 90 seconds. Last response: ${JSON.stringify(last)}`);
+          NODE
+
+      - name: Verify preserved Day 1-7C runtime foundation
+        env:
+          GALVICARE_QA_WORKER_URL: ${{ env.QA_WORKER_URL }}
+        run: node scripts/verify-qa-runtime.mjs
+
+      - name: Exact Day 7D SHA runtime schema proof number 1
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`proof1-${Date.now()}`})});
+          if(!response.ok) throw new Error(`health_check HTTP ${response.status}`);
+          const body=await response.json(),d=body?.day7d;
+          const expected={enabled:true,rules_version:'galviengine_customer_intelligence_v0_5_1',entrypoint:'worker/day7d-engine.js',schema_adapter:'day7d_dedicated_tables_v1',release_contract:'day7d_progressive_customer_intelligence_v1',progressive_followups:true,evidence_versioned_results:true,legacy_runtime_preservation:true,payment_intelligence_decoupled:true,deployment_sha:process.env.EXPECTED_SHA};
+          if(body?.success!==true) throw new Error(`Preserved runtime health failed: ${JSON.stringify(body)}`);
+          for(const [key,value] of Object.entries(expected)) if(d?.[key]!==value) throw new Error(`Proof #1 ${key} mismatch: expected ${JSON.stringify(value)}, got ${JSON.stringify(d?.[key])}; body=${JSON.stringify(body)}`);
+          console.log(`DAY 7D PROOF #1 PASS — ${process.env.EXPECTED_SHA}`);
+          NODE
+
+      - name: Ten second stability interval
+        run: sleep 10
+
+      - name: Exact Day 7D SHA runtime schema proof number 2
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'NODE'
+          const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`proof2-${Date.now()}`})});
+          if(!response.ok) throw new Error(`health_check HTTP ${response.status}`);
+          const body=await response.json(),d=body?.day7d;
+          const expected={enabled:true,rules_version:'galviengine_customer_intelligence_v0_5_1',entrypoint:'worker/day7d-engine.js',schema_adapter:'day7d_dedicated_tables_v1',release_contract:'day7d_progressive_customer_intelligence_v1',progressive_followups:true,evidence_versioned_results:true,legacy_runtime_preservation:true,payment_intelligence_decoupled:true,deployment_sha:process.env.EXPECTED_SHA};
+          if(body?.success!==true) throw new Error(`Preserved runtime health failed: ${JSON.stringify(body)}`);
+          for(const [key,value] of Object.entries(expected)) if(d?.[key]!==value) throw new Error(`Proof #2 ${key} mismatch: expected ${JSON.stringify(value)}, got ${JSON.stringify(d?.[key])}; body=${JSON.stringify(body)}`);
+          console.log(`DAY 7D PROOF #2 PASS — ${process.env.EXPECTED_SHA}`);
+          NODE
+
+      - name: READY FOR DAY 7D HUMAN E2E
+        if: success()
+        run: |
+          echo '## DAY 7D QA RELEASE GATE: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Proven Day 7A-7C infrastructure preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Real needs_followup customer-path contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Visible GalviShot/GalviSight/GalviPath targeted-question adapter in generated QA browser: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Persisted answers + evidence versioning contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Cumulative GalviShot/GalviSight/GalviPath intelligence composition: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Evidence-version-aware refresh restoration contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Existing QA D1 + 3 Day 7D tables: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Exact deployed Git SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Preserved Day 1-7C runtime: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Exact Day 7D runtime proof #1: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- 10-second stability interval: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Exact Day 7D runtime proof #2: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR DAY 7D HUMAN E2E**' >> "$GITHUB_STEP_SUMMARY"
