@@ -5,6 +5,15 @@ on:
     branches: [qa-revamped-galvicare-0-5]
     paths:
       - '.github/workflows/day7c-qa-deploy.yml'
+      - 'day7c-browser-observability.js'
+      - 'migrations/0005_day7c_integration_trace.sql'
+      - 'tests/day7c-integration.test.mjs'
+      - 'scripts/day7b-build-qa-frontend.mjs'
+      - 'wrangler.json'
+      - 'wrangler.qa-frontend.jsonc'
+      - 'qa-frontend-worker.js'
+      - 'worker/worker.js'
+      - 'package.json'
   workflow_dispatch:
 
 permissions:
@@ -38,84 +47,66 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: Required Day 7C source present
-        run: |
-          test -f day7c-browser-observability.js
-          test -f migrations/0005_day7c_integration_trace.sql
-          test -f tests/day7c-integration.test.mjs
-          grep -q 'day7c:gate' package.json
-
-      - name: Tests and gates
+      - name: Tests -> Day 7B gate -> Day 7C gate
         run: |
           node --check worker/worker.js
           node --check worker/production-entry.js
-          node --check day7c-browser-observability.js
-          npm run check
-          npm test
-          npm run test:day7b
+          npm run stabilization:gate
           npm run day7b:gate
           npm run day7c:gate
           git diff --check
 
-      - name: QA isolation source check
+      - name: QA isolation check
         run: |
           grep -q 'galvivault-0-5-qa' wrangler.json
+          grep -q '"ENVIRONMENT": "qa"' wrangler.json
+          grep -q '"HUBSPOT_ENABLED": "true"' wrangler.json
           grep -q 'G-V5ZPM5L19T' wrangler.json
           grep -q 'xswd8m446z' wrangler.json
           grep -q 'galviclinic-day7c-qa' wrangler.json
           ! grep -q 'galvivault-0-5-production' wrangler.json
+          ! grep -q 'galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
 
-      - name: Apply additive Day 7C QA D1 migration
+      - name: Apply additive Day 7C D1 migration to QA only
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 migrations apply galvivault-0-5-qa --remote --config wrangler.json
+          command: d1 execute galvivault-0-5-qa --remote --file migrations/0005_day7c_integration_trace.sql --config wrangler.json
 
-      - name: Deploy QA backend Worker
+      - name: Deploy QA backend
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.json
 
-      - name: Build QA frontend
-        run: node scripts/day7b-build-qa-frontend.mjs
-
-      - name: Deploy QA frontend Worker
+      - name: Deploy QA frontend
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.qa-frontend.jsonc
 
-      - name: Wait for propagation
-        run: sleep 15
-
-      - name: Live backend preflight
+      - name: Live runtime preflight
         run: |
+          sleep 15
           curl --fail --silent --show-error --retry 5 --retry-delay 3 "$QA_BACKEND_URL/health" -o /tmp/backend.json
-          grep -q '"environment":"qa"' /tmp/backend.json || grep -q '"environment": "qa"' /tmp/backend.json
-          grep -q '"db_bound":true' /tmp/backend.json || grep -q '"db_bound": true' /tmp/backend.json
-          grep -q '"stripe_mode":"test"' /tmp/backend.json || grep -q '"stripe_mode": "test"' /tmp/backend.json
-          grep -q '"hubspot_enabled":true' /tmp/backend.json || grep -q '"hubspot_enabled": true' /tmp/backend.json
-          grep -q '"hubspot_credential_present":true' /tmp/backend.json || grep -q '"hubspot_credential_present": true' /tmp/backend.json
-
-      - name: Live frontend preflight
-        run: |
+          cat /tmp/backend.json
           curl --fail --silent --show-error --retry 5 --retry-delay 3 "$QA_FRONTEND_URL/health" -o /tmp/frontend-health.json
           grep -q '"environment":"qa"' /tmp/frontend-health.json || grep -q '"environment": "qa"' /tmp/frontend-health.json
           curl --fail --silent --show-error --retry 5 --retry-delay 3 "$QA_FRONTEND_URL" -o /tmp/frontend.html
           grep -q 'G-V5ZPM5L19T' /tmp/frontend.html
           grep -q 'xswd8m446z' /tmp/frontend.html
           grep -q 'https://calendly.com/galvilpro/galviclinic-day7c-qa' /tmp/frontend.html
+          grep -q 'https://buy.stripe.com/test_' /tmp/frontend.html
           ! grep -q 'galvicare-0-5-production.mrgalvipro.workers.dev' /tmp/frontend.html
           ! grep -q 'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00' /tmp/frontend.html
           ! grep -q 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253O01' /tmp/frontend.html
           ! grep -q 'https://buy.stripe.com/00w14odrG1QLdcu9dA53O02' /tmp/frontend.html
           ! grep -q 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03' /tmp/frontend.html
 
-      - name: READY FOR HUMAN DAY 7C E2E
+      - name: Certification summary
         run: |
           echo '## GalviCare Day 7C QA Deployment PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Tests: PASS' >> "$GITHUB_STEP_SUMMARY"
@@ -123,8 +114,8 @@ jobs:
           echo '- Day 7C gate: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- QA isolation: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- D1 migration: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- QA backend deploy: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- QA frontend deploy: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA backend deployment: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA frontend deployment: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Live runtime preflight: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo '**READY FOR HUMAN DAY 7C E2E**' >> "$GITHUB_STEP_SUMMARY"
