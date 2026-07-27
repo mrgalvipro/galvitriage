@@ -10,55 +10,91 @@ const prodWrangler = readFileSync(new URL('../wrangler.production.jsonc', import
 const PROD_D1_ID = '2fc954b7-00ca-405b-8313-f91e706845a2';
 const QA_D1_ID = 'cdf9042b-ab09-498a-ac66-010b6cce47d4';
 
+function expectIncludes(haystack, needles) {
+  for (const needle of needles) assert.ok(haystack.includes(needle), `Missing required production/QA contract: ${needle}`);
+}
+
+function expectExcludes(haystack, needles) {
+  for (const needle of needles) assert.ok(!haystack.includes(needle), `Forbidden production/QA contract present: ${needle}`);
+}
+
 test('Day 7A Worker remains the QA/build source without product-logic rewrite', () => {
-  assert.match(qaWorker, /DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1'/);
-  assert.match(qaWorker, /environment: 'qa'/);
-  assert.match(qaWorker, /branch: 'qa-revamped-galvicare-0-5'/);
+  expectIncludes(qaWorker, [
+    "DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1'",
+    "environment: 'qa'",
+    "branch: 'qa-revamped-galvicare-0-5'"
+  ]);
 });
 
-test('Production has a separate runtime entrypoint', () => {
-  assert.match(prodWrangler, /"main": "worker\/production-entry\.js"/);
-  assert.match(prodEntry, /import day7aWorker from '\.\/worker\.js'/);
-  assert.match(prodEntry, /day7b-production-isolation-v1/);
+test('Production has a separate runtime entrypoint with the locked Day 7B fingerprint', () => {
+  expectIncludes(prodWrangler, ['"main": "worker/production-entry.js"']);
+  expectIncludes(prodEntry, [
+    "import day7aWorker from './worker.js'",
+    "DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v1'"
+  ]);
 });
 
 test('QA and Production Worker services are distinct', () => {
-  assert.match(qaWrangler, /"name": "galvicare-triage-intake"/);
-  assert.match(prodWrangler, /"name": "galvicare-0-5-production"/);
+  expectIncludes(qaWrangler, ['"name": "galvicare-triage-intake"']);
+  expectIncludes(prodWrangler, ['"name": "galvicare-0-5-production"']);
 });
 
 test('QA and Production D1 targets are physically distinct', () => {
-  assert.match(qaWrangler, /"database_name": "galvivault-0-5-qa"/);
-  assert.match(prodWrangler, /"database_name": "galvivault-0-5-production"/);
-  assert.match(prodWrangler, new RegExp(PROD_D1_ID.replaceAll('-', '\\-')));
-  assert.doesNotMatch(prodWrangler, new RegExp(QA_D1_ID.replaceAll('-', '\\-')));
+  expectIncludes(qaWrangler, ['"database_name": "galvivault-0-5-qa"', QA_D1_ID]);
+  expectIncludes(prodWrangler, ['"database_name": "galvivault-0-5-production"', PROD_D1_ID]);
+  expectExcludes(prodWrangler, [QA_D1_ID, 'galvivault-0-5-qa']);
 });
 
 test('Production runtime is explicitly production and customer-origin only', () => {
-  assert.match(prodWrangler, /"ENVIRONMENT": "production"/);
-  assert.match(prodWrangler, /"APP_ENV": "production"/);
-  assert.match(prodWrangler, /"ALLOWED_ORIGIN": "https:\/\/www\.galvipro\.com"/);
-  assert.match(prodWrangler, /"preview_urls": false/);
-  assert.match(prodEntry, /origin !== PRODUCTION_ORIGIN/);
-  assert.doesNotMatch(prodEntry, /Access-Control-Allow-Origin['"]?:\s*['"]\*['"]/);
+  expectIncludes(prodWrangler, [
+    '"ENVIRONMENT": "production"',
+    '"APP_ENV": "production"',
+    '"ALLOWED_ORIGIN": "https://www.galvipro.com"',
+    '"preview_urls": false'
+  ]);
+  expectIncludes(prodEntry, [
+    "const PRODUCTION_ORIGIN = 'https://www.galvipro.com'",
+    'origin !== PRODUCTION_ORIGIN'
+  ]);
+  expectExcludes(prodEntry, ["'Access-Control-Allow-Origin': '*'", '"Access-Control-Allow-Origin": "*"']);
 });
 
 test('QA-only fixture and override capabilities are denied by Production boundary', () => {
-  assert.match(prodEntry, /action === 'get_fixture_result'/);
-  assert.match(prodEntry, /action === 'grant_test_override'/);
-  assert.match(prodEntry, /QA-only capability is unavailable in production\./);
-  assert.match(prodEntry, /}, 404\);/);
+  expectIncludes(prodEntry, [
+    "action === 'get_fixture_result'",
+    "action === 'grant_test_override'",
+    'QA-only capability is unavailable in production.',
+    "status:'not_found'"
+  ]);
 });
 
-test('Production health fingerprint identifies RUN lane and Production GalviVault', () => {
-  assert.match(prodEntry, /environment: 'production'/);
-  assert.match(prodEntry, /galvivault: 'galvivault-0-5-production'/);
-  assert.match(prodEntry, /release_branch: 'qa-revamped-galvicare-0-5'/);
-  assert.match(prodEntry, /db_bound: Boolean\(env\?\.DB\)/);
+test('Production health fingerprint identifies RUN lane, Production GalviVault, DB binding and Stripe mode', () => {
+  expectIncludes(prodEntry, [
+    "environment:'production'",
+    "galvivault:'galvivault-0-5-production'",
+    "release_branch:'qa-revamped-galvicare-0-5'",
+    'db_bound:Boolean(env?.DB)',
+    'stripe_mode:stripeMode(env)'
+  ]);
+});
+
+test('Production payment return is fail-closed and requires Stripe LIVE paid authority', () => {
+  expectIncludes(prodEntry, [
+    "if (stripeMode(env) !== 'live')",
+    "stripeSession.livemode === true",
+    "paymentStatus !== 'paid'",
+    'paymentIntent',
+    'payment_amount_mismatch',
+    'payment_product_mismatch',
+    'A verified Stripe LIVE paid transaction is required before GalviCare can unlock this product.'
+  ]);
 });
 
 test('Production config contains no QA-only D1 or test-payment authority', () => {
-  assert.doesNotMatch(prodWrangler, /galvivault-0-5-qa/);
-  assert.doesNotMatch(prodWrangler, /buy\.stripe\.com\/test_/);
-  assert.doesNotMatch(prodWrangler, /QA_OVERRIDE_SECRET|TEST_OVERRIDE_SECRET/);
+  expectExcludes(prodWrangler, [
+    'galvivault-0-5-qa',
+    'buy.stripe.com/test_',
+    'QA_OVERRIDE_SECRET',
+    'TEST_OVERRIDE_SECRET'
+  ]);
 });
