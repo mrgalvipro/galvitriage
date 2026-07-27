@@ -28,6 +28,17 @@ printf '\n[3/4] Verifying Production tables...\n'
 npx wrangler d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --command "SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;"
 
 printf '\n[4/4] Verifying Production starts without customer/session/payment data...\n'
-npx wrangler d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --command "SELECT 'sessions' AS table_name, COUNT(*) AS row_count FROM sessions UNION ALL SELECT 'founders', COUNT(*) FROM founders UNION ALL SELECT 'ventures', COUNT(*) FROM ventures UNION ALL SELECT 'payments', COUNT(*) FROM payments UNION ALL SELECT 'entitlements', COUNT(*) FROM entitlements UNION ALL SELECT 'product_results', COUNT(*) FROM product_results;"
+COUNTS="$(npx wrangler d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --json --command "SELECT 'sessions' AS table_name, COUNT(*) AS row_count FROM sessions UNION ALL SELECT 'founders', COUNT(*) FROM founders UNION ALL SELECT 'ventures', COUNT(*) FROM ventures UNION ALL SELECT 'payments', COUNT(*) FROM payments UNION ALL SELECT 'entitlements', COUNT(*) FROM entitlements UNION ALL SELECT 'product_results', COUNT(*) FROM product_results;")"
+printf '%s\n' "$COUNTS"
+COUNTS_JSON="$COUNTS" node -e '
+const parsed = JSON.parse(process.env.COUNTS_JSON);
+const rows = Array.isArray(parsed) ? (parsed[0]?.results || []) : (parsed?.results || []);
+const dirty = rows.filter((row) => Number(row.row_count) !== 0);
+if (dirty.length) {
+  console.error("BLOCKED: Production contains unexpected customer/session/payment rows:", dirty);
+  process.exit(1);
+}
+console.log("PASS: Production customer/session/payment tables are empty.");
+'
 
 printf '\nPASS: Production schema initialized. Next gate is Human Evidence for runtime security/isolation and public payment/frontend routing.\n'
