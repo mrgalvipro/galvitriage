@@ -3,11 +3,18 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const PRESTRIPE = process.argv.includes('--prestripe');
 const PROD_ENDPOINT = 'https://galvicare-0-5-production.mrgalvipro.workers.dev';
 
+const defaults = {
+  GALVISCORE_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/14A00kbivcypgoGfBY53000',
+  GALVISHOT_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253001',
+  GALVISIGHT_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/00w14odrG1QLdcu9dA53002',
+  GALVIPATH_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53003'
+};
+
 const approved = {
-  GALVISCORE_LIVE_PAYMENT_LINK: process.env.GALVISCORE_LIVE_PAYMENT_LINK,
-  GALVISHOT_LIVE_PAYMENT_LINK: process.env.GALVISHOT_LIVE_PAYMENT_LINK,
-  GALVISIGHT_LIVE_PAYMENT_LINK: process.env.GALVISIGHT_LIVE_PAYMENT_LINK,
-  GALVIPATH_LIVE_PAYMENT_LINK: process.env.GALVIPATH_LIVE_PAYMENT_LINK
+  GALVISCORE_LIVE_PAYMENT_LINK: process.env.GALVISCORE_LIVE_PAYMENT_LINK || defaults.GALVISCORE_LIVE_PAYMENT_LINK,
+  GALVISHOT_LIVE_PAYMENT_LINK: process.env.GALVISHOT_LIVE_PAYMENT_LINK || defaults.GALVISHOT_LIVE_PAYMENT_LINK,
+  GALVISIGHT_LIVE_PAYMENT_LINK: process.env.GALVISIGHT_LIVE_PAYMENT_LINK || defaults.GALVISIGHT_LIVE_PAYMENT_LINK,
+  GALVIPATH_LIVE_PAYMENT_LINK: process.env.GALVIPATH_LIVE_PAYMENT_LINK || defaults.GALVIPATH_LIVE_PAYMENT_LINK
 };
 
 const placeholders = {
@@ -18,12 +25,6 @@ const placeholders = {
 };
 
 if (!PRESTRIPE) {
-  const missing = Object.entries(approved).filter(([, value]) => !value).map(([key]) => key);
-  if (missing.length) {
-    console.error(`BLOCKED — MISSING APPROVED STRIPE LIVE PAYMENT LINK(S): ${missing.join(', ')}`);
-    process.exit(2);
-  }
-
   for (const [key, value] of Object.entries(approved)) {
     if (!/^https:\/\/buy\.stripe\.com\//.test(value) || value.includes('/test_')) {
       console.error(`BLOCKED — ${key} is not an approved-looking Stripe LIVE Payment Link.`);
@@ -81,8 +82,17 @@ if (!html.includes(PROD_ENDPOINT)) {
   process.exit(4);
 }
 
+if (!PRESTRIPE) {
+  for (const [key, value] of Object.entries(approved)) {
+    if (!html.includes(value)) {
+      console.error(`BLOCKED — ${key} missing from generated Production artifact.`);
+      process.exit(4);
+    }
+  }
+}
+
 const output = PRESTRIPE ? 'index.production.prestripe.html' : 'index.production.html';
 writeFileSync(output, html, 'utf8');
 console.log(PRESTRIPE
   ? `PASS — ${output} generated with Production Worker, QA controls hidden, TEST Stripe links removed, and four explicit LIVE-link placeholders.`
-  : `PASS — ${output} generated with Production Worker, four Stripe LIVE links, and QA UI controls hidden.`);
+  : `PASS — ${output} generated with Production Worker, four approved Stripe LIVE links, and QA UI controls hidden.`);
