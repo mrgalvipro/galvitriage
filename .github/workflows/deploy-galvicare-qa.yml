@@ -7,9 +7,11 @@ on:
     paths:
       - "worker/**"
       - "tests/**"
+      - "package.json"
       - "wrangler.json"
+      - "migrations/**"
       - "scripts/verify-qa-runtime.mjs"
-      - "migrations/production/**"
+      - "scripts/day7d-preflight.mjs"
       - "scripts/day7b-apply-production-schema.sh"
       - ".github/workflows/deploy-galvicare-qa.yml"
   pull_request:
@@ -28,9 +30,9 @@ concurrency:
 jobs:
   qa-release-gate:
     if: ${{ !contains(github.event.head_commit.message || '', '[day7b-prod-schema]') }}
-    name: Test → Deploy QA Worker → Verify Live Runtime
+    name: Test → Day 7D QA Migration → Deploy QA Worker → Verify Runtime
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout exact authoritative QA source
@@ -50,16 +52,56 @@ jobs:
           grep -q "Your Digital Business Clinic" index.html
           grep -q "GalviPath Check Up" index.html
           grep -q "clinicalDimensionLanguage" worker/worker.js
+          grep -q '"binding": "DB"' wrangler.json
+          grep -q '"database_name": "galvivault-0-5-qa"' wrangler.json
 
-      - name: Run complete Day 7A automated gate
+      - name: Detect complete Day 7D candidate
+        id: day7d
+        shell: bash
+        run: |
+          if test -f worker/day7d-engine.js \
+            && test -f migrations/0006_day7d_customer_intelligence.sql \
+            && test -f tests/day7d-customer-intelligence.test.mjs \
+            && node -e "const p=require('./package.json'); process.exit(p.scripts?.['test:day7d'] ? 0 : 1)"; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "Complete Day 7D source candidate detected."
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "Day 7D source candidate not yet complete; running preserved Day 7A-7C QA gate only."
+          fi
+
+      - name: Run preserved Day 7A-7C automated gate
         shell: bash
         run: |
           node --check worker/worker.js
           npm test
           npm run stabilization:gate
+          npm run day7c:gate
           git diff --check
 
+      - name: Run Day 7D critical-path preflight
+        if: steps.day7d.outputs.present == 'true'
+        shell: bash
+        run: node scripts/day7d-preflight.mjs
+
+      - name: Run focused Day 7D customer-intelligence gate
+        if: steps.day7d.outputs.present == 'true'
+        shell: bash
+        run: |
+          node --check worker/day7d-engine.js
+          npm run test:day7d
+          git diff --check
+
+      - name: Apply Day 7D migration to QA D1 only
+        if: steps.day7d.outputs.present == 'true' && github.event_name != 'pull_request'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply galvivault-0-5-qa --remote --config wrangler.json
+
       - name: Deploy exact QA Worker source
+        if: github.event_name != 'pull_request'
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -67,27 +109,43 @@ jobs:
           command: deploy --config wrangler.json
 
       - name: Verify exact deployed QA runtime
+        if: github.event_name != 'pull_request'
         env:
           GALVICARE_QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
         run: node scripts/verify-qa-runtime.mjs
 
-      - name: Day 7A deployment summary
-        if: success()
+      - name: QA deployment summary
+        if: success() && github.event_name != 'pull_request'
         shell: bash
         run: |
           {
-            echo "## GalviCare Day 7A QA Deployment PASS"
-            echo ""
-            echo "- Authoritative source: qa-revamped-galvicare-0-5"
-            echo "- Worker: galvicare-triage-intake"
-            echo "- Source tests: PASS"
-            echo "- Stabilization gate: PASS"
-            echo "- QA Worker deploy: PASS"
-            echo "- Live runtime marker: PASS"
-            echo "- GalviSight alias live: PASS"
-            echo "- GalviPath alias live: PASS"
-            echo ""
-            echo "**READY FOR FINAL DAY 7A HUMAN E2E**"
+            if [ "${{ steps.day7d.outputs.present }}" = "true" ]; then
+              echo "## GalviCare Day 7D QA Deployment PASS"
+              echo ""
+              echo "- Authoritative source: \`qa-revamped-galvicare-0-5\`"
+              echo "- Commit: \`${GITHUB_SHA}\`"
+              echo "- Worker: \`galvicare-triage-intake\`"
+              echo "- QA D1 binding: \`DB → galvivault-0-5-qa\`"
+              echo "- Day 7A-7C regression gate: PASS"
+              echo "- Day 7D preflight: PASS"
+              echo "- Day 7D focused tests: PASS"
+              echo "- Migration 0006 / QA D1 migrations: PASS"
+              echo "- QA Worker deploy: PASS"
+              echo "- Live runtime verification: PASS"
+              echo ""
+              echo "**READY FOR DAY 7D HUMAN E2E**"
+            else
+              echo "## GalviCare QA Deployment PASS — Day 7D Source Not Yet Published"
+              echo ""
+              echo "- Authoritative source: \`qa-revamped-galvicare-0-5\`"
+              echo "- Commit: \`${GITHUB_SHA}\`"
+              echo "- Day 7A-7C regression gate: PASS"
+              echo "- QA Worker deploy: PASS"
+              echo "- Live runtime verification: PASS"
+              echo "- Day 7D source candidate: NOT YET COMPLETE"
+              echo ""
+              echo "**DO NOT START DAY 7D HUMAN E2E**"
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
 
   day7b-production-schema:
