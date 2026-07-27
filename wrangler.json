@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvicare-triage-intake",
-  "main": "worker/day7d-runtime.js",
+  "main": "worker/day7d-engine.js",
   "compatibility_date": "2026-07-23",
   "vars": {
     "ENVIRONMENT": "qa",
