@@ -26,10 +26,16 @@
     if(!host) return null;
     let panel=el(cfg.followup);
     if(!panel){
-      panel=document.createElement('div'); panel.id=cfg.followup; panel.className='gshot-followup hidden';
-      panel.innerHTML=`<p class="eyebrow">GALVIENGINE CUSTOMER INTELLIGENCE</p><h3>One more detail will make your ${product} more specific to your business.</h3><div id="${cfg.questions}"></div><div class="button-row"><button id="${cfg.submit}" class="primary-btn" type="button">Save Answer & Continue</button></div><p id="${cfg.status}" class="gshot-status-note" aria-live="polite"></p>`;
+      panel=document.createElement('div');
+      panel.id=cfg.followup;
+      panel.className='gshot-followup hidden';
       const anchor=product==='GalviShot'?host.querySelector('.gshot-confidence-row'):host.querySelector('[id$="result-panel"]');
       host.insertBefore(panel,anchor||host.lastChild);
+    }
+    // Day 7A-7C already has a GalviSight status panel. Upgrade that exact panel in place
+    // instead of creating a second UI or Worker.
+    if(!el(cfg.questions)){
+      panel.innerHTML=`<p class="eyebrow">GALVIENGINE CUSTOMER INTELLIGENCE</p><h3>One more detail will make your ${product} more specific to your business.</h3><div id="${cfg.questions}"></div><div class="button-row"><button id="${cfg.submit}" class="primary-btn" type="button">Save Answer & Continue</button></div><p id="${cfg.status}" class="gshot-status-note" aria-live="polite"></p>`;
     }
     return panel;
   }
@@ -76,8 +82,8 @@
 
   function bind(product){
     const cfg=STAGES[product]; ensureStageUi(product);
-    // GalviShot already has the proven Day 4-7C question panel and submit handler.
-    // Do not double-bind it; Day 7D only feeds that existing UI with the new questions.
+    // GalviShot already has the proven Day 4-7C submit handler. Day 7D feeds that UI
+    // but does not register a competing handler.
     if(product==='GalviShot') return;
     const button=el(cfg.submit); if(!button||button.dataset.day7dBound==='1') return;
     button.dataset.day7dBound='1';
