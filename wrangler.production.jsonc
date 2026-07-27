@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "galvicare-0-5-production",
+  "main": "worker/production-entry.js",
+  "compatibility_date": "2026-07-23",
+  "keep_vars": true,
+  "preview_urls": false,
+
+  "vars": {
+    "ENVIRONMENT": "production",
+    "APP_ENV": "production",
+    "RELEASE_BRANCH": "qa-revamped-galvicare-0-5",
+    "GALVIVAULT_NAME": "galvivault-0-5-production",
+    "ALLOWED_ORIGIN": "https://www.galvipro.com",
+    "HUBSPOT_ENABLED": "false"
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "galvivault-0-5-production",
+      "database_id": "${GALVICARE_PROD_D1_DATABASE_ID}"
+    }
+  ]
+}
