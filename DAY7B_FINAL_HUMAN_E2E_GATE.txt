@@ -1,0 +1,1 @@
+Trigger final Day 7B automated QA source/deployment verification and production critical-path readiness validation from the authoritative qa-revamped-galvicare-0-5 source after restoring the production runtime fingerprint compatibility.
