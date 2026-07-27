@@ -1,0 +1,45 @@
+name: Day 7B Production Critical Path
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [qa-revamped-galvicare-0-5]
+    paths:
+      - 'scripts/day7b-apply-production-schema-rest.mjs'
+      - 'scripts/day7b-verify-production-runtime-isolation.mjs'
+      - 'migrations/production/**'
+      - '.github/workflows/day7b-production-critical-path.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  production-critical-path:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout authoritative Day 7B source
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Production D1 GREEN
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/day7b-apply-production-schema-rest.mjs
+
+      - name: Production security and isolation GREEN
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/day7b-verify-production-runtime-isolation.mjs
+
+      - name: Day 7B gate summary
+        if: always()
+        run: |
+          echo 'Production D1 + security/isolation critical-path gate completed.'
+          echo 'Next gate: Production pre-Stripe frontend, then insert four approved LIVE Stripe Payment Links.'
