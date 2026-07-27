@@ -14,8 +14,12 @@ function productionEnv(env = {}) {
   };
 }
 
+function stripeSecret(env = {}) {
+  return String(env.STRIPE_SECRET_KEY || env.STRIPE_LIVE_SECRET_KEY || '').trim();
+}
+
 function stripeMode(env = {}) {
-  const key = String(env.STRIPE_SECRET_KEY || '').trim();
+  const key = stripeSecret(env);
   if (key.startsWith('sk_live_')) return 'live';
   if (key.startsWith('sk_test_')) return 'test';
   return 'missing';
@@ -114,7 +118,7 @@ async function verifyProductionStripeReturn(request, env, payload) {
     return json(request, { success:false, action:'resolve_payment_return', status:'invalid_payment_return' }, 400);
   }
 
-  const secret = String(env.STRIPE_SECRET_KEY || '').trim();
+  const secret = stripeSecret(env);
   const url = `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(stripeSessionId)}?expand[]=line_items.data.price.product`;
   const stripeResponse = await fetch(url, { headers: { Authorization: `Bearer ${secret}` } });
   let stripeSession = {};
