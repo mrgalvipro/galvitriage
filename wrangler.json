@@ -3,12 +3,21 @@
   "name": "galvicare-triage-intake",
   "main": "worker/worker.js",
   "compatibility_date": "2026-07-23",
-
+  "vars": {
+    "ENVIRONMENT": "qa",
+    "APP_ENV": "qa",
+    "GALVIVAULT_NAME": "galvivault-0-5-qa",
+    "HUBSPOT_ENABLED": "true",
+    "GA4_MEASUREMENT_ID": "G-V5ZPM5L19T",
+    "CLARITY_PROJECT_ID": "xswd8m446z",
+    "GALVICLINIC_URL": "https://calendly.com/galvilpro/galviclinic-day7c-qa"
+  },
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "galvivault-0-5-qa",
-      "database_id": "cdf9042b-ab09-498a-ac66-010b6cce47d4"
+      "database_id": "cdf9042b-ab09-498a-ac66-010b6cce47d4",
+      "migrations_dir": "migrations"
     }
   ]
 }
