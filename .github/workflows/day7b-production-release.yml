@@ -1,0 +1,90 @@
+name: Day 7B Production Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/day7b-production-release.yml'
+      - 'scripts/day7b-build-production-frontend.mjs'
+      - 'scripts/day7b-d1-api.mjs'
+      - 'scripts/day7b-verify-production-runtime-isolation.mjs'
+      - 'migrations/production/**'
+      - 'worker/production-entry.js'
+      - 'wrangler.production.jsonc'
+
+permissions:
+  contents: write
+
+jobs:
+  release-production-frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout Production main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Final automated regression
+        run: |
+          npm ci --ignore-scripts || npm install --ignore-scripts
+          npm run stabilization:gate
+          npm run day7b:gate
+          git diff --check
+
+      - name: Production D1 GREEN
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/day7b-d1-api.mjs
+
+      - name: Production security and isolation GREEN
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/day7b-verify-production-runtime-isolation.mjs
+
+      - name: Generate final Production LIVE frontend
+        run: |
+          node scripts/day7b-build-production-frontend.mjs
+          test -f index.production.html
+          grep -q 'https://galvicare-0-5-production.mrgalvipro.workers.dev' index.production.html
+          ! grep -q 'https://galvicare-triage-intake.mrgalvipro.workers.dev' index.production.html
+          ! grep -q 'buy.stripe.com/test_' index.production.html
+          grep -q 'https://buy.stripe.com/14A00kbivcypgoGfBY53000' index.production.html
+          grep -q 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253001' index.production.html
+          grep -q 'https://buy.stripe.com/00w14odrG1QLdcu9dA53002' index.production.html
+          grep -q 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53003' index.production.html
+
+      - name: Publish Production frontend to main
+        run: |
+          cp index.production.html index.html
+          rm -f index.production.html
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          if git diff --cached --quiet; then
+            echo 'Production index already current; no commit required.'
+          else
+            git commit -m 'Day 7B: publish Production LIVE frontend'
+            git push origin HEAD:main
+          fi
+
+      - name: Release summary
+        run: |
+          echo '## Day 7B Production Release PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 7A regression: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production D1: GREEN' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production security/isolation: GREEN' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production Worker endpoint: LIVE' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Stripe mappings: LIVE x4' >> "$GITHUB_STEP_SUMMARY"
+          echo '- TEST Stripe mappings in Production: 0' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production frontend published to main' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Status: READY FOR HUMAN E2E after Pages deployment completes' >> "$GITHUB_STEP_SUMMARY"
