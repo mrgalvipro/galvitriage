@@ -53,33 +53,12 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/day7b-verify-production-runtime-isolation.mjs
 
-      - name: Require Stripe LIVE secret for Production
-        env:
-          STRIPE_LIVE_SECRET_KEY: ${{ secrets.STRIPE_LIVE_SECRET_KEY }}
-        run: |
-          if [ -z "$STRIPE_LIVE_SECRET_KEY" ]; then
-            echo 'BLOCKED — GitHub Actions secret STRIPE_LIVE_SECRET_KEY is required for Production server-side payment verification.' >&2
-            exit 2
-          fi
-          case "$STRIPE_LIVE_SECRET_KEY" in
-            sk_live_*) echo 'PASS — Stripe LIVE secret is present.' ;;
-            *) echo 'BLOCKED — STRIPE_LIVE_SECRET_KEY is not an sk_live_ key.' >&2; exit 2 ;;
-          esac
-
-      - name: Deploy hardened Production Worker
+      - name: Deploy hardened Production Worker preserving Cloudflare runtime secrets
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.production.jsonc
-
-      - name: Install Stripe LIVE secret on Production Worker
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          STRIPE_LIVE_SECRET_KEY: ${{ secrets.STRIPE_LIVE_SECRET_KEY }}
-        run: |
-          printf '%s' "$STRIPE_LIVE_SECRET_KEY" | npx wrangler secret put STRIPE_SECRET_KEY --config wrangler.production.jsonc
 
       - name: Verify Production Worker is LIVE and fail-closed
         run: |
@@ -149,7 +128,7 @@ jobs:
           echo '- Production D1: GREEN' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production security/isolation: GREEN' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production Worker: hardened and LIVE' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Stripe secret mode: LIVE' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Cloudflare Stripe secret mode: LIVE' >> "$GITHUB_STEP_SUMMARY"
           echo '- Stripe mappings: LIVE x4' >> "$GITHUB_STEP_SUMMARY"
           echo '- TEST Stripe mappings in Production: 0' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production frontend published to main' >> "$GITHUB_STEP_SUMMARY"
