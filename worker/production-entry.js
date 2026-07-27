@@ -1,7 +1,7 @@
 import day7aWorker from './worker.js';
 
 const PRODUCTION_ORIGIN = 'https://www.galvipro.com';
-const DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v2';
+const DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v1';
 
 function productionEnv(env = {}) {
   return {
