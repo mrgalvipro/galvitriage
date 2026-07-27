@@ -19,7 +19,7 @@
     {
       "binding": "DB",
       "database_name": "galvivault-0-5-production",
-      "database_id": "${GALVICARE_PROD_D1_DATABASE_ID}"
+      "database_id": "2fc954b7-00ca-405b-8313-f91e706845a2"
     }
   ]
 }
