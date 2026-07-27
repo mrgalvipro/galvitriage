@@ -2,7 +2,7 @@ name: Day 7B Production Release
 
 on:
   push:
-    branches: [main]
+    branches: [qa-revamped-galvicare-0-5]
     paths:
       - '.github/workflows/day7b-production-release.yml'
       - 'scripts/day7b-build-production-frontend.mjs'
@@ -10,7 +10,9 @@ on:
       - 'scripts/day7b-verify-production-runtime-isolation.mjs'
       - 'migrations/production/**'
       - 'worker/production-entry.js'
+      - 'worker/worker.js'
       - 'wrangler.production.jsonc'
+      - 'index.html'
 
 permissions:
   contents: write
@@ -20,10 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Checkout Production main
+      - name: Checkout authoritative QA release source
         uses: actions/checkout@v4
         with:
-          ref: main
+          ref: qa-revamped-galvicare-0-5
           fetch-depth: 0
 
       - name: Set up Node 22
@@ -50,6 +52,29 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: node scripts/day7b-verify-production-runtime-isolation.mjs
 
+      - name: Deploy hardened Production Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.production.jsonc
+
+      - name: Verify Production Worker is LIVE and fail-closed
+        run: |
+          python - <<'PY'
+          import json, urllib.request, sys
+          url='https://galvicare-0-5-production.mrgalvipro.workers.dev/health'
+          with urllib.request.urlopen(url, timeout=20) as r:
+              body=json.load(r)
+          assert body.get('success') is True, body
+          assert body.get('environment') == 'production', body
+          assert body.get('runtime_marker') == 'day7b-production-isolation-v1', body
+          assert body.get('galvivault') == 'galvivault-0-5-production', body
+          assert body.get('db_bound') is True, body
+          assert body.get('stripe_mode') == 'live', body
+          print(json.dumps(body, sort_keys=True))
+          PY
+
       - name: Generate final Production LIVE frontend
         run: |
           node scripts/day7b-build-production-frontend.mjs
@@ -62,10 +87,17 @@ jobs:
           grep -q 'https://buy.stripe.com/00w14odrG1QLdcu9dA53002' index.production.html
           grep -q 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53003' index.production.html
 
+      - name: Preserve generated Production artifact
+        run: cp index.production.html /tmp/index.production.html
+
+      - name: Checkout Production main
+        run: |
+          git fetch origin main
+          git checkout -B main origin/main
+
       - name: Publish Production frontend to main
         run: |
-          cp index.production.html index.html
-          rm -f index.production.html
+          cp /tmp/index.production.html index.html
           git diff --check
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -83,7 +115,8 @@ jobs:
           echo '- Day 7A regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production D1: GREEN' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production security/isolation: GREEN' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Production Worker endpoint: LIVE' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production Worker: hardened and LIVE' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Stripe mode: LIVE' >> "$GITHUB_STEP_SUMMARY"
           echo '- Stripe mappings: LIVE x4' >> "$GITHUB_STEP_SUMMARY"
           echo '- TEST Stripe mappings in Production: 0' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production frontend published to main' >> "$GITHUB_STEP_SUMMARY"
