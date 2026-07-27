@@ -53,7 +53,6 @@
     const cfg=STAGES[product],fields=Array.from(document.querySelectorAll(`#${cfg.questions} textarea`)),status=el(cfg.status);
     if(!fields.length) return;
     const missing=fields.find(x=>!x.value.trim()); if(missing){missing.focus();return;}
-    const beforeText=status?.textContent||'';
     if(status) status.textContent='Saving your evidence and updating your Founder Health Record…';
     const saved=await call(cfg.save,{answers:fields.map(x=>({question_id:x.dataset.questionCode,question_code:x.dataset.questionCode,question_text:x.dataset.questionText,answer:x.value.trim(),answer_text:x.value.trim(),confidence_impact:Number(x.dataset.confidenceImpact||5)}))});
     if(saved.evidence_version_bumped!==true && Number(saved.evidence_version||0)<=Number(saved.evidence_version_before||0)) throw new Error('Follow-up saved without an evidence-version bump.');
@@ -73,11 +72,13 @@
     if(product==='GalviShot'&&typeof window.showIntegratedGalviShotResult==='function') await window.showIntegratedGalviShotResult();
     if(product==='GalviSight'&&typeof window.showGalviSight==='function') await window.showGalviSight();
     if(product==='GalviPath'&&typeof window.showGalviPath==='function') await window.showGalviPath();
-    if(status&&status.textContent===beforeText) status.textContent='Evidence saved.';
   }
 
   function bind(product){
     const cfg=STAGES[product]; ensureStageUi(product);
+    // GalviShot already has the proven Day 4-7C question panel and submit handler.
+    // Do not double-bind it; Day 7D only feeds that existing UI with the new questions.
+    if(product==='GalviShot') return;
     const button=el(cfg.submit); if(!button||button.dataset.day7dBound==='1') return;
     button.dataset.day7dBound='1';
     button.addEventListener('click',async()=>{button.disabled=true;try{await saveAnswers(product);}catch(error){const status=el(cfg.status);if(status)status.textContent=error.message||'Unable to save this evidence.';console.error('Day 7D follow-up save failed',product,error);}finally{button.disabled=false;}});
