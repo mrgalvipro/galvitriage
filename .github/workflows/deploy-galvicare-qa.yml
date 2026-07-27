@@ -12,6 +12,7 @@ on:
       - "migrations/**"
       - "day7d-browser-customer-intelligence.js"
       - "wrangler.json"
+      - "wrangler.qa-frontend.json"
       - "package.json"
       - ".github/workflows/deploy-galvicare-qa.yml"
 
@@ -24,6 +25,7 @@ concurrency:
 
 env:
   QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
+  QA_FRONTEND_HEALTH_URL: https://galvicare-0-5-qa.mrgalvipro.workers.dev/__qa_health
 
 jobs:
   qa-release-gate:
@@ -50,6 +52,7 @@ jobs:
           test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
           test -f worker/worker.js
           test -f worker/day7d-engine.js
+          test -f worker/qa-frontend.js
           test -f day7d-browser-customer-intelligence.js
           test -f migrations/0006_day7d_customer_intelligence.sql
           test -f scripts/day7d-preflight.mjs
@@ -59,6 +62,10 @@ jobs:
           grep -q '"main": "worker/day7d-engine.js"' wrangler.json
           grep -q '"binding": "DB"' wrangler.json
           grep -q '"database_name": "galvivault-0-5-qa"' wrangler.json
+          grep -q '"name": "galvicare-0-5-qa"' wrangler.qa-frontend.json
+          grep -q '"main": "worker/qa-frontend.js"' wrangler.qa-frontend.json
+          grep -q '"binding": "D1"' wrangler.qa-frontend.json
+          grep -q '"database_name": "galvivault-0-5-qa"' wrangler.qa-frontend.json
           grep -q "day7d_progressive_customer_intelligence_v1" worker/day7d-engine.js
           grep -q "progressive_followups:true" worker/day7d-engine.js
           grep -q "evidence_versioned_results:true" worker/day7d-engine.js
@@ -90,14 +97,31 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 execute galvivault-0-5-qa --remote --command="SELECT CASE WHEN COUNT(*)=3 THEN 'PASS' ELSE 'FAIL' END AS status, COUNT(*) AS table_count, GROUP_CONCAT(name, ',') AS tables FROM sqlite_master WHERE type='table' AND name IN ('day7d_context_evidence','clinical_evidence_versions','day7d_observations');" --config wrangler.json
 
-      - name: Deploy exact Day 7D QA source using proven Day 7A-7C mechanism
+      - name: Deploy exact Day 7D API source using proven Day 7A-7C mechanism
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.json --var DAY7D_DEPLOY_SHA:${{ github.sha }} --var DAY7D_DEPLOY_TARGET:galvicare-triage-intake
 
-      - name: Confirm active Cloudflare deployment
+      - name: Deploy QA browser with source-controlled D1 binding
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.qa-frontend.json
+
+      - name: Prove QA browser D1 binding after deploy
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const r=await fetch(process.env.QA_FRONTEND_HEALTH_URL,{headers:{'cache-control':'no-cache'}});
+          const b=await r.json();
+          if(!r.ok||b?.success!==true||b?.d1_binding!==true||b?.d1_query!==true||b?.progressive_customer_intelligence!==true) throw new Error(`QA frontend binding proof failed: ${JSON.stringify(b)}`);
+          console.log('QA FRONTEND D1 BINDING PROOF PASS',b);
+          NODE
+
+      - name: Confirm active Cloudflare API deployment
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -127,7 +151,7 @@ jobs:
       - name: Ten second stability interval
         run: sleep 10
 
-      - name: Exact SHA runtime schema proof number 2
+      - name: Exact SHA runtime schema proof number 2 plus frontend binding persistence
         shell: bash
         env:
           EXPECTED_SHA: ${{ github.sha }}
@@ -139,7 +163,10 @@ jobs:
           const expected={enabled:true,rules_version:'galviengine_customer_intelligence_v0_5_1',entrypoint:'worker/day7d-engine.js',schema_adapter:'day7d_dedicated_tables_v1',release_contract:'day7d_progressive_customer_intelligence_v1',progressive_followups:true,evidence_versioned_results:true,legacy_runtime_preservation:true,payment_intelligence_decoupled:true,deployment_sha:process.env.EXPECTED_SHA};
           if(body?.success!==true) throw new Error(`Preserved runtime health failed: ${JSON.stringify(body)}`);
           for(const [key,value] of Object.entries(expected)) if(d?.[key]!==value) throw new Error(`Proof #2 ${key} mismatch: expected ${JSON.stringify(value)}, got ${JSON.stringify(d?.[key])}; body=${JSON.stringify(body)}`);
+          const fr=await fetch(process.env.QA_FRONTEND_HEALTH_URL,{headers:{'cache-control':'no-cache'}}),fb=await fr.json();
+          if(!fr.ok||fb?.d1_binding!==true||fb?.d1_query!==true) throw new Error(`QA frontend D1 binding did not persist: ${JSON.stringify(fb)}`);
           console.log(`DAY 7D PROOF #2 PASS — ${process.env.EXPECTED_SHA}`);
+          console.log('QA FRONTEND D1 BINDING PERSISTENCE PASS');
           NODE
 
       - name: READY FOR DAY 7D HUMAN E2E
@@ -150,10 +177,11 @@ jobs:
           echo '- Visible GalviShot/GalviSight/GalviPath targeted questions: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Persisted answers + evidence versioning: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Cumulative clinical intelligence composition: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA frontend D1 binding source-controlled + live query: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Exact deployed Git SHA: $GITHUB_SHA' >> "$GITHUB_STEP_SUMMARY"
           echo '- All 3 Day 7D tables: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Preserved Day 1-7C runtime: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Exact SHA/runtime/schema proof #1: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- 10-second stability interval: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Exact SHA/runtime/schema proof #2: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Exact SHA/runtime/schema proof #2 + frontend binding persistence: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '**READY FOR DAY 7D HUMAN E2E**' >> "$GITHUB_STEP_SUMMARY"
