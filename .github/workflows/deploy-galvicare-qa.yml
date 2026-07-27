@@ -19,12 +19,12 @@ permissions:
   contents: read
 
 concurrency:
-  group: galvicare-qa-worker
+  group: galvicare-qa-worker-day7d-authoritative
   cancel-in-progress: true
 
 jobs:
   qa-release-gate:
-    name: Day 7D Gate → QA Schema → Deploy → Runtime
+    name: Day 7D Gate → QA Schema → Authoritative Deploy → Runtime
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -32,10 +32,12 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: qa-revamped-galvicare-0-5
+
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+
       - name: Verify exact Day 7D QA source contract
         shell: bash
         run: |
@@ -47,51 +49,70 @@ jobs:
           grep -q '"binding": "DB"' wrangler.json
           grep -q '"database_name": "galvivault-0-5-qa"' wrangler.json
           grep -q "galviengine_customer_intelligence_v0_5_1" worker/day7d-engine.js
+
       - name: Run Day 7D preflight
         run: npm run day7d:preflight
+
       - name: Run focused Day 7D tests
         run: npm run test:day7d
+
       - name: Run complete preserved regression gate
         run: npm run stabilization:gate
+
       - name: Run Day 7C integration regression gate
         run: npm run day7c:gate
+
       - name: Apply Day 7D schema to QA D1 only
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 execute galvivault-0-5-qa --remote --file=migrations/0006_day7d_customer_intelligence.sql --config wrangler.json
+
       - name: Verify Day 7D schema in QA D1
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 execute galvivault-0-5-qa --remote --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('clinical_evidence','clinical_evidence_versions','clinical_observations') ORDER BY name;" --config wrangler.json
-      - name: Deploy exact Day 7D QA Worker
+
+      - name: Allow legacy QA deployers to finish
+        shell: bash
+        run: |
+          echo "Waiting 50 seconds before the authoritative Day 7D deploy so older QA workflows cannot become the last writer."
+          sleep 50
+
+      - name: Deploy exact Day 7D QA Worker as final authoritative deployment
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.json
+
       - name: Verify preserved QA runtime
         env:
           GALVICARE_QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
         run: node scripts/verify-qa-runtime.mjs
-      - name: Verify Day 7D runtime marker
+
+      - name: Verify Day 7D runtime marker twice
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          const response = await fetch('https://galvicare-triage-intake.mrgalvipro.workers.dev/api', {
-            method: 'POST', headers: {'content-type':'application/json','cache-control':'no-cache'},
-            body: JSON.stringify({action:'health_check'})
-          });
-          if (!response.ok) throw new Error(`health_check HTTP ${response.status}`);
-          const body = await response.json();
-          if (body?.day7d?.enabled !== true) throw new Error(`Day 7D runtime not enabled: ${JSON.stringify(body)}`);
-          if (body?.day7d?.rules_version !== 'galviengine_customer_intelligence_v0_5_1') throw new Error(`Day 7D runtime marker missing: ${JSON.stringify(body)}`);
-          if (body?.day7d?.entrypoint !== 'worker/day7d-engine.js') throw new Error(`Wrong Day 7D entrypoint: ${JSON.stringify(body.day7d)}`);
-          console.log(JSON.stringify(body.day7d, null, 2));
+          const url='https://galvicare-triage-intake.mrgalvipro.workers.dev/api';
+          async function check(attempt){
+            const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check'})});
+            if(!response.ok) throw new Error(`health_check HTTP ${response.status}`);
+            const body=await response.json();
+            if(body?.day7d?.enabled!==true) throw new Error(`Day 7D runtime not enabled on attempt ${attempt}: ${JSON.stringify(body)}`);
+            if(body?.day7d?.rules_version!=='galviengine_customer_intelligence_v0_5_1') throw new Error(`Day 7D runtime marker missing on attempt ${attempt}: ${JSON.stringify(body)}`);
+            if(body?.day7d?.entrypoint!=='worker/day7d-engine.js') throw new Error(`Wrong Day 7D entrypoint on attempt ${attempt}: ${JSON.stringify(body.day7d)}`);
+            console.log(JSON.stringify({attempt,status:'PASS',day7d:body.day7d},null,2));
+          }
+          await check(1);
+          await new Promise(resolve=>setTimeout(resolve,10000));
+          await check(2);
           NODE
+
       - name: Day 7D QA deployment summary
         if: success()
         shell: bash
@@ -106,11 +127,10 @@ jobs:
             echo "- Day 7D preflight: PASS"
             echo "- Day 7D focused tests: PASS"
             echo "- Day 7A-7C regression: PASS"
-            echo "- Day 7D QA schema execute: PASS"
-            echo "- Day 7D QA schema verification: PASS"
-            echo "- QA deployment: PASS"
+            echo "- Day 7D QA schema: PASS"
+            echo "- Authoritative final QA deployment: PASS"
             echo "- Preserved runtime verification: PASS"
-            echo "- Day 7D runtime marker: PASS"
+            echo "- Day 7D runtime marker: PASS twice"
             echo ""
             echo "**READY FOR DAY 7D HUMAN E2E**"
           } >> "$GITHUB_STEP_SUMMARY"
