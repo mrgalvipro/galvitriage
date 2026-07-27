@@ -9,6 +9,8 @@ on:
       - "tests/**"
       - "wrangler.json"
       - "scripts/verify-qa-runtime.mjs"
+      - "migrations/production/**"
+      - "scripts/day7b-apply-production-schema.sh"
       - ".github/workflows/deploy-galvicare-qa.yml"
   pull_request:
     branches:
@@ -25,6 +27,7 @@ concurrency:
 
 jobs:
   qa-release-gate:
+    if: ${{ !contains(github.event.head_commit.message || '', '[day7b-prod-schema]') }}
     name: Test → Deploy QA Worker → Verify Live Runtime
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -85,4 +88,44 @@ jobs:
             echo "- GalviPath alias live: PASS"
             echo ""
             echo "**READY FOR FINAL DAY 7A HUMAN E2E**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  day7b-production-schema:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message || '', '[day7b-prod-schema]') }}
+    name: Day 7B → Initialize Production D1 → Verify Empty Customer Data
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout exact QA hardening source
+        uses: actions/checkout@v4
+        with:
+          ref: qa-revamped-galvicare-0-5
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Execute guarded Production schema initializer
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: bash scripts/day7b-apply-production-schema.sh
+
+      - name: Day 7B Production schema summary
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "## GalviCare Day 7B Production Schema PASS"
+            echo ""
+            echo "- Production D1: galvivault-0-5-production"
+            echo "- Production D1 ID: 2fc954b7-00ca-405b-8313-f91e706845a2"
+            echo "- Guarded Day 7A + Day 7B gate: PASS"
+            echo "- Production schema initialized: PASS"
+            echo "- QA customer/payment rows copied: NO"
+            echo ""
+            echo "**NEXT: RUNTIME ISOLATION + STRIPE/PUBLIC FRONTEND EVIDENCE**"
           } >> "$GITHUB_STEP_SUMMARY"
