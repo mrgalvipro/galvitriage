@@ -4,10 +4,10 @@ const PRESTRIPE = process.argv.includes('--prestripe');
 const PROD_ENDPOINT = 'https://galvicare-0-5-production.mrgalvipro.workers.dev';
 
 const defaults = {
-  GALVISCORE_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/14A00kbivcypgoGfBY53000',
-  GALVISHOT_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253001',
-  GALVISIGHT_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/00w14odrG1QLdcu9dA53002',
-  GALVIPATH_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53003'
+  GALVISCORE_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00',
+  GALVISHOT_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253O01',
+  GALVISIGHT_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/00w14odrG1QLdcu9dA53O02',
+  GALVIPATH_LIVE_PAYMENT_LINK: 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03'
 };
 
 const approved = {
