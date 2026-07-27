@@ -43,12 +43,15 @@ jobs:
         run: |
           test "$(git branch --show-current)" = "qa-revamped-galvicare-0-5"
           test -f worker/day7d-engine.js
+          test -f worker/day7d-runtime.js
           test -f migrations/0006_day7d_customer_intelligence.sql
           test -f tests/day7d-customer-intelligence.test.mjs
-          grep -q '"main": "worker/day7d-engine.js"' wrangler.json
+          grep -q '"main": "worker/day7d-runtime.js"' wrangler.json
           grep -q '"binding": "DB"' wrangler.json
           grep -q '"database_name": "galvivault-0-5-qa"' wrangler.json
           grep -q "galviengine_customer_intelligence_v0_5_1" worker/day7d-engine.js
+          grep -q "day7d_context_evidence" worker/day7d-runtime.js
+          grep -q "day7d_observations" worker/day7d-runtime.js
 
       - name: Run Day 7D preflight
         run: npm run day7d:preflight
@@ -69,12 +72,12 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 execute galvivault-0-5-qa --remote --file=migrations/0006_day7d_customer_intelligence.sql --config wrangler.json
 
-      - name: Verify Day 7D schema in QA D1
+      - name: Verify Day 7D dedicated schema in QA D1
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 execute galvivault-0-5-qa --remote --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('clinical_evidence','clinical_evidence_versions','clinical_observations') ORDER BY name;" --config wrangler.json
+          command: d1 execute galvivault-0-5-qa --remote --command="SELECT name FROM sqlite_master WHERE type='table' AND name IN ('day7d_context_evidence','clinical_evidence_versions','day7d_observations') ORDER BY name;" --config wrangler.json
 
       - name: Allow legacy QA deployers to finish
         shell: bash
@@ -105,7 +108,8 @@ jobs:
             const body=await response.json();
             if(body?.day7d?.enabled!==true) throw new Error(`Day 7D runtime not enabled on attempt ${attempt}: ${JSON.stringify(body)}`);
             if(body?.day7d?.rules_version!=='galviengine_customer_intelligence_v0_5_1') throw new Error(`Day 7D runtime marker missing on attempt ${attempt}: ${JSON.stringify(body)}`);
-            if(body?.day7d?.entrypoint!=='worker/day7d-engine.js') throw new Error(`Wrong Day 7D entrypoint on attempt ${attempt}: ${JSON.stringify(body.day7d)}`);
+            if(body?.day7d?.entrypoint!=='worker/day7d-runtime.js') throw new Error(`Wrong Day 7D entrypoint on attempt ${attempt}: ${JSON.stringify(body.day7d)}`);
+            if(body?.day7d?.schema_adapter!=='day7d_dedicated_tables_v1') throw new Error(`Wrong Day 7D schema adapter on attempt ${attempt}: ${JSON.stringify(body.day7d)}`);
             console.log(JSON.stringify({attempt,status:'PASS',day7d:body.day7d},null,2));
           }
           await check(1);
@@ -122,15 +126,16 @@ jobs:
             echo ""
             echo "- Authoritative source: \`qa-revamped-galvicare-0-5\`"
             echo "- Commit: \`${GITHUB_SHA}\`"
-            echo "- Entrypoint: \`worker/day7d-engine.js\`"
+            echo "- Entrypoint: \`worker/day7d-runtime.js\`"
             echo "- QA D1: \`DB → galvivault-0-5-qa\`"
+            echo "- Day 1–7C clinical schema preserved: PASS"
+            echo "- Day 7D dedicated schema: PASS"
             echo "- Day 7D preflight: PASS"
             echo "- Day 7D focused tests: PASS"
             echo "- Day 7A-7C regression: PASS"
-            echo "- Day 7D QA schema: PASS"
             echo "- Authoritative final QA deployment: PASS"
             echo "- Preserved runtime verification: PASS"
-            echo "- Day 7D runtime marker: PASS twice"
+            echo "- Day 7D runtime marker + schema adapter: PASS twice"
             echo ""
             echo "**READY FOR DAY 7D HUMAN E2E**"
           } >> "$GITHUB_STEP_SUMMARY"
