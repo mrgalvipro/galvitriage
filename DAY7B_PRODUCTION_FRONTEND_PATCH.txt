@@ -1,0 +1,56 @@
+DAY 7B PRODUCTION FRONTEND CRITICAL PATCH
+========================================
+
+DO NOT APPLY UNTIL THE FOUR APPROVED STRIPE LIVE PAYMENT LINKS ARE AVAILABLE.
+
+Current production defects that MUST be replaced in index.html:
+
+1) API endpoint
+
+FROM:
+const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-triage-intake.mrgalvipro.workers.dev';
+
+TO:
+const GALVICARE_INTAKE_ENDPOINT = 'https://galvicare-0-5-production.mrgalvipro.workers.dev';
+
+2) GalviScore Stripe
+
+FROM:
+const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01';
+
+TO:
+const GALVISCORE_STRIPE_PAYMENT_LINK = '<APPROVED_GALVISCORE_LIVE_PAYMENT_LINK>';
+
+3) GalviShot Stripe
+
+Current source also contains:
+PAYMENT_LINK: 'https://buy.stripe.com/test_00w14odrG1QLdcu9dA53O02'
+
+Replace ONLY with:
+PAYMENT_LINK: '<APPROVED_GALVISHOT_LIVE_PAYMENT_LINK>'
+
+4) GalviSight Stripe
+
+FROM:
+const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_eVq3cw3R63YT6O6ahE53O03';
+
+TO:
+const GALVISIGHT_STRIPE_PAYMENT_LINK = '<APPROVED_GALVISIGHT_LIVE_PAYMENT_LINK>';
+
+5) GalviPath Stripe
+
+FROM:
+const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_fZu14ofzO9jd8We1L853O05';
+
+TO:
+const GALVIPATH_STRIPE_PAYMENT_LINK = '<APPROVED_GALVIPATH_LIVE_PAYMENT_LINK>';
+
+FAIL-CLOSED RULE
+----------------
+Do not guess Stripe URLs.
+Do not transform test URLs into live URLs.
+If any of the four exact LIVE links is unavailable, report:
+BLOCKED — MISSING APPROVED STRIPE LIVE PAYMENT LINK(S)
+
+After patching, verify no string "buy.stripe.com/test_" remains in the PRODUCTION frontend artifact.
+QA source may retain TEST links.
