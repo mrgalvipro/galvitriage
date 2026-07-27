@@ -7,6 +7,9 @@ const prodEntry = readFileSync(new URL('../worker/production-entry.js', import.m
 const qaWrangler = readFileSync(new URL('../wrangler.jsonc', import.meta.url), 'utf8');
 const prodWrangler = readFileSync(new URL('../wrangler.production.jsonc', import.meta.url), 'utf8');
 
+const PROD_D1_ID = '2fc954b7-00ca-405b-8313-f91e706845a2';
+const QA_D1_ID = 'cdf9042b-ab09-498a-ac66-010b6cce47d4';
+
 test('Day 7A Worker remains the QA/build source without product-logic rewrite', () => {
   assert.match(qaWorker, /DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1'/);
   assert.match(qaWorker, /environment: 'qa'/);
@@ -24,10 +27,11 @@ test('QA and Production Worker services are distinct', () => {
   assert.match(prodWrangler, /"name": "galvicare-0-5-production"/);
 });
 
-test('QA and Production D1 targets are distinct', () => {
+test('QA and Production D1 targets are physically distinct', () => {
   assert.match(qaWrangler, /"database_name": "galvivault-0-5-qa"/);
   assert.match(prodWrangler, /"database_name": "galvivault-0-5-production"/);
-  assert.doesNotMatch(prodWrangler, /cdf9042b-ab09-498a-ac66-010b6cce47d4/);
+  assert.match(prodWrangler, new RegExp(PROD_D1_ID.replaceAll('-', '\\-')));
+  assert.doesNotMatch(prodWrangler, new RegExp(QA_D1_ID.replaceAll('-', '\\-')));
 });
 
 test('Production runtime is explicitly production and customer-origin only', () => {
@@ -50,8 +54,11 @@ test('Production health fingerprint identifies RUN lane and Production GalviVaul
   assert.match(prodEntry, /environment: 'production'/);
   assert.match(prodEntry, /galvivault: 'galvivault-0-5-production'/);
   assert.match(prodEntry, /release_branch: 'qa-revamped-galvicare-0-5'/);
+  assert.match(prodEntry, /db_bound: Boolean\(env\?\.DB\)/);
 });
 
-test('Production D1 identifier must be supplied independently', () => {
-  assert.match(prodWrangler, /\$\{GALVICARE_PROD_D1_DATABASE_ID\}/);
+test('Production config contains no QA-only D1 or test-payment authority', () => {
+  assert.doesNotMatch(prodWrangler, /galvivault-0-5-qa/);
+  assert.doesNotMatch(prodWrangler, /buy\.stripe\.com\/test_/);
+  assert.doesNotMatch(prodWrangler, /QA_OVERRIDE_SECRET|TEST_OVERRIDE_SECRET/);
 });
