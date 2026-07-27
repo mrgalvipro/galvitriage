@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "galvicare-0-5-qa",
+  "main": "worker/qa-frontend.js",
+  "compatibility_date": "2026-07-23",
+  "assets": {
+    "directory": "./dist-qa",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "vars": {
+    "ENVIRONMENT": "qa",
+    "APP_ENV": "qa",
+    "GALVICARE_API_ORIGIN": "https://galvicare-triage-intake.mrgalvipro.workers.dev"
+  },
+  "d1_databases": [
+    {
+      "binding": "D1",
+      "database_name": "galvivault-0-5-qa",
+      "database_id": "cdf9042b-ab09-498a-ac66-010b6cce47d4"
+    }
+  ]
+}
