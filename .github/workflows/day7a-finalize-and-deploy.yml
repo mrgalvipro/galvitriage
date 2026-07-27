@@ -1,37 +1,25 @@
-name: Finalize GalviCare Day 7A and Deploy QA
+name: Validate GalviCare Day 7A Baseline
 
-# Immutable Day 7A release gate. The approved Day 7A source is already committed.
-# This workflow tests that exact QA source, deploys the QA Worker, verifies runtime,
-# and releases the build to final Human E2E only when all gates pass.
+# Day 7A is an accepted historical baseline only.
+# It MUST NOT deploy the shared QA Worker. Day 7D owns QA deployment authority.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - qa-revamped-galvicare-0-5
-    paths:
-      - "index.html"
-      - "worker/**"
-      - "tests/**"
-      - "scripts/verify-qa-runtime.mjs"
-      - "wrangler.json"
-      - "package.json"
-      - ".github/workflows/day7a-finalize-and-deploy.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: galvicare-day7a-finalize
+  group: galvicare-day7a-validation-only
   cancel-in-progress: true
 
 jobs:
-  finalize-deploy-verify:
-    name: Test Committed QA Source → Deploy QA Worker → Verify Runtime
+  validate-day7a-baseline:
+    name: Validate Day 7A Baseline — No Deployment
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
 
     steps:
-      - name: Checkout exact QA commit
+      - name: Checkout current QA source
         uses: actions/checkout@v4
 
       - name: Set up Node 22
@@ -42,55 +30,27 @@ jobs:
       - name: Install dependencies
         run: npm install --ignore-scripts
 
-      - name: Verify QA branch and release SHA
+      - name: Verify preserved Day 7A presentation and runtime foundation
         shell: bash
         run: |
-          echo "QA branch: ${GITHUB_REF_NAME}"
-          echo "Release SHA: ${GITHUB_SHA}"
-          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
-
-      - name: Verify committed Day 7A presentation
-        shell: bash
-        run: |
+          set -euo pipefail
           grep -Fq "/* Day 7A customer presentation */" index.html
           grep -Fq "GalviTriage™" index.html
           grep -Fq "Your GalviScore™ is Ready" index.html
           grep -Fq "Chart Your GalviPath™" index.html
-          grep -Fq ">Print / Save GalviPath™</button>" index.html
-
-      - name: Run complete Day 7A source gate
-        shell: bash
-        run: |
           node --check worker/worker.js
-          node --check scripts/verify-qa-runtime.mjs
-          npm test
           npm run stabilization:gate
-          git diff --check
-          test -z "$(git status --short)"
+          echo "PASS: Day 7A baseline preserved."
+          echo "NO DEPLOYMENT AUTHORITY: Day 7D is the sole QA deploy owner."
 
-      - name: Deploy existing QA Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.json
-
-      - name: Verify exact deployed QA runtime
-        env:
-          GALVICARE_QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
-        run: node scripts/verify-qa-runtime.mjs
-
-      - name: Human E2E release gate
+      - name: Baseline validation summary
         if: success()
         shell: bash
         run: |
           {
-            echo "## GalviCare Day 7A Final QA PASS"
+            echo "## GalviCare Day 7A Baseline Validation PASS"
             echo ""
-            echo "- QA stabilization/source gate: PASS"
-            echo "- Day 7A release workflow: PASS"
-            echo "- QA Worker deployment: PASS"
-            echo "- Live runtime verification: PASS"
-            echo ""
-            echo "**READY FOR FINAL DAY 7A HUMAN E2E**"
+            echo "- Historical Day 7A baseline: PRESERVED"
+            echo "- QA deployment authority: REMOVED"
+            echo "- Authoritative QA deploy owner: Day 7D workflow only"
           } >> "$GITHUB_STEP_SUMMARY"
