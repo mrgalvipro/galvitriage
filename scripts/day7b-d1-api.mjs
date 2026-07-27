@@ -12,15 +12,15 @@ if (!accountId || !apiToken) {
 
 const base = `https://api.cloudflare.com/client/v4/accounts/${accountId}/d1/database/${databaseId}/query`;
 const headers = {
-  'Authorization': `Bearer ${apiToken}`,
+  Authorization: `Bearer ${apiToken}`,
   'Content-Type': 'application/json'
 };
 
-async function query(sql) {
+async function query(sql, params = []) {
   const response = await fetch(base, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ sql })
+    body: JSON.stringify({ sql, params })
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok || body.success === false) {
@@ -45,11 +45,22 @@ const tables = await query("SELECT name FROM sqlite_schema WHERE type='table' AN
 console.log(JSON.stringify(tables.result));
 
 console.log('[3/3] Verifying Production customer/session/payment tables start empty...');
-const countsSql = "SELECT 'sessions' AS table_name, COUNT(*) AS row_count FROM sessions UNION ALL SELECT 'founders', COUNT(*) FROM founders UNION ALL SELECT 'ventures', COUNT(*) FROM ventures UNION ALL SELECT 'payments', COUNT(*) FROM payments UNION ALL SELECT 'entitlements', COUNT(*) FROM entitlements UNION ALL SELECT 'product_results', COUNT(*) FROM product_results;";
-const counts = await query(countsSql);
-console.log(JSON.stringify(counts.result));
-const rows = (counts.result || []).flatMap((entry) => entry?.results || []);
-const dirty = rows.filter((row) => Number(row.row_count) !== 0);
+const tablesToCheck = ['sessions', 'founders', 'ventures', 'payments', 'entitlements', 'product_results'];
+const counts = [];
+for (const tableName of tablesToCheck) {
+  const result = await query(`SELECT COUNT(*) AS row_count FROM ${tableName};`);
+  const rows = (result.result || []).flatMap((entry) => entry?.results || []);
+  counts.push({ table_name: tableName, row_count: Number(rows?.[0]?.row_count ?? NaN) });
+}
+console.log(JSON.stringify(counts));
+
+const invalid = counts.filter((row) => !Number.isFinite(row.row_count));
+if (invalid.length) {
+  console.error('BLOCKED — could not verify Production table counts:', JSON.stringify(invalid));
+  process.exit(4);
+}
+
+const dirty = counts.filter((row) => row.row_count !== 0);
 if (dirty.length) {
   console.error('BLOCKED — unexpected Production customer/session/payment rows:', JSON.stringify(dirty));
   process.exit(4);
