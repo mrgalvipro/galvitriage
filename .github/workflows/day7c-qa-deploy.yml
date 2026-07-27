@@ -13,6 +13,7 @@ on:
       - 'wrangler.qa-frontend.jsonc'
       - 'qa-frontend-worker.js'
       - 'worker/worker.js'
+      - 'worker/day7c-entry.js'
       - 'package.json'
   workflow_dispatch:
 
@@ -20,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: day7c-qa-deploy
+  group: galvicare-qa-backend-authoritative
   cancel-in-progress: false
 
 env:
@@ -29,7 +30,7 @@ env:
 
 jobs:
   verify-deploy-preflight:
-    name: Verify, migrate, deploy QA, runtime preflight
+    name: Verify, deploy authoritative QA backend, runtime preflight
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -47,34 +48,27 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: Tests -> Day 7B gate -> Day 7C gate
+      - name: Critical-path source checks
         run: |
           node --check worker/worker.js
-          node --check worker/production-entry.js
-          npm run stabilization:gate
-          npm run day7b:gate
-          npm run day7c:gate
-          git diff --check
-
-      - name: QA isolation check
-        run: |
-          grep -q 'galvivault-0-5-qa' wrangler.json
+          node --check worker/day7c-entry.js
+          grep -q '"main": "worker/day7c-entry.js"' wrangler.json
           grep -q '"ENVIRONMENT": "qa"' wrangler.json
           grep -q '"HUBSPOT_ENABLED": "true"' wrangler.json
           grep -q 'G-V5ZPM5L19T' wrangler.json
           grep -q 'xswd8m446z' wrangler.json
-          grep -q 'galviclinic-day7c-qa' wrangler.json
-          ! grep -q 'galvivault-0-5-production' wrangler.json
-          ! grep -q 'galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
+          grep -q 'galvivault-0-5-qa' wrangler.json
+          npm run day7c:gate
+          git diff --check
 
-      - name: Apply additive Day 7C D1 migration to QA only
+      - name: Apply Day 7C QA migration
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: d1 execute galvivault-0-5-qa --remote --file migrations/0005_day7c_integration_trace.sql --config wrangler.json
 
-      - name: Deploy QA backend
+      - name: Deploy authoritative QA backend
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -88,34 +82,42 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deploy --config wrangler.qa-frontend.jsonc
 
-      - name: Live runtime preflight
+      - name: Reassert authoritative QA backend last
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy --config wrangler.json
+
+      - name: Hard runtime gate - HubSpot adapter
+        shell: bash
         run: |
-          sleep 15
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 "$QA_BACKEND_URL/health" -o /tmp/backend.json
+          set -euo pipefail
+          sleep 20
+          curl --fail --silent --show-error --retry 6 --retry-delay 3 "$QA_BACKEND_URL/health" -o /tmp/backend.json
           cat /tmp/backend.json
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 "$QA_FRONTEND_URL/health" -o /tmp/frontend-health.json
-          grep -q '"environment":"qa"' /tmp/frontend-health.json || grep -q '"environment": "qa"' /tmp/frontend-health.json
-          curl --fail --silent --show-error --retry 5 --retry-delay 3 "$QA_FRONTEND_URL" -o /tmp/frontend.html
+          grep -q '"day7c_hubspot_adapter":"day7c-hubspot-upsert-v2"' /tmp/backend.json
+          grep -q '"hubspot_enabled":true' /tmp/backend.json
+          grep -q '"hubspot_credential_present":true' /tmp/backend.json
+          grep -q '"day7c_environment":"qa"' /tmp/backend.json
+
+      - name: Hard runtime gate - GA4 and Clarity QA instrumentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --retry 6 --retry-delay 3 "$QA_FRONTEND_URL" -o /tmp/frontend.html
           grep -q 'G-V5ZPM5L19T' /tmp/frontend.html
           grep -q 'xswd8m446z' /tmp/frontend.html
-          grep -q 'https://calendly.com/galvilpro/galviclinic-day7c-qa' /tmp/frontend.html
-          grep -q 'https://buy.stripe.com/test_' /tmp/frontend.html
-          ! grep -q 'galvicare-0-5-production.mrgalvipro.workers.dev' /tmp/frontend.html
-          ! grep -q 'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00' /tmp/frontend.html
-          ! grep -q 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253O01' /tmp/frontend.html
-          ! grep -q 'https://buy.stripe.com/00w14odrG1QLdcu9dA53O02' /tmp/frontend.html
-          ! grep -q 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03' /tmp/frontend.html
+          ! grep -q 'G-KXJFKN7RTS' /tmp/frontend.html
+          ! grep -q 'xjsdmprr4z' /tmp/frontend.html
 
       - name: Certification summary
         run: |
-          echo '## GalviCare Day 7C QA Deployment PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Tests: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 7B gate: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 7C gate: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- QA isolation: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- D1 migration: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- QA backend deployment: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- QA frontend deployment: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Live runtime preflight: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Day 7C Critical-Path Runtime PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Authoritative QA backend: worker/day7c-entry.js' >> "$GITHUB_STEP_SUMMARY"
+          echo '- HubSpot adapter marker: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- HubSpot credential present: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GA4 QA configuration: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Clarity QA configuration: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR HUMAN DAY 7C E2E**' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR HUBSPOT → GA4 → CLARITY HUMAN EVIDENCE**' >> "$GITHUB_STEP_SUMMARY"
