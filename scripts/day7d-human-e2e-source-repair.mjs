@@ -13,19 +13,22 @@ const newRoute="function routeByGalviScoreConfidence(scoreResult){ if(!hasValidG
 if(html.includes(oldRoute)) html=html.replace(oldRoute,newRoute);
 else if(!html.includes("galviscore_followup_completed_")) throw new Error('GalviScore routing signature changed; refusing unsafe patch.');
 
-// Preserve the proven Day 6/7C paid-return restoration contract exactly, then layer
-// Day 7D clarification after the unlocked result has been restored and return-pending cleared.
+// Restore the exact proven Day 6/7C paid-return function contract.
 const brokenPaidReturn="    routeByGalviScoreConfidence(restored);\n    clearGalviCareReturnPending();";
-const additivePaidReturn="    renderUnlockedGalviScore(restored);\n    clearGalviCareReturnPending();\n    queueMicrotask(()=>routeByGalviScoreConfidence(restored));";
-if(html.includes(brokenPaidReturn)) html=html.replace(brokenPaidReturn,additivePaidReturn);
-else if(!html.includes(additivePaidReturn)){
-  const legacyPaidReturn="    renderUnlockedGalviScore(restored);\n    clearGalviCareReturnPending();";
-  if(html.includes(legacyPaidReturn)) html=html.replace(legacyPaidReturn,additivePaidReturn);
-  else throw new Error('GalviScore paid-return restoration signature changed; refusing unsafe patch.');
-}
+const previouslyAdditivePaidReturn="    renderUnlockedGalviScore(restored);\n    clearGalviCareReturnPending();\n    queueMicrotask(()=>routeByGalviScoreConfidence(restored));";
+const provenPaidReturn="    renderUnlockedGalviScore(restored);\n    clearGalviCareReturnPending();";
+if(html.includes(brokenPaidReturn)) html=html.replace(brokenPaidReturn,provenPaidReturn);
+if(html.includes(previouslyAdditivePaidReturn)) html=html.replace(previouslyAdditivePaidReturn,provenPaidReturn);
+if(!html.includes(provenPaidReturn)) throw new Error('GalviScore paid-return restoration signature changed; refusing unsafe patch.');
 
-// Preserve the existing cached-result render path as the visual restoration authority;
-// Day 7D clarification is layered after it rather than replacing it.
+// Layer Day 7D clarification only after renderGalviScoreAfterPayment has completed,
+// leaving its preserved render -> clear -> return true sequence untouched.
+const paidRouteBase="      const rendered=await renderGalviScoreAfterPayment(paidSessionId);\n      if(rendered===false) throw new Error('Verified GalviScore payment did not restore a GalviScore result.');\n      cleanPaidReturnCustomerUrl();";
+const paidRouteDay7D="      const rendered=await renderGalviScoreAfterPayment(paidSessionId);\n      if(rendered===false) throw new Error('Verified GalviScore payment did not restore a GalviScore result.');\n      queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });\n      cleanPaidReturnCustomerUrl();";
+if(html.includes(paidRouteBase)) html=html.replace(paidRouteBase,paidRouteDay7D);
+else if(!html.includes(paidRouteDay7D)) throw new Error('GalviScore paid-return route signature changed; refusing unsafe patch.');
+
+// Preserve cached visual restoration first; clarification remains additive.
 const brokenCached="  routeByGalviScoreConfidence(cached);\n});";
 const additiveCached="  renderUnlockedGalviScore(cached);\n  queueMicrotask(()=>routeByGalviScoreConfidence(cached));\n});";
 if(html.includes(brokenCached)) html=html.replace(brokenCached,additiveCached);
@@ -51,12 +54,13 @@ fs.writeFileSync(enginePath,engine);
 
 const assertions=[
   [html.includes("galviscore_followup_completed_"),'GalviScore completion marker'],
-  [html.includes('renderUnlockedGalviScore(restored);\n    clearGalviCareReturnPending();'),'preserved paid-return render contract'],
-  [html.includes('queueMicrotask(()=>routeByGalviScoreConfidence(restored))'),'additive GalviScore clarification transition'],
+  [html.includes('renderUnlockedGalviScore(restored);\n    clearGalviCareReturnPending();\n    return true'),'exact preserved paid-return contract'],
+  [html.includes('queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); })'),'post-restore Day 7D clarification transition'],
   [html.includes('DAY7D_CUSTOMER_INTELLIGENCE_ADAPTER_SOURCE'),'real QA source adapter'],
+  [html.includes('galvishot-followup-questions'),'GalviShot question host'],
   [html.includes('galvisight-followup-questions'),'GalviSight question host'],
   [html.includes('galvipath-followup-questions'),'GalviPath question host'],
   [engine.includes('count=Math.max(count,1)'),'mandatory stage follow-up'],
 ];
 for(const [ok,label] of assertions) if(!ok) throw new Error(`Missing ${label}`);
-console.log('PASS: Day 7D human-E2E source repaired additively while preserving Day 1-7C restoration contracts.');
+console.log('PASS: Day 7D customer intelligence layered after preserved Day 1-7C paid-return restoration.');
