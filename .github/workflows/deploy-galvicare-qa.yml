@@ -27,7 +27,7 @@ env:
 
 jobs:
   qa-release-gate:
-    name: Day 7D → Progressive Intelligence → Schema → Proven QA Deploy → Double Runtime Proof
+    name: Day 7D → Progressive Intelligence → Schema → Proven QA Deploy → Stable Runtime Proof
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -64,6 +64,7 @@ jobs:
           grep -q "progressive_followups:true" worker/day7d-engine.js
           grep -q "evidence_versioned_results:true" worker/day7d-engine.js
           grep -q "payment_intelligence_decoupled:true" worker/day7d-engine.js
+          grep -q "galviengine_customer_intelligence_v0_5_1" worker/day7d-engine.js
           echo 'PASS: Day 7D remains additive to the proven Day 7A-7C architecture.'
 
       - name: Day 7D preflight
@@ -123,7 +124,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           command: deployments list --config wrangler.json
 
-      - name: Wait for exact Day 7D API runtime convergence
+      - name: Wait for stable exact Day 7D API runtime convergence
         shell: bash
         env:
           EXPECTED_SHA: ${{ github.sha }}
@@ -131,22 +132,25 @@ jobs:
           node --input-type=module <<'NODE'
           const url=process.env.QA_WORKER_URL;
           const expectedSha=process.env.EXPECTED_SHA;
-          const deadline=Date.now()+90000;
-          let last=null;
+          const deadline=Date.now()+120000;
+          let last=null, consecutive=0;
           while(Date.now()<deadline){
             try{
-              const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`converge-${Date.now()}`})});
+              const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`converge-${Date.now()}-${Math.random()}`})});
               const body=await response.json();
               last=body;
               const d=body?.day7d;
-              if(response.ok && body?.success===true && d?.enabled===true && d?.entrypoint==='worker/day7d-engine.js' && d?.schema_adapter==='day7d_dedicated_tables_v1' && d?.release_contract==='day7d_progressive_customer_intelligence_v1' && d?.deployment_sha===expectedSha){
-                console.log(`PASS: exact Day 7D runtime converged at ${expectedSha}`);
+              const exact=response.ok && body?.success===true && d?.enabled===true && d?.rules_version==='galviengine_customer_intelligence_v0_5_1' && d?.entrypoint==='worker/day7d-engine.js' && d?.schema_adapter==='day7d_dedicated_tables_v1' && d?.release_contract==='day7d_progressive_customer_intelligence_v1' && d?.progressive_followups===true && d?.evidence_versioned_results===true && d?.deployment_sha===expectedSha;
+              consecutive=exact?consecutive+1:0;
+              console.log(`Day 7D convergence sample: exact=${exact} consecutive=${consecutive}/4`);
+              if(consecutive>=4){
+                console.log(`PASS: stable exact Day 7D runtime converged at ${expectedSha}`);
                 process.exit(0);
               }
-            }catch(error){last={error:String(error?.message||error)};}
+            }catch(error){last={error:String(error?.message||error)};consecutive=0;}
             await new Promise(resolve=>setTimeout(resolve,3000));
           }
-          throw new Error(`Exact Day 7D runtime did not converge within 90 seconds. Last response: ${JSON.stringify(last)}`);
+          throw new Error(`Stable exact Day 7D runtime did not converge within 120 seconds. Last response: ${JSON.stringify(last)}`);
           NODE
 
       - name: Verify preserved Day 1-7C runtime foundation
@@ -160,13 +164,23 @@ jobs:
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           node --input-type=module <<'NODE'
-          const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`proof1-${Date.now()}`})});
-          if(!response.ok) throw new Error(`health_check HTTP ${response.status}`);
-          const body=await response.json(),d=body?.day7d;
           const expected={enabled:true,rules_version:'galviengine_customer_intelligence_v0_5_1',entrypoint:'worker/day7d-engine.js',schema_adapter:'day7d_dedicated_tables_v1',release_contract:'day7d_progressive_customer_intelligence_v1',progressive_followups:true,evidence_versioned_results:true,legacy_runtime_preservation:true,payment_intelligence_decoupled:true,deployment_sha:process.env.EXPECTED_SHA};
-          if(body?.success!==true) throw new Error(`Preserved runtime health failed: ${JSON.stringify(body)}`);
-          for(const [key,value] of Object.entries(expected)) if(d?.[key]!==value) throw new Error(`Proof #1 ${key} mismatch: expected ${JSON.stringify(value)}, got ${JSON.stringify(d?.[key])}; body=${JSON.stringify(body)}`);
-          console.log(`DAY 7D PROOF #1 PASS — ${process.env.EXPECTED_SHA}`);
+          const deadline=Date.now()+90000;
+          let last=null,consecutive=0;
+          while(Date.now()<deadline){
+            try{
+              const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`proof1-${Date.now()}-${Math.random()}`})});
+              const body=await response.json(),d=body?.day7d;
+              last=body;
+              let exact=response.ok&&body?.success===true;
+              for(const [key,value] of Object.entries(expected)) exact=exact&&d?.[key]===value;
+              consecutive=exact?consecutive+1:0;
+              console.log(`Proof #1 sample: exact=${exact} consecutive=${consecutive}/3`);
+              if(consecutive>=3){console.log(`DAY 7D PROOF #1 PASS — ${process.env.EXPECTED_SHA}`);process.exit(0);}
+            }catch(error){last={error:String(error?.message||error)};consecutive=0;}
+            await new Promise(resolve=>setTimeout(resolve,3000));
+          }
+          throw new Error(`Proof #1 did not stabilize: ${JSON.stringify(last)}`);
           NODE
 
       - name: Ten second stability interval
@@ -178,13 +192,23 @@ jobs:
           EXPECTED_SHA: ${{ github.sha }}
         run: |
           node --input-type=module <<'NODE'
-          const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`proof2-${Date.now()}`})});
-          if(!response.ok) throw new Error(`health_check HTTP ${response.status}`);
-          const body=await response.json(),d=body?.day7d;
           const expected={enabled:true,rules_version:'galviengine_customer_intelligence_v0_5_1',entrypoint:'worker/day7d-engine.js',schema_adapter:'day7d_dedicated_tables_v1',release_contract:'day7d_progressive_customer_intelligence_v1',progressive_followups:true,evidence_versioned_results:true,legacy_runtime_preservation:true,payment_intelligence_decoupled:true,deployment_sha:process.env.EXPECTED_SHA};
-          if(body?.success!==true) throw new Error(`Preserved runtime health failed: ${JSON.stringify(body)}`);
-          for(const [key,value] of Object.entries(expected)) if(d?.[key]!==value) throw new Error(`Proof #2 ${key} mismatch: expected ${JSON.stringify(value)}, got ${JSON.stringify(d?.[key])}; body=${JSON.stringify(body)}`);
-          console.log(`DAY 7D PROOF #2 PASS — ${process.env.EXPECTED_SHA}`);
+          const deadline=Date.now()+90000;
+          let last=null,consecutive=0;
+          while(Date.now()<deadline){
+            try{
+              const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`proof2-${Date.now()}-${Math.random()}`})});
+              const body=await response.json(),d=body?.day7d;
+              last=body;
+              let exact=response.ok&&body?.success===true;
+              for(const [key,value] of Object.entries(expected)) exact=exact&&d?.[key]===value;
+              consecutive=exact?consecutive+1:0;
+              console.log(`Proof #2 sample: exact=${exact} consecutive=${consecutive}/3`);
+              if(consecutive>=3){console.log(`DAY 7D PROOF #2 PASS — ${process.env.EXPECTED_SHA}`);process.exit(0);}
+            }catch(error){last={error:String(error?.message||error)};consecutive=0;}
+            await new Promise(resolve=>setTimeout(resolve,3000));
+          }
+          throw new Error(`Proof #2 did not stabilize: ${JSON.stringify(last)}`);
           NODE
 
       - name: READY FOR DAY 7D HUMAN E2E
@@ -200,6 +224,7 @@ jobs:
           echo '- Existing QA D1 + 3 Day 7D tables: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo "- Exact deployed Git SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo '- Preserved Day 1-7C runtime: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Stable exact Day 7D runtime convergence: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Exact Day 7D runtime proof #1: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- 10-second stability interval: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Exact Day 7D runtime proof #2: PASS' >> "$GITHUB_STEP_SUMMARY"
