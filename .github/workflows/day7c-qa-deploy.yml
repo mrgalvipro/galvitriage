@@ -14,6 +14,7 @@ on:
       - 'qa-frontend-worker.js'
       - 'migrations/0006_day7d_customer_intelligence.sql'
       - 'tests/day7d-customer-intelligence.test.mjs'
+      - 'tests/day7d-customer-path-contract.test.mjs'
       - 'package.json'
   workflow_dispatch:
 
@@ -73,7 +74,7 @@ jobs:
           git diff --exit-code
 
       - name: Focused Day 7D behavioral tests
-        run: npm run day7d:test
+        run: npm run test:day7d
 
       - name: Full preserved Day 1-7C regression
         run: npm test
