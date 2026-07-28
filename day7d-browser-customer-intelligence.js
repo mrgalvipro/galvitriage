@@ -73,12 +73,20 @@
     return true;
   }
 
+  async function renderReadyStage(product){
+    if(product==='GalviShot'&&typeof window.showIntegratedGalviShotResult==='function') return window.showIntegratedGalviShotResult();
+    if(product==='GalviSight'&&typeof window.__galviLegacyShowGalviSight==='function') return window.__galviLegacyShowGalviSight();
+    if(product==='GalviPath'&&typeof window.__galviLegacyShowGalviPath==='function') return window.__galviLegacyShowGalviPath();
+    return false;
+  }
+
   async function saveAnswers(product){
     const cfg=STAGES[product],fields=Array.from(document.querySelectorAll(`#${cfg.questions} textarea`)),status=el(cfg.status);
     if(!fields.length) return;
     const missing=fields.find(x=>!x.value.trim()); if(missing){missing.focus();return;}
     if(status) status.textContent='Saving your evidence and updating your Founder Health Record…';
     const saved=await call(cfg.save,{answers:fields.map(x=>({question_id:x.dataset.questionCode,question_code:x.dataset.questionCode,question_text:x.dataset.questionText,answer:x.value.trim(),answer_text:x.value.trim(),confidence_impact:Number(x.dataset.confidenceImpact||5)}))});
+    if(saved.evidence_version_bumped!==true && Number(saved.evidence_version||0)<=Number(saved.evidence_version_before||0)) throw new Error('Follow-up saved without an evidence-version bump.');
     const savedStatus=String(saved.status||saved.evaluation?.status||'').toLowerCase();
     if(savedStatus==='needs_followup'){
       renderQuestions(product,saved.evaluation||saved);
@@ -101,8 +109,7 @@
       return;
     }
     el(cfg.followup)?.classList.add('hidden');
-    if(product==='GalviSight'&&typeof window.__galviLegacyShowGalviSight==='function') await window.__galviLegacyShowGalviSight();
-    if(product==='GalviPath'&&typeof window.__galviLegacyShowGalviPath==='function') await window.__galviLegacyShowGalviPath();
+    await renderReadyStage(product);
   }
 
   function bind(product){
@@ -126,7 +133,7 @@
       window.showGalviSight=async function(){
         const response=await call(STAGES.GalviSight.get,{});
         if(String(response.status||'').toLowerCase()==='needs_followup') return exposeFollowupStage('GalviSight',response);
-        return window.__galviLegacyShowGalviSight();
+        return renderReadyStage('GalviSight');
       };
     }
     if(typeof window.showGalviPath==='function'&&!window.__galviLegacyShowGalviPath){
@@ -134,7 +141,7 @@
       window.showGalviPath=async function(){
         const response=await call(STAGES.GalviPath.get,{});
         if(String(response.status||'').toLowerCase()==='needs_followup') return exposeFollowupStage('GalviPath',response);
-        return window.__galviLegacyShowGalviPath();
+        return renderReadyStage('GalviPath');
       };
     }
   }
@@ -165,5 +172,5 @@
     installAuthoritativeStageRoutes();
     interceptFetch();
   });
-  window.GalviCareDay7D={renderQuestions,saveAnswers,ensureStageUi,exposeFollowupStage};
+  window.GalviCareDay7D={renderQuestions,saveAnswers,ensureStageUi,exposeFollowupStage,renderReadyStage};
 })();
