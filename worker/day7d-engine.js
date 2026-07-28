@@ -1,6 +1,6 @@
 import legacyWorker from './worker.js';
 
-export const DAY7D_RULES_VERSION = 'galviengine_customer_intelligence_v0_5_1';
+export const DAY7D_RULES_VERSION = 'galviengine_customer_intelligence_v0_5_2';
 export const DAY7D_QUESTION_VERSION = 'clinical_followups_v0_5_1';
 export const DAY7D_CONTENT_VERSION = 'galvicare_day7d_customer_intelligence_v0_5_2';
 export const DAY7D_SCHEMA_VERSION = 'day7d_dedicated_tables_v1';
@@ -150,8 +150,6 @@ export function chooseFollowups(r,existing={},product='GalviShot') {
   if(r.confidence<60) count=3;
   else if(r.confidence<80) count=2;
   else if(divergence) count=1;
-  // Day 7D product contract: every new clinical stage collects at least one
-  // stage-specific founder intelligence input before finalizing its deliverable.
   if(Object.keys(existing||{}).length===0) count=Math.max(count,1);
   if(!count) return [];
   const dims=[r.weakest_dimension,r.stated?.biggest_challenge,'general'].filter(Boolean);
@@ -310,14 +308,17 @@ async function evaluate(db,sid,product){
 
 async function getOrCreate(db,sid,product){
   const f=await clinicalFile(db,sid);
-  const cached=await currentDay7DResult(db,sid,product,f.evidence_version);
-  if(cached) return {success:true,status:'ok',stored:true,session_id:sid,product,evidence_version:f.evidence_version,result:cached,data:cached};
 
+  // Required Day 7D Customer Intelligence must be authoritative before any
+  // cached or newly generated product result can be returned.
   const existing=f.followups_by_product?.[product]||{};
   const outstanding=chooseFollowups(f.reconciliation,existing,product);
   if(outstanding.length){
     return {success:true,status:'needs_followup',session_id:sid,product,confidence:f.reconciliation.confidence,evidence_version:f.evidence_version,rules_version:DAY7D_RULES_VERSION,followups:outstanding,followup_questions:outstanding};
   }
+
+  const cached=await currentDay7DResult(db,sid,product,f.evidence_version);
+  if(cached) return {success:true,status:'ok',stored:true,session_id:sid,product,evidence_version:f.evidence_version,result:cached,data:cached};
 
   let result;
   if(product==='GalviShot') result=shotResult(f);
