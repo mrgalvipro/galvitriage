@@ -12,8 +12,8 @@ const QA_GA4 = 'G-V5ZPM5L19T';
 const QA_CLARITY = 'xswd8m446z';
 const QA_CALENDLY = 'https://calendly.com/galvilpro/galviclinic-day7c-qa';
 const TEST_STRIPE_MARKER = 'https://buy.stripe.com/test_';
-const DAY7D_START = '/* DAY7D_CUSTOMER_INTELLIGENCE_ADAPTER_SOURCE */';
-const DAY7D_END = 'window.GalviCareDay7D={renderQuestions,saveAnswers,ensureStageUi};\n})();';
+const AUTHORITATIVE_SIGNATURE = 'Day 7D progressive customer-intelligence browser adapter.';
+const LEGACY_SIGNATURE = 'DAY7D_CUSTOMER_INTELLIGENCE_ADAPTER_SOURCE';
 
 let html = readFileSync(SOURCE, 'utf8');
 const day7dBrowser = readFileSync(DAY7D_BROWSER, 'utf8');
@@ -31,6 +31,7 @@ for (const contract of requiredQaContracts) {
 if (html.includes(PROD_WORKER)) throw new Error('Production Worker endpoint is present in QA source.');
 
 const day7dRequired = [
+  AUTHORITATIVE_SIGNATURE,
   'needs_followup',
   'save_galvishot_followup',
   'save_galvisight_followup',
@@ -39,7 +40,8 @@ const day7dRequired = [
   'galvipath-followup-questions',
   'evidence_version_bumped',
   'installAuthoritativeStageRoutes',
-  'invokeLegacyWithResponse'
+  'invokeLegacyWithResponse',
+  'slice(0,3)'
 ];
 for (const contract of day7dRequired) {
   if (!day7dBrowser.includes(contract)) throw new Error(`Day 7D browser contract missing: ${contract}`);
@@ -60,21 +62,23 @@ const qaBanner = `\n<div id="galvicare-qa-environment-banner" role="status" styl
 html = html.replace(/<body([^>]*)>/, `<body$1>${qaBanner}`);
 html = html.replace('</head>', `  <meta name="galvicare-environment" content="qa" />\n  <meta name="galvicare-qa-frontend" content="day7d-progressive-intelligence-v1" />\n</head>`);
 
-while (html.includes(DAY7D_START)) {
-  const markerStart = html.indexOf(DAY7D_START);
-  const scriptStart = html.lastIndexOf('<script>', markerStart);
-  const markerEnd = html.indexOf(DAY7D_END, markerStart);
-  if (markerEnd < 0) throw new Error('Embedded Day 7D adapter start exists without its authoritative end marker.');
-  const scriptEnd = html.indexOf('</script>', markerEnd + DAY7D_END.length);
-  if (scriptEnd < 0) throw new Error('Embedded Day 7D adapter is missing its closing script tag.');
-  const removeStart = scriptStart >= 0 ? scriptStart : markerStart;
-  html = html.slice(0, removeStart) + html.slice(scriptEnd + '</script>'.length);
+function removeEmbeddedAdapter(signature) {
+  while (html.includes(signature)) {
+    const markerStart = html.indexOf(signature);
+    const scriptStart = html.lastIndexOf('<script>', markerStart);
+    const scriptEnd = html.indexOf('</script>', markerStart);
+    if (scriptStart < 0 || scriptEnd < 0) throw new Error(`Embedded adapter containing ${signature} is not bounded by a script tag.`);
+    html = html.slice(0, scriptStart) + html.slice(scriptEnd + '</script>'.length);
+  }
 }
+removeEmbeddedAdapter(LEGACY_SIGNATURE);
+removeEmbeddedAdapter(AUTHORITATIVE_SIGNATURE);
 
 html = html.replace('</body>', `<script>\n${day7dBrowser}\n</script>\n</body>`);
 
-const adapterCount = (html.match(/DAY7D_CUSTOMER_INTELLIGENCE_ADAPTER_SOURCE/g) || []).length;
+const adapterCount = html.split(AUTHORITATIVE_SIGNATURE).length - 1;
 if (adapterCount !== 1) throw new Error(`Generated QA frontend must contain exactly one Day 7D adapter; found ${adapterCount}.`);
+if (html.includes(LEGACY_SIGNATURE)) throw new Error('Legacy Day 7D adapter marker survived the QA build.');
 if (html.includes("if(product==='GalviShot') return;")) throw new Error('Stale GalviShot adapter bypass survived the QA build.');
 
 for (const required of [QA_WORKER, QA_CUSTOMER_URL, TEST_STRIPE_MARKER, QA_GA4, QA_CLARITY, QA_CALENDLY, 'galvisight-followup-questions', 'galvipath-followup-questions', 'evidence_version_bumped', 'installAuthoritativeStageRoutes', 'invokeLegacyWithResponse']) {
