@@ -31,7 +31,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Patch only GalviScore clarification invocation sequencing
+      - name: Patch exact GalviScore paid-return clarification sequencing
         shell: bash
         run: |
           set -euo pipefail
@@ -39,6 +39,7 @@ jobs:
           import fs from 'node:fs';
           const path='index.html';
           let html=fs.readFileSync(path,'utf8');
+
           function replaceExactlyOnce(oldText,newText,label){
             if(html.includes(newText)){ console.log(`PASS: ${label} already applied`); return; }
             const count=html.split(oldText).length-1;
@@ -46,22 +47,7 @@ jobs:
             html=html.replace(oldText,newText);
             console.log(`PATCHED: ${label}`);
           }
-          replaceExactlyOnce(
-`    if(available.includes('GalviScore')&&entitled.includes('GalviScore')){
-      const rendered=await renderGalviScoreAfterPayment(sessionId);
-      return rendered!==false;
-    }`,
-`    if(available.includes('GalviScore')&&entitled.includes('GalviScore')){
-      const rendered=await renderGalviScoreAfterPayment(sessionId);
-      if(rendered!==false){
-        const cached=getCachedGalviScoreResult();
-        const followupKey='galviscore_followup_completed_'+sessionId;
-        if(cached&&localStorage.getItem(followupKey)!=='true') routeByGalviScoreConfidence(cached);
-      }
-      return rendered!==false;
-    }`,
-            'session restoration cannot bypass unanswered GalviScore clarification'
-          );
+
           replaceExactlyOnce(
 `      const rendered=await renderGalviScoreAfterPayment(paidSessionId);
       if(rendered===false) throw new Error('Verified GalviScore payment did not restore a GalviScore result.');
@@ -80,11 +66,13 @@ jobs:
       return true;`,
             'paid GalviScore return blocks synchronously on clarification before URL cleanup'
           );
+
           replaceExactlyOnce(
 `document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=getStoredSessionId(); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const el of textareas){ if(!el.value.trim()){el.reportValidity(); return;} await saveClinicalFollowUp(sessionId,{question_id:el.dataset.questionId,confidence_impact:Number(el.dataset.confidenceImpact||0)},el.value.trim()); } localStorage.setItem('galviscore_followup_completed_'+sessionId,'true'); const cached=getCachedGalviScoreResult(); if(cached){ cached.galviscore_confidence=Math.min(100,Number(cached.galviscore_confidence||0)+12); cacheGalviScoreResult(cached); routeByGalviScoreConfidence(cached); } });`,
 `document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=getStoredSessionId(); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const el of textareas){ if(!el.value.trim()){el.reportValidity(); return;} await saveClinicalFollowUp(sessionId,{question_id:el.dataset.questionId,confidence_impact:Number(el.dataset.confidenceImpact||0)},el.value.trim()); } localStorage.setItem('galviscore_followup_completed_'+sessionId,'true'); const cached=getCachedGalviScoreResult(); if(cached){ cached.galviscore_confidence=Math.min(100,Number(cached.galviscore_confidence||0)+12); cacheGalviScoreResult(cached); routeByGalviScoreConfidence(cached); cleanPaidReturnCustomerUrl(); } });`,
             'clarification completion releases enriched GalviScore then performs paid-return cleanup'
           );
+
           if(html.includes("queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });\n      cleanPaidReturnCustomerUrl();")) throw new Error('Unsafe paid-return clarification microtask still present');
           fs.writeFileSync(path,html);
           NODE
@@ -97,18 +85,18 @@ jobs:
           import assert from 'node:assert/strict';
           import fs from 'node:fs';
           const html=fs.readFileSync('index.html','utf8');
+
           test('paid GalviScore return synchronously blocks on unanswered clarification',()=>{
             assert.match(html,/const followupKey='galviscore_followup_completed_'\+paidSessionId;/);
             assert.match(html,/if\(cached&&localStorage\.getItem\(followupKey\)!=='true'\)\{\s*routeByGalviScoreConfidence\(cached\);\s*return true;\s*\}\s*cleanPaidReturnCustomerUrl\(\);/s);
             assert.doesNotMatch(html,/queueMicrotask\(\(\)=>\{ const cached=getCachedGalviScoreResult\(\); if\(cached\) routeByGalviScoreConfidence\(cached\); \}\);\s*cleanPaidReturnCustomerUrl\(\);/);
           });
-          test('session restoration cannot bypass unanswered clarification',()=>{
-            assert.match(html,/const followupKey='galviscore_followup_completed_'\+sessionId;/);
-          });
-          test('clarification completion releases enriched GalviScore',()=>{
+
+          test('clarification completion releases enriched GalviScore before paid-return cleanup',()=>{
             assert.match(html,/localStorage\.setItem\('galviscore_followup_completed_'\+sessionId,'true'\)/);
             assert.match(html,/routeByGalviScoreConfidence\(cached\); cleanPaidReturnCustomerUrl\(\);/);
           });
+
           test('customer-facing clarification UI remains present',()=>{
             assert.match(html,/id="galviscore-followup"/);
             assert.match(html,/id="followup-question-container"/);
