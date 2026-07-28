@@ -1,0 +1,153 @@
+name: Day 7D GalviScore Invocation Hotfix
+
+on:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - ".github/workflows/day7d-galviscore-invocation-hotfix.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: day7d-galviscore-invocation-hotfix
+  cancel-in-progress: true
+
+jobs:
+  patch-authoritative-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout authoritative QA
+        uses: actions/checkout@v4
+        with:
+          ref: qa-revamped-galvicare-0-5
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Patch only GalviScore clarification invocation sequencing
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const path='index.html';
+          let html=fs.readFileSync(path,'utf8');
+
+          function replaceExactlyOnce(oldText,newText,label){
+            if(html.includes(newText)){
+              console.log(`PASS: ${label} already applied`);
+              return;
+            }
+            const count=html.split(oldText).length-1;
+            if(count!==1) throw new Error(`${label}: expected exactly one source match, found ${count}`);
+            html=html.replace(oldText,newText);
+            console.log(`PATCHED: ${label}`);
+          }
+
+          replaceExactlyOnce(
+`    if(available.includes('GalviScore')&&entitled.includes('GalviScore')){
+      const rendered=await renderGalviScoreAfterPayment(sessionId);
+      return rendered!==false;
+    }`,
+`    if(available.includes('GalviScore')&&entitled.includes('GalviScore')){
+      const rendered=await renderGalviScoreAfterPayment(sessionId);
+      if(rendered!==false){
+        const cached=getCachedGalviScoreResult();
+        const followupKey='galviscore_followup_completed_'+sessionId;
+        if(cached&&localStorage.getItem(followupKey)!=='true') routeByGalviScoreConfidence(cached);
+      }
+      return rendered!==false;
+    }`,
+            'session restoration cannot bypass unanswered GalviScore clarification'
+          );
+
+          replaceExactlyOnce(
+`      const rendered=await renderGalviScoreAfterPayment(paidSessionId);
+      if(rendered===false) throw new Error('Verified GalviScore payment did not restore a GalviScore result.');
+      queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });
+      cleanPaidReturnCustomerUrl();
+      return true;`,
+`      const rendered=await renderGalviScoreAfterPayment(paidSessionId);
+      if(rendered===false) throw new Error('Verified GalviScore payment did not restore a GalviScore result.');
+      const cached=getCachedGalviScoreResult();
+      const followupKey='galviscore_followup_completed_'+paidSessionId;
+      if(cached&&localStorage.getItem(followupKey)!=='true'){
+        routeByGalviScoreConfidence(cached);
+        return true;
+      }
+      cleanPaidReturnCustomerUrl();
+      return true;`,
+            'paid GalviScore return blocks synchronously on clarification before URL cleanup'
+          );
+
+          replaceExactlyOnce(
+`document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=getStoredSessionId(); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const el of textareas){ if(!el.value.trim()){el.reportValidity(); return;} await saveClinicalFollowUp(sessionId,{question_id:el.dataset.questionId,confidence_impact:Number(el.dataset.confidenceImpact||0)},el.value.trim()); } localStorage.setItem('galviscore_followup_completed_'+sessionId,'true'); const cached=getCachedGalviScoreResult(); if(cached){ cached.galviscore_confidence=Math.min(100,Number(cached.galviscore_confidence||0)+12); cacheGalviScoreResult(cached); routeByGalviScoreConfidence(cached); } });`,
+`document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=getStoredSessionId(); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const el of textareas){ if(!el.value.trim()){el.reportValidity(); return;} await saveClinicalFollowUp(sessionId,{question_id:el.dataset.questionId,confidence_impact:Number(el.dataset.confidenceImpact||0)},el.value.trim()); } localStorage.setItem('galviscore_followup_completed_'+sessionId,'true'); const cached=getCachedGalviScoreResult(); if(cached){ cached.galviscore_confidence=Math.min(100,Number(cached.galviscore_confidence||0)+12); cacheGalviScoreResult(cached); routeByGalviScoreConfidence(cached); cleanPaidReturnCustomerUrl(); } });`,
+            'clarification completion releases enriched GalviScore then performs paid-return cleanup'
+          );
+
+          if(html.includes("queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });\n      cleanPaidReturnCustomerUrl();")){
+            throw new Error('Unsafe paid-return clarification microtask still present');
+          }
+
+          fs.writeFileSync(path,html);
+          NODE
+
+      - name: Add permanent regression guard for real Customer Intelligence journey
+        shell: bash
+        run: |
+          cat > tests/day7d-galviscore-invocation.test.mjs <<'EOF'
+          import test from 'node:test';
+          import assert from 'node:assert/strict';
+          import fs from 'node:fs';
+
+          const html=fs.readFileSync('index.html','utf8');
+
+          test('paid GalviScore return synchronously blocks on unanswered clarification',()=>{
+            assert.match(html,/const followupKey='galviscore_followup_completed_'\+paidSessionId;/);
+            assert.match(html,/if\(cached&&localStorage\.getItem\(followupKey\)!=='true'\)\{\s*routeByGalviScoreConfidence\(cached\);\s*return true;\s*\}\s*cleanPaidReturnCustomerUrl\(\);/s);
+            assert.doesNotMatch(html,/queueMicrotask\(\(\)=>\{ const cached=getCachedGalviScoreResult\(\); if\(cached\) routeByGalviScoreConfidence\(cached\); \}\);\s*cleanPaidReturnCustomerUrl\(\);/);
+          });
+
+          test('session restoration cannot bypass an unanswered GalviScore clarification',()=>{
+            assert.match(html,/if\(available\.includes\('GalviScore'\)&&entitled\.includes\('GalviScore'\)\)\{[\s\S]*?const followupKey='galviscore_followup_completed_'\+sessionId;[\s\S]*?routeByGalviScoreConfidence\(cached\);[\s\S]*?return rendered!==false;/);
+          });
+
+          test('clarification completion marks the session complete and releases enriched GalviScore',()=>{
+            assert.match(html,/localStorage\.setItem\('galviscore_followup_completed_'\+sessionId,'true'\)/);
+            assert.match(html,/routeByGalviScoreConfidence\(cached\); cleanPaidReturnCustomerUrl\(\);/);
+          });
+
+          test('real GalviScore clarification screen and targeted question container remain customer-facing',()=>{
+            assert.match(html,/id="galviscore-followup"/);
+            assert.match(html,/id="followup-question-container"/);
+            assert.match(html,/function renderClinicalFollowUp\(scoreResult\)/);
+          });
+          EOF
+
+      - name: Prove focused invocation fix
+        run: node --test tests/day7d-galviscore-invocation.test.mjs
+
+      - name: Prove full Day 7D Customer Intelligence suite
+        run: npm run test:day7d
+
+      - name: Prove preserved Day 1-7C regression
+        run: npm run stabilization:gate
+
+      - name: Remove one-shot patch mechanism and commit authoritative source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'galvicare-day7d-bot'
+          git config user.email 'actions@users.noreply.github.com'
+          git rm .github/workflows/day7d-galviscore-invocation-hotfix.yml
+          git add index.html tests/day7d-galviscore-invocation.test.mjs
+          git commit -m 'Day 7D: make GalviScore clarification deterministic in customer journey'
+          git push origin HEAD:qa-revamped-galvicare-0-5
