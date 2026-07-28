@@ -1,5 +1,6 @@
-# One-shot source migration only. Deletes itself after committing the durable fix.
-name: Day 7D GalviScore Invocation Hotfix
+# One-shot authoritative Day 7D customer-intelligence orchestration migration.
+# Deletes itself after committing the durable application source and regression guard.
+name: Day 7D Progressive Customer Intelligence Finalization
 
 on:
   push:
@@ -12,13 +13,13 @@ permissions:
   contents: write
 
 concurrency:
-  group: day7d-galviscore-invocation-hotfix
+  group: day7d-progressive-customer-intelligence-final
   cancel-in-progress: true
 
 jobs:
-  patch-authoritative-source:
+  finalize-authoritative-source:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - name: Checkout authoritative QA
         uses: actions/checkout@v4
@@ -31,7 +32,7 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Patch exact GalviScore paid-return clarification sequencing
+      - name: Apply one deterministic Customer Intelligence contract across all paid stages
         shell: bash
         run: |
           set -euo pipefail
@@ -40,15 +41,16 @@ jobs:
           const path='index.html';
           let html=fs.readFileSync(path,'utf8');
 
-          function replaceExactlyOnce(oldText,newText,label){
+          function replaceOnce(oldText,newText,label){
             if(html.includes(newText)){ console.log(`PASS: ${label} already applied`); return; }
             const count=html.split(oldText).length-1;
-            if(count!==1) throw new Error(`${label}: expected exactly one source match, found ${count}`);
+            if(count!==1) throw new Error(`${label}: expected exactly one match, found ${count}`);
             html=html.replace(oldText,newText);
             console.log(`PATCHED: ${label}`);
           }
 
-          replaceExactlyOnce(
+          // GalviScore: do not let URL cleanup or final-result rendering outrun clarification.
+          replaceOnce(
 `      const rendered=await renderGalviScoreAfterPayment(paidSessionId);
       if(rendered===false) throw new Error('Verified GalviScore payment did not restore a GalviScore result.');
       queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });
@@ -64,62 +66,209 @@ jobs:
       }
       cleanPaidReturnCustomerUrl();
       return true;`,
-            'paid GalviScore return blocks synchronously on clarification before URL cleanup'
+            'GalviScore paid return blocks on clarification'
           );
 
-          replaceExactlyOnce(
+          replaceOnce(
 `document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=getStoredSessionId(); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const el of textareas){ if(!el.value.trim()){el.reportValidity(); return;} await saveClinicalFollowUp(sessionId,{question_id:el.dataset.questionId,confidence_impact:Number(el.dataset.confidenceImpact||0)},el.value.trim()); } localStorage.setItem('galviscore_followup_completed_'+sessionId,'true'); const cached=getCachedGalviScoreResult(); if(cached){ cached.galviscore_confidence=Math.min(100,Number(cached.galviscore_confidence||0)+12); cacheGalviScoreResult(cached); routeByGalviScoreConfidence(cached); } });`,
 `document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=getStoredSessionId(); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const el of textareas){ if(!el.value.trim()){el.reportValidity(); return;} await saveClinicalFollowUp(sessionId,{question_id:el.dataset.questionId,confidence_impact:Number(el.dataset.confidenceImpact||0)},el.value.trim()); } localStorage.setItem('galviscore_followup_completed_'+sessionId,'true'); const cached=getCachedGalviScoreResult(); if(cached){ cached.galviscore_confidence=Math.min(100,Number(cached.galviscore_confidence||0)+12); cacheGalviScoreResult(cached); routeByGalviScoreConfidence(cached); cleanPaidReturnCustomerUrl(); } });`,
-            'clarification completion releases enriched GalviScore then performs paid-return cleanup'
+            'GalviScore answer releases result before cleanup'
           );
 
-          if(html.includes("queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });\n      cleanPaidReturnCustomerUrl();")) throw new Error('Unsafe paid-return clarification microtask still present');
+          // All paid product returns retain their return context while a targeted question is pending.
+          replaceOnce(
+`      const rendered=await window.showIntegratedGalviShotResult({paidReturn:true,session_id:paidSessionId});
+      if(rendered===false) throw new Error('Verified GalviShot payment did not restore a GalviShot result.');
+      clearGalviCareReturnPending();
+      cleanPaidReturnCustomerUrl();`,
+`      const rendered=await window.showIntegratedGalviShotResult({paidReturn:true,session_id:paidSessionId});
+      if(rendered===false) throw new Error('Verified GalviShot payment did not restore a GalviShot result.');
+      clearGalviCareReturnPending();
+      if(window.GalviCareDay7D?.hasPending('GalviShot')) return true;
+      cleanPaidReturnCustomerUrl();`,
+            'GalviShot paid return waits for targeted evidence'
+          );
+
+          replaceOnce(
+`      const rendered=await window.showGalviSight({paidReturn:true,session_id:paidSessionId});
+      if(rendered===false) throw new Error('Verified GalviSight payment did not restore a GalviSight result.');
+      clearGalviCareReturnPending();
+      cleanPaidReturnCustomerUrl();`,
+`      const rendered=await window.showGalviSight({paidReturn:true,session_id:paidSessionId});
+      if(rendered===false) throw new Error('Verified GalviSight payment did not restore a GalviSight result.');
+      clearGalviCareReturnPending();
+      if(window.GalviCareDay7D?.hasPending('GalviSight')) return true;
+      cleanPaidReturnCustomerUrl();`,
+            'GalviSight paid return waits for targeted evidence'
+          );
+
+          replaceOnce(
+`      const rendered=await window.showGalviPath({paidReturn:true,session_id:paidSessionId});
+      if(rendered===false) throw new Error('Verified GalviPath payment did not restore a GalviPath result.');
+      clearGalviCareReturnPending();
+      cleanPaidReturnCustomerUrl();`,
+`      const rendered=await window.showGalviPath({paidReturn:true,session_id:paidSessionId});
+      if(rendered===false) throw new Error('Verified GalviPath payment did not restore a GalviPath result.');
+      clearGalviCareReturnPending();
+      if(window.GalviCareDay7D?.hasPending('GalviPath')) return true;
+      cleanPaidReturnCustomerUrl();`,
+            'GalviPath paid return waits for targeted evidence'
+          );
+
+          // GalviShot paid follow-up is a valid restored state, not a payment-recovery failure.
+          replaceOnce(
+`        if(status) status.textContent='Follow-up is still required before GalviShot can generate the paid result.';
+        return false;`,
+`        if(status) status.textContent='Answer the targeted question below so GalviCare can update GalviShot using your evidence.';
+        return true;`,
+            'GalviShot needs_followup is a successful paid state'
+          );
+
+          // When a paid GalviShot answer becomes eligible, regenerate immediately in the same journey.
+          replaceOnce(
+`        if(evaluation.status==='eligible') el('galvishot-followup')?.classList.add('hidden');`,
+`        if(evaluation.status==='eligible'){
+          el('galvishot-followup')?.classList.add('hidden');
+          const params=new URLSearchParams(location.search);
+          if((params.get('product')||'').toLowerCase()==='galvishot'&&params.get('paid')==='shot_success'){
+            await requestResult({paidReturn:true});
+            cleanPaidReturnCustomerUrl();
+          }
+        }`,
+            'paid GalviShot answer regenerates result immediately'
+          );
+
+          // GalviSight explicitly renders targeted questions from its authoritative Worker response.
+          replaceOnce(
+`} else if(resultStatus==='needs_followup'){
+          if(stateMessage) stateMessage.textContent='GalviSight needs additional evidence before interpretation.';
+          el('galvisight-followup')?.classList.remove('hidden');`,
+`} else if(resultStatus==='needs_followup'||responseStatus==='needs_followup'){
+          if(stateMessage) stateMessage.textContent='Answer the targeted question below so GalviCare can update GalviSight using your evidence.';
+          window.GalviCareDay7D?.renderQuestions('GalviSight',response);
+          el('galvisight-followup')?.classList.remove('hidden');`,
+            'GalviSight renders authoritative targeted questions synchronously'
+          );
+
+          // GalviPath supports needs_followup as a first-class state instead of throwing unsupported status.
+          replaceOnce(
+`        if(responseStatus==='locked'){
+          if(stateMessage) stateMessage.textContent='GalviPath is locked pending server-side entitlement verification.';
+          el('galvipath-locked')?.classList.remove('hidden');
+          return false;
+        }
+
+        const ready=`,
+`        if(responseStatus==='locked'){
+          if(stateMessage) stateMessage.textContent='GalviPath is locked pending server-side entitlement verification.';
+          el('galvipath-locked')?.classList.remove('hidden');
+          return false;
+        }
+
+        if(responseStatus==='needs_followup'||resultStatus==='needs_followup'){
+          if(stateMessage) stateMessage.textContent='Answer the targeted question below so GalviCare can update GalviPath using your evidence.';
+          window.GalviCareDay7D?.renderQuestions('GalviPath',response);
+          el('galvipath-followup')?.classList.remove('hidden');
+          window.scrollTo({top:0,behavior:'smooth'});
+          return true;
+        }
+
+        const ready=`,
+            'GalviPath treats targeted evidence as a valid journey state'
+          );
+
+          // Adapter: expose deterministic pending state; regenerate then clean paid return.
+          replaceOnce(
+`    el(cfg.followup)?.classList.add('hidden');
+    if(product==='GalviShot'&&typeof window.showIntegratedGalviShotResult==='function') await window.showIntegratedGalviShotResult();
+    if(product==='GalviSight'&&typeof window.showGalviSight==='function') await window.showGalviSight();
+    if(product==='GalviPath'&&typeof window.showGalviPath==='function') await window.showGalviPath();`,
+`    el(cfg.followup)?.classList.add('hidden');
+    if(product==='GalviShot'&&typeof window.showIntegratedGalviShotResult==='function') await window.showIntegratedGalviShotResult();
+    if(product==='GalviSight'&&typeof window.showGalviSight==='function') await window.showGalviSight();
+    if(product==='GalviPath'&&typeof window.showGalviPath==='function') await window.showGalviPath();
+    cleanPaidReturnCustomerUrl();`,
+            'all product answers regenerate before paid-return cleanup'
+          );
+
+          replaceOnce(
+`  document.addEventListener('DOMContentLoaded',()=>{Object.keys(STAGES).forEach(bind);interceptFetch();});
+  window.GalviCareDay7D={renderQuestions,saveAnswers,ensureStageUi};`,
+`  function hasPending(product){
+    const cfg=STAGES[product],panel=cfg?el(cfg.followup):null,questions=cfg?el(cfg.questions):null;
+    return Boolean(panel&&!panel.classList.contains('hidden')&&questions?.querySelector('textarea'));
+  }
+  document.addEventListener('DOMContentLoaded',()=>{Object.keys(STAGES).forEach(bind);});
+  window.GalviCareDay7D={renderQuestions,saveAnswers,ensureStageUi,hasPending};`,
+            'remove late fetch race and expose deterministic pending contract'
+          );
+
+          const forbidden=[
+            "queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });\n      cleanPaidReturnCustomerUrl();",
+            "DOMContentLoaded',()=>{Object.keys(STAGES).forEach(bind);interceptFetch();}"
+          ];
+          forbidden.forEach(value=>{if(html.includes(value)) throw new Error(`Forbidden race remains: ${value}`);});
           fs.writeFileSync(path,html);
           NODE
 
-      - name: Add permanent regression guard
+      - name: Add permanent full-chain regression guard
         shell: bash
         run: |
-          cat > tests/day7d-galviscore-invocation.test.mjs <<'EOF'
+          cat > tests/day7d-progressive-customer-intelligence-e2e.test.mjs <<'EOF'
           import test from 'node:test';
           import assert from 'node:assert/strict';
           import fs from 'node:fs';
           const html=fs.readFileSync('index.html','utf8');
 
-          test('paid GalviScore return synchronously blocks on unanswered clarification',()=>{
+          test('GalviScore blocks synchronously on unanswered clarification',()=>{
             assert.match(html,/const followupKey='galviscore_followup_completed_'\+paidSessionId;/);
-            assert.match(html,/if\(cached&&localStorage\.getItem\(followupKey\)!=='true'\)\{\s*routeByGalviScoreConfidence\(cached\);\s*return true;\s*\}\s*cleanPaidReturnCustomerUrl\(\);/s);
+            assert.match(html,/routeByGalviScoreConfidence\(cached\);\s*return true;\s*\}\s*cleanPaidReturnCustomerUrl\(\);/s);
             assert.doesNotMatch(html,/queueMicrotask\(\(\)=>\{ const cached=getCachedGalviScoreResult\(\); if\(cached\) routeByGalviScoreConfidence\(cached\); \}\);\s*cleanPaidReturnCustomerUrl\(\);/);
           });
 
-          test('clarification completion releases enriched GalviScore before paid-return cleanup',()=>{
-            assert.match(html,/localStorage\.setItem\('galviscore_followup_completed_'\+sessionId,'true'\)/);
-            assert.match(html,/routeByGalviScoreConfidence\(cached\); cleanPaidReturnCustomerUrl\(\);/);
+          test('all downstream paid returns preserve targeted-question state',()=>{
+            for(const product of ['GalviShot','GalviSight','GalviPath']){
+              assert.match(html,new RegExp(`GalviCareDay7D\\?\\.hasPending\\('${product}'\\)`));
+            }
           });
 
-          test('customer-facing clarification UI remains present',()=>{
-            assert.match(html,/id="galviscore-followup"/);
-            assert.match(html,/id="followup-question-container"/);
-            assert.match(html,/function renderClinicalFollowUp\(scoreResult\)/);
+          test('GalviShot follow-up regenerates without payment recovery',()=>{
+            assert.match(html,/Answer the targeted question below so GalviCare can update GalviShot using your evidence/);
+            assert.match(html,/await requestResult\(\{paidReturn:true\}\);\s*cleanPaidReturnCustomerUrl\(\);/s);
+          });
+
+          test('GalviSight and GalviPath render authoritative targeted questions directly',()=>{
+            assert.match(html,/renderQuestions\('GalviSight',response\)/);
+            assert.match(html,/renderQuestions\('GalviPath',response\)/);
+            assert.match(html,/responseStatus==='needs_followup'\|\|resultStatus==='needs_followup'/);
+          });
+
+          test('late fetch interception is no longer active',()=>{
+            assert.doesNotMatch(html,/Object\.keys\(STAGES\)\.forEach\(bind\);interceptFetch\(\)/);
+            assert.match(html,/window\.GalviCareDay7D=\{renderQuestions,saveAnswers,ensureStageUi,hasPending\}/);
+          });
+
+          test('every saved downstream answer regenerates before cleanup',()=>{
+            assert.match(html,/if\(product==='GalviPath'.*await window\.showGalviPath\(\);\s*cleanPaidReturnCustomerUrl\(\);/s);
           });
           EOF
 
-      - name: Prove focused invocation fix
-        run: node --test tests/day7d-galviscore-invocation.test.mjs
+      - name: Prove focused progressive Customer Intelligence contract
+        run: node --test tests/day7d-progressive-customer-intelligence-e2e.test.mjs
 
-      - name: Prove full Day 7D Customer Intelligence suite
+      - name: Prove full Day 7D suite
         run: npm run test:day7d
 
       - name: Prove preserved Day 1-7C regression
         run: npm run stabilization:gate
 
-      - name: Commit durable source and remove one-shot mechanism
+      - name: Commit final durable source and remove migration workflow
         shell: bash
         run: |
           set -euo pipefail
           git config user.name 'galvicare-day7d-bot'
           git config user.email 'actions@users.noreply.github.com'
           git rm .github/workflows/day7d-galviscore-invocation-hotfix.yml
-          git add index.html tests/day7d-galviscore-invocation.test.mjs
-          git commit -m 'Day 7D: make GalviScore clarification deterministic in customer journey'
+          git add index.html tests/day7d-progressive-customer-intelligence-e2e.test.mjs
+          git commit -m 'Day 7D: finalize progressive Customer Intelligence E2E orchestration'
           git push origin HEAD:qa-revamped-galvicare-0-5
