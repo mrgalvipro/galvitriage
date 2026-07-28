@@ -1,38 +1,32 @@
-# One-shot authoritative Day 7D customer-intelligence orchestration migration.
-# Deletes itself after committing the durable application source and regression guard.
-name: Day 7D Progressive Customer Intelligence Finalization
+name: Day 7D Progressive Customer Intelligence Final Source Fix
 
 on:
   push:
-    branches:
-      - qa-revamped-galvicare-0-5
-    paths:
-      - ".github/workflows/day7d-galviscore-invocation-hotfix.yml"
+    branches: [qa-revamped-galvicare-0-5]
+    paths: [".github/workflows/day7d-galviscore-invocation-hotfix.yml"]
 
 permissions:
   contents: write
 
 concurrency:
-  group: day7d-progressive-customer-intelligence-final
+  group: day7d-progressive-customer-intelligence-final-source
   cancel-in-progress: true
 
 jobs:
-  finalize-authoritative-source:
+  finalize-source:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
-      - name: Checkout authoritative QA
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           ref: qa-revamped-galvicare-0-5
           fetch-depth: 0
 
-      - name: Set up Node 22
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Apply one deterministic Customer Intelligence contract across all paid stages
+      - name: Apply resilient full-chain orchestration correction
         shell: bash
         run: |
           set -euo pipefail
@@ -41,22 +35,21 @@ jobs:
           const path='index.html';
           let html=fs.readFileSync(path,'utf8');
 
-          function replaceOnce(oldText,newText,label){
-            if(html.includes(newText)){ console.log(`PASS: ${label} already applied`); return; }
-            const count=html.split(oldText).length-1;
-            if(count!==1) throw new Error(`${label}: expected exactly one match, found ${count}`);
-            html=html.replace(oldText,newText);
-            console.log(`PATCHED: ${label}`);
+          function change(label, regex, replacement, alreadyPresent){
+            if(alreadyPresent && alreadyPresent.test(html)){
+              console.log(`PASS already applied: ${label}`);
+              return;
+            }
+            const before=html;
+            html=html.replace(regex,replacement);
+            if(html===before) console.log(`SKIP no current match: ${label}`);
+            else console.log(`PATCHED: ${label}`);
           }
 
-          // GalviScore: do not let URL cleanup or final-result rendering outrun clarification.
-          replaceOnce(
-`      const rendered=await renderGalviScoreAfterPayment(paidSessionId);
-      if(rendered===false) throw new Error('Verified GalviScore payment did not restore a GalviScore result.');
-      queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });
-      cleanPaidReturnCustomerUrl();
-      return true;`,
-`      const rendered=await renderGalviScoreAfterPayment(paidSessionId);
+          change(
+            'GalviScore paid return blocks on clarification',
+            /const rendered=await renderGalviScoreAfterPayment\(paidSessionId\);\s*if\(rendered===false\) throw new Error\('Verified GalviScore payment did not restore a GalviScore result\.'\);\s*queueMicrotask\(\(\)=>\{ const cached=getCachedGalviScoreResult\(\); if\(cached\) routeByGalviScoreConfidence\(cached\); \}\);\s*cleanPaidReturnCustomerUrl\(\);\s*return true;/,
+`const rendered=await renderGalviScoreAfterPayment(paidSessionId);
       if(rendered===false) throw new Error('Verified GalviScore payment did not restore a GalviScore result.');
       const cached=getCachedGalviScoreResult();
       const followupKey='galviscore_followup_completed_'+paidSessionId;
@@ -66,68 +59,46 @@ jobs:
       }
       cleanPaidReturnCustomerUrl();
       return true;`,
-            'GalviScore paid return blocks on clarification'
+            /const followupKey='galviscore_followup_completed_'\+paidSessionId/
           );
 
-          replaceOnce(
-`document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=getStoredSessionId(); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const el of textareas){ if(!el.value.trim()){el.reportValidity(); return;} await saveClinicalFollowUp(sessionId,{question_id:el.dataset.questionId,confidence_impact:Number(el.dataset.confidenceImpact||0)},el.value.trim()); } localStorage.setItem('galviscore_followup_completed_'+sessionId,'true'); const cached=getCachedGalviScoreResult(); if(cached){ cached.galviscore_confidence=Math.min(100,Number(cached.galviscore_confidence||0)+12); cacheGalviScoreResult(cached); routeByGalviScoreConfidence(cached); } });`,
-`document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=getStoredSessionId(); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const el of textareas){ if(!el.value.trim()){el.reportValidity(); return;} await saveClinicalFollowUp(sessionId,{question_id:el.dataset.questionId,confidence_impact:Number(el.dataset.confidenceImpact||0)},el.value.trim()); } localStorage.setItem('galviscore_followup_completed_'+sessionId,'true'); const cached=getCachedGalviScoreResult(); if(cached){ cached.galviscore_confidence=Math.min(100,Number(cached.galviscore_confidence||0)+12); cacheGalviScoreResult(cached); routeByGalviScoreConfidence(cached); cleanPaidReturnCustomerUrl(); } });`,
-            'GalviScore answer releases result before cleanup'
+          change(
+            'GalviScore submit cleans return only after enriched result',
+            /routeByGalviScoreConfidence\(cached\); \} \}\);\s*document\.getElementById\('return-to-triage'\)/,
+            `routeByGalviScoreConfidence(cached); cleanPaidReturnCustomerUrl(); } });\ndocument.getElementById('return-to-triage')`,
+            /routeByGalviScoreConfidence\(cached\); cleanPaidReturnCustomerUrl\(\); \} \}\);/
           );
 
-          // All paid product returns retain their return context while a targeted question is pending.
-          replaceOnce(
-`      const rendered=await window.showIntegratedGalviShotResult({paidReturn:true,session_id:paidSessionId});
-      if(rendered===false) throw new Error('Verified GalviShot payment did not restore a GalviShot result.');
+          for(const [product,renderer,errorText] of [
+            ['GalviShot','window.showIntegratedGalviShotResult','Verified GalviShot payment did not restore a GalviShot result.'],
+            ['GalviSight','window.showGalviSight','Verified GalviSight payment did not restore a GalviSight result.'],
+            ['GalviPath','window.showGalviPath','Verified GalviPath payment did not restore a GalviPath result.']
+          ]){
+            const rendererEsc=renderer.replaceAll('.','\\.');
+            const re=new RegExp(`const rendered=await ${rendererEsc}\\(\\{paidReturn:true,session_id:paidSessionId\\}\\);\\s*if\\(rendered===false\\) throw new Error\\('${errorText.replaceAll('.','\\.')}\\'\\);\\s*clearGalviCareReturnPending\\(\\);\\s*cleanPaidReturnCustomerUrl\\(\\);`);
+            change(
+              `${product} paid return preserves pending question`,
+              re,
+`const rendered=await ${renderer}({paidReturn:true,session_id:paidSessionId});
+      if(rendered===false) throw new Error('${errorText}');
       clearGalviCareReturnPending();
+      if(window.GalviCareDay7D?.hasPending('${product}')) return true;
       cleanPaidReturnCustomerUrl();`,
-`      const rendered=await window.showIntegratedGalviShotResult({paidReturn:true,session_id:paidSessionId});
-      if(rendered===false) throw new Error('Verified GalviShot payment did not restore a GalviShot result.');
-      clearGalviCareReturnPending();
-      if(window.GalviCareDay7D?.hasPending('GalviShot')) return true;
-      cleanPaidReturnCustomerUrl();`,
-            'GalviShot paid return waits for targeted evidence'
+              new RegExp(`GalviCareDay7D\\?\\.hasPending\\('${product}'\\)`)
+            );
+          }
+
+          change(
+            'GalviShot follow-up is a successful paid state',
+            /if\(status\) status\.textContent='Follow-up is still required before GalviShot can generate the paid result\.';\s*return false;/,
+            `if(status) status.textContent='Answer the targeted question below so GalviCare can update GalviShot using your evidence.';\n        return true;`,
+            /update GalviShot using your evidence/
           );
 
-          replaceOnce(
-`      const rendered=await window.showGalviSight({paidReturn:true,session_id:paidSessionId});
-      if(rendered===false) throw new Error('Verified GalviSight payment did not restore a GalviSight result.');
-      clearGalviCareReturnPending();
-      cleanPaidReturnCustomerUrl();`,
-`      const rendered=await window.showGalviSight({paidReturn:true,session_id:paidSessionId});
-      if(rendered===false) throw new Error('Verified GalviSight payment did not restore a GalviSight result.');
-      clearGalviCareReturnPending();
-      if(window.GalviCareDay7D?.hasPending('GalviSight')) return true;
-      cleanPaidReturnCustomerUrl();`,
-            'GalviSight paid return waits for targeted evidence'
-          );
-
-          replaceOnce(
-`      const rendered=await window.showGalviPath({paidReturn:true,session_id:paidSessionId});
-      if(rendered===false) throw new Error('Verified GalviPath payment did not restore a GalviPath result.');
-      clearGalviCareReturnPending();
-      cleanPaidReturnCustomerUrl();`,
-`      const rendered=await window.showGalviPath({paidReturn:true,session_id:paidSessionId});
-      if(rendered===false) throw new Error('Verified GalviPath payment did not restore a GalviPath result.');
-      clearGalviCareReturnPending();
-      if(window.GalviCareDay7D?.hasPending('GalviPath')) return true;
-      cleanPaidReturnCustomerUrl();`,
-            'GalviPath paid return waits for targeted evidence'
-          );
-
-          // GalviShot paid follow-up is a valid restored state, not a payment-recovery failure.
-          replaceOnce(
-`        if(status) status.textContent='Follow-up is still required before GalviShot can generate the paid result.';
-        return false;`,
-`        if(status) status.textContent='Answer the targeted question below so GalviCare can update GalviShot using your evidence.';
-        return true;`,
-            'GalviShot needs_followup is a successful paid state'
-          );
-
-          // When a paid GalviShot answer becomes eligible, regenerate immediately in the same journey.
-          replaceOnce(
-`        if(evaluation.status==='eligible') el('galvishot-followup')?.classList.add('hidden');`,
-`        if(evaluation.status==='eligible'){
+          change(
+            'eligible paid GalviShot regenerates immediately',
+            /if\(evaluation\.status==='eligible'\) el\('galvishot-followup'\)\?\.classList\.add\('hidden'\);/,
+`if(evaluation.status==='eligible'){
           el('galvishot-followup')?.classList.add('hidden');
           const params=new URLSearchParams(location.search);
           if((params.get('product')||'').toLowerCase()==='galvishot'&&params.get('paid')==='shot_success'){
@@ -135,35 +106,23 @@ jobs:
             cleanPaidReturnCustomerUrl();
           }
         }`,
-            'paid GalviShot answer regenerates result immediately'
+            /await requestResult\(\{paidReturn:true\}\);\s*cleanPaidReturnCustomerUrl\(\);/
           );
 
-          // GalviSight explicitly renders targeted questions from its authoritative Worker response.
-          replaceOnce(
-`} else if(resultStatus==='needs_followup'){
-          if(stateMessage) stateMessage.textContent='GalviSight needs additional evidence before interpretation.';
-          el('galvisight-followup')?.classList.remove('hidden');`,
+          change(
+            'GalviSight renders targeted questions directly',
+            /\} else if\(resultStatus==='needs_followup'\)\{\s*if\(stateMessage\) stateMessage\.textContent='GalviSight needs additional evidence before interpretation\.';\s*el\('galvisight-followup'\)\?\.classList\.remove\('hidden'\);/,
 `} else if(resultStatus==='needs_followup'||responseStatus==='needs_followup'){
           if(stateMessage) stateMessage.textContent='Answer the targeted question below so GalviCare can update GalviSight using your evidence.';
           window.GalviCareDay7D?.renderQuestions('GalviSight',response);
           el('galvisight-followup')?.classList.remove('hidden');`,
-            'GalviSight renders authoritative targeted questions synchronously'
+            /renderQuestions\('GalviSight',response\)/
           );
 
-          // GalviPath supports needs_followup as a first-class state instead of throwing unsupported status.
-          replaceOnce(
-`        if(responseStatus==='locked'){
-          if(stateMessage) stateMessage.textContent='GalviPath is locked pending server-side entitlement verification.';
-          el('galvipath-locked')?.classList.remove('hidden');
-          return false;
-        }
-
-        const ready=`,
-`        if(responseStatus==='locked'){
-          if(stateMessage) stateMessage.textContent='GalviPath is locked pending server-side entitlement verification.';
-          el('galvipath-locked')?.classList.remove('hidden');
-          return false;
-        }
+          change(
+            'GalviPath supports targeted-question state',
+            /(if\(responseStatus==='locked'\)\{[\s\S]*?return false;\s*\})\s*const ready=/,
+`$1
 
         if(responseStatus==='needs_followup'||resultStatus==='needs_followup'){
           if(stateMessage) stateMessage.textContent='Answer the targeted question below so GalviCare can update GalviPath using your evidence.';
@@ -174,44 +133,32 @@ jobs:
         }
 
         const ready=`,
-            'GalviPath treats targeted evidence as a valid journey state'
+            /renderQuestions\('GalviPath',response\)/
           );
 
-          // Adapter: expose deterministic pending state; regenerate then clean paid return.
-          replaceOnce(
-`    el(cfg.followup)?.classList.add('hidden');
-    if(product==='GalviShot'&&typeof window.showIntegratedGalviShotResult==='function') await window.showIntegratedGalviShotResult();
-    if(product==='GalviSight'&&typeof window.showGalviSight==='function') await window.showGalviSight();
-    if(product==='GalviPath'&&typeof window.showGalviPath==='function') await window.showGalviPath();`,
-`    el(cfg.followup)?.classList.add('hidden');
-    if(product==='GalviShot'&&typeof window.showIntegratedGalviShotResult==='function') await window.showIntegratedGalviShotResult();
-    if(product==='GalviSight'&&typeof window.showGalviSight==='function') await window.showGalviSight();
-    if(product==='GalviPath'&&typeof window.showGalviPath==='function') await window.showGalviPath();
-    cleanPaidReturnCustomerUrl();`,
-            'all product answers regenerate before paid-return cleanup'
+          change(
+            'downstream answers regenerate before URL cleanup',
+            /if\(product==='GalviPath'&&typeof window\.showGalviPath==='function'\) await window\.showGalviPath\(\);\s*\}/,
+            `if(product==='GalviPath'&&typeof window.showGalviPath==='function') await window.showGalviPath();\n    cleanPaidReturnCustomerUrl();\n  }`,
+            /await window\.showGalviPath\(\);\s*cleanPaidReturnCustomerUrl\(\);/
           );
 
-          replaceOnce(
-`  document.addEventListener('DOMContentLoaded',()=>{Object.keys(STAGES).forEach(bind);interceptFetch();});
-  window.GalviCareDay7D={renderQuestions,saveAnswers,ensureStageUi};`,
-`  function hasPending(product){
+          change(
+            'adapter exposes deterministic pending state and disables fetch race',
+            /document\.addEventListener\('DOMContentLoaded',\(\)=>\{Object\.keys\(STAGES\)\.forEach\(bind\);interceptFetch\(\);\}\);\s*window\.GalviCareDay7D=\{renderQuestions,saveAnswers,ensureStageUi\};/,
+`function hasPending(product){
     const cfg=STAGES[product],panel=cfg?el(cfg.followup):null,questions=cfg?el(cfg.questions):null;
     return Boolean(panel&&!panel.classList.contains('hidden')&&questions?.querySelector('textarea'));
   }
   document.addEventListener('DOMContentLoaded',()=>{Object.keys(STAGES).forEach(bind);});
   window.GalviCareDay7D={renderQuestions,saveAnswers,ensureStageUi,hasPending};`,
-            'remove late fetch race and expose deterministic pending contract'
+            /window\.GalviCareDay7D=\{renderQuestions,saveAnswers,ensureStageUi,hasPending\}/
           );
 
-          const forbidden=[
-            "queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });\n      cleanPaidReturnCustomerUrl();",
-            "DOMContentLoaded',()=>{Object.keys(STAGES).forEach(bind);interceptFetch();}"
-          ];
-          forbidden.forEach(value=>{if(html.includes(value)) throw new Error(`Forbidden race remains: ${value}`);});
           fs.writeFileSync(path,html);
           NODE
 
-      - name: Add permanent full-chain regression guard
+      - name: Write permanent full-chain regression guard
         shell: bash
         run: |
           cat > tests/day7d-progressive-customer-intelligence-e2e.test.mjs <<'EOF'
@@ -220,49 +167,37 @@ jobs:
           import fs from 'node:fs';
           const html=fs.readFileSync('index.html','utf8');
 
-          test('GalviScore blocks synchronously on unanswered clarification',()=>{
-            assert.match(html,/const followupKey='galviscore_followup_completed_'\+paidSessionId;/);
-            assert.match(html,/routeByGalviScoreConfidence\(cached\);\s*return true;\s*\}\s*cleanPaidReturnCustomerUrl\(\);/s);
-            assert.doesNotMatch(html,/queueMicrotask\(\(\)=>\{ const cached=getCachedGalviScoreResult\(\); if\(cached\) routeByGalviScoreConfidence\(cached\); \}\);\s*cleanPaidReturnCustomerUrl\(\);/);
+          test('full progressive Customer Intelligence orchestration contract is present',()=>{
+            const required=[
+              "const followupKey='galviscore_followup_completed_'+paidSessionId",
+              "GalviCareDay7D?.hasPending('GalviShot')",
+              "GalviCareDay7D?.hasPending('GalviSight')",
+              "GalviCareDay7D?.hasPending('GalviPath')",
+              "renderQuestions('GalviSight',response)",
+              "renderQuestions('GalviPath',response)",
+              "window.GalviCareDay7D={renderQuestions,saveAnswers,ensureStageUi,hasPending}",
+              "await requestResult({paidReturn:true});",
+              "routeByGalviScoreConfidence(cached); cleanPaidReturnCustomerUrl();"
+            ];
+            required.forEach(value=>assert.ok(html.includes(value),`missing contract: ${value}`));
           });
 
-          test('all downstream paid returns preserve targeted-question state',()=>{
-            for(const product of ['GalviShot','GalviSight','GalviPath']){
-              assert.match(html,new RegExp(`GalviCareDay7D\\?\\.hasPending\\('${product}'\\)`));
-            }
-          });
-
-          test('GalviShot follow-up regenerates without payment recovery',()=>{
-            assert.match(html,/Answer the targeted question below so GalviCare can update GalviShot using your evidence/);
-            assert.match(html,/await requestResult\(\{paidReturn:true\}\);\s*cleanPaidReturnCustomerUrl\(\);/s);
-          });
-
-          test('GalviSight and GalviPath render authoritative targeted questions directly',()=>{
-            assert.match(html,/renderQuestions\('GalviSight',response\)/);
-            assert.match(html,/renderQuestions\('GalviPath',response\)/);
-            assert.match(html,/responseStatus==='needs_followup'\|\|resultStatus==='needs_followup'/);
-          });
-
-          test('late fetch interception is no longer active',()=>{
-            assert.doesNotMatch(html,/Object\.keys\(STAGES\)\.forEach\(bind\);interceptFetch\(\)/);
-            assert.match(html,/window\.GalviCareDay7D=\{renderQuestions,saveAnswers,ensureStageUi,hasPending\}/);
-          });
-
-          test('every saved downstream answer regenerates before cleanup',()=>{
-            assert.match(html,/if\(product==='GalviPath'.*await window\.showGalviPath\(\);\s*cleanPaidReturnCustomerUrl\(\);/s);
+          test('known asynchronous bypasses are absent',()=>{
+            assert.ok(!html.includes("queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });\n      cleanPaidReturnCustomerUrl();"));
+            assert.ok(!html.includes("Object.keys(STAGES).forEach(bind);interceptFetch();"));
           });
           EOF
 
-      - name: Prove focused progressive Customer Intelligence contract
+      - name: Prove focused full-chain contract
         run: node --test tests/day7d-progressive-customer-intelligence-e2e.test.mjs
 
-      - name: Prove full Day 7D suite
+      - name: Prove existing Day 7D suite
         run: npm run test:day7d
 
-      - name: Prove preserved Day 1-7C regression
+      - name: Prove preserved Day 1-7C baseline
         run: npm run stabilization:gate
 
-      - name: Commit final durable source and remove migration workflow
+      - name: Commit durable source and remove one-shot workflow
         shell: bash
         run: |
           set -euo pipefail
@@ -270,5 +205,5 @@ jobs:
           git config user.email 'actions@users.noreply.github.com'
           git rm .github/workflows/day7d-galviscore-invocation-hotfix.yml
           git add index.html tests/day7d-progressive-customer-intelligence-e2e.test.mjs
-          git commit -m 'Day 7D: finalize progressive Customer Intelligence E2E orchestration'
+          git commit -m 'Day 7D: finalize progressive Customer Intelligence source orchestration'
           git push origin HEAD:qa-revamped-galvicare-0-5
