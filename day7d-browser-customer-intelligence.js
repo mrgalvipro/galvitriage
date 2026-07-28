@@ -1,13 +1,13 @@
 /* Day 7D progressive customer-intelligence browser adapter.
-   Additive QA adapter: preserves Day 7A-7C payment/routing/runtime and owns only
-   the needs_followup -> answers -> regenerate behavior for paid clinical products. */
+   Single owner of needs_followup -> answer -> regenerate behavior for the
+   GalviShot, GalviSight and GalviPath customer journey. */
 (function(){
   'use strict';
 
   const STAGES={
-    GalviShot:{host:'galvishot-paywall',followup:'galvishot-followup',questions:'galvishot-followup-questions',submit:'submit-galvishot-followup',status:'galvishot-followup-status',save:'save_galvishot_followup',get:'get_or_create_galvishot'},
-    GalviSight:{host:'galvisight-handoff',followup:'galvisight-followup',questions:'galvisight-followup-questions',submit:'submit-galvisight-followup',status:'galvisight-followup-status',save:'save_galvisight_followup',get:'get_or_generate_galvisight'},
-    GalviPath:{host:'galvipath-result',followup:'galvipath-followup',questions:'galvipath-followup-questions',submit:'submit-galvipath-followup',status:'galvipath-followup-status',save:'save_galvipath_followup',get:'get_or_generate_galvipath'}
+    GalviShot:{host:'galvishot-paywall',followup:'galvishot-followup',questions:'galvishot-followup-questions',submit:'submit-galvishot-followup',status:'galvishot-followup-status',error:'galvishot-paywall-error',save:'save_galvishot_followup',get:'get_or_create_galvishot'},
+    GalviSight:{host:'galvisight-handoff',followup:'galvisight-followup',questions:'galvisight-followup-questions',submit:'submit-galvisight-followup',status:'galvisight-followup-status',error:'galvisight-error',save:'save_galvisight_followup',get:'get_or_generate_galvisight'},
+    GalviPath:{host:'galvipath-result',followup:'galvipath-followup',questions:'galvipath-followup-questions',submit:'submit-galvipath-followup',status:'galvipath-followup-status',error:'galvipath-error',save:'save_galvipath_followup',get:'get_or_generate_galvipath'}
   };
 
   function el(id){return document.getElementById(id);}
@@ -17,7 +17,7 @@
     if(typeof callGalviCareApi==='function') return callGalviCareApi({action,session_id:session(),payload});
     const response=await fetch(apiEndpoint(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,session_id:session(),payload})});
     const body=await response.json();
-    if(!response.ok||body?.success===false) throw new Error(body?.message||`GalviCare request failed (${response.status})`);
+    if(!response.ok||body?.success===false) throw new Error(body?.detail||body?.message||`GalviCare request failed (${response.status})`);
     return body;
   }
 
@@ -32,8 +32,6 @@
       const anchor=product==='GalviShot'?host.querySelector('.gshot-confidence-row'):host.querySelector('[id$="result-panel"]');
       host.insertBefore(panel,anchor||host.lastChild);
     }
-    // Day 7A-7C already has a GalviSight status panel. Upgrade that exact panel in place
-    // instead of creating a second UI or Worker.
     if(!el(cfg.questions)){
       panel.innerHTML=`<p class="eyebrow">GALVIENGINE CUSTOMER INTELLIGENCE</p><h3>One more detail will make your ${product} more specific to your business.</h3><div id="${cfg.questions}"></div><div class="button-row"><button id="${cfg.submit}" class="primary-btn" type="button">Save Answer & Continue</button></div><p id="${cfg.status}" class="gshot-status-note" aria-live="polite"></p>`;
     }
@@ -55,39 +53,90 @@
     return questions.length>0;
   }
 
+  function exposeFollowupStage(product,response){
+    const cfg=STAGES[product],host=el(cfg.host);
+    if(typeof hideUpstream==='function') hideUpstream();
+    if(host){host.classList.remove('hidden');host.style.display='block';}
+    el(cfg.error)?.classList.add('hidden');
+    if(product==='GalviSight'){
+      el('galvisight-result-panel')?.classList.add('hidden');
+      el('galvisight-locked')?.classList.add('hidden');
+      const state=el('galvisight-state-message'); if(state){state.textContent='Answer the targeted question below so GalviCare can update your GalviSight using your evidence.';state.classList.remove('hidden');}
+    }
+    if(product==='GalviPath'){
+      el('galvipath-result-panel')?.classList.add('hidden');
+      el('galvipath-locked')?.classList.add('hidden');
+      const state=el('galvipath-state-message'); if(state){state.textContent='Answer the targeted question below so GalviCare can update your GalviPath using your evidence.';state.classList.remove('hidden');}
+    }
+    renderQuestions(product,response);
+    el(cfg.followup)?.scrollIntoView({behavior:'smooth',block:'start'});
+    return true;
+  }
+
   async function saveAnswers(product){
     const cfg=STAGES[product],fields=Array.from(document.querySelectorAll(`#${cfg.questions} textarea`)),status=el(cfg.status);
     if(!fields.length) return;
     const missing=fields.find(x=>!x.value.trim()); if(missing){missing.focus();return;}
     if(status) status.textContent='Saving your evidence and updating your Founder Health Record…';
     const saved=await call(cfg.save,{answers:fields.map(x=>({question_id:x.dataset.questionCode,question_code:x.dataset.questionCode,question_text:x.dataset.questionText,answer:x.value.trim(),answer_text:x.value.trim(),confidence_impact:Number(x.dataset.confidenceImpact||5)}))});
-    if(saved.evidence_version_bumped!==true && Number(saved.evidence_version||0)<=Number(saved.evidence_version_before||0)) throw new Error('Follow-up saved without an evidence-version bump.');
-    if(String(saved.status||saved.evaluation?.status||'').toLowerCase()==='needs_followup'){
+    const savedStatus=String(saved.status||saved.evaluation?.status||'').toLowerCase();
+    if(savedStatus==='needs_followup'){
       renderQuestions(product,saved.evaluation||saved);
       if(status) status.textContent='Evidence saved. One additional targeted answer is needed before GalviCare finalizes this stage.';
       return;
     }
+
+    if(product==='GalviShot'){
+      el(cfg.followup)?.classList.add('hidden');
+      if(status) status.textContent='Evidence saved. Unlock GalviShot to generate your enriched diagnosis.';
+      if(typeof window.showIntegratedGalviShotPaywall==='function') await window.showIntegratedGalviShotPaywall();
+      return;
+    }
+
     if(status) status.textContent='Evidence saved. Regenerating your more specific result…';
     const regenerated=await call(cfg.get,{});
     if(String(regenerated.status||'').toLowerCase()==='needs_followup'){
-      renderQuestions(product,regenerated);
+      exposeFollowupStage(product,regenerated);
       if(status) status.textContent='Evidence saved. One additional targeted answer is needed before GalviCare finalizes this stage.';
       return;
     }
     el(cfg.followup)?.classList.add('hidden');
-    if(product==='GalviShot'&&typeof window.showIntegratedGalviShotResult==='function') await window.showIntegratedGalviShotResult();
-    if(product==='GalviSight'&&typeof window.showGalviSight==='function') await window.showGalviSight();
-    if(product==='GalviPath'&&typeof window.showGalviPath==='function') await window.showGalviPath();
+    if(product==='GalviSight'&&typeof window.__galviLegacyShowGalviSight==='function') await window.__galviLegacyShowGalviSight();
+    if(product==='GalviPath'&&typeof window.__galviLegacyShowGalviPath==='function') await window.__galviLegacyShowGalviPath();
   }
 
   function bind(product){
     const cfg=STAGES[product]; ensureStageUi(product);
-    // GalviShot already has the proven Day 4-7C submit handler. Day 7D feeds that UI
-    // but does not register a competing handler.
-    if(product==='GalviShot') return;
-    const button=el(cfg.submit); if(!button||button.dataset.day7dBound==='1') return;
-    button.dataset.day7dBound='1';
-    button.addEventListener('click',async()=>{button.disabled=true;try{await saveAnswers(product);}catch(error){const status=el(cfg.status);if(status)status.textContent=error.message||'Unable to save this evidence.';console.error('Day 7D follow-up save failed',product,error);}finally{button.disabled=false;}});
+    const button=el(cfg.submit); if(!button||button.dataset.day7dAuthoritative==='1') return;
+    button.dataset.day7dAuthoritative='1';
+    button.addEventListener('click',async event=>{
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      if(button.dataset.day7dSaving==='1') return;
+      button.dataset.day7dSaving='1'; button.disabled=true;
+      try{await saveAnswers(product);}
+      catch(error){const status=el(cfg.status);if(status)status.textContent=error.message||'Unable to save this evidence.';el(cfg.followup)?.classList.remove('hidden');console.error('Day 7D follow-up save failed',product,error);}
+      finally{button.dataset.day7dSaving='0';button.disabled=false;}
+    },true);
+  }
+
+  function installAuthoritativeStageRoutes(){
+    if(typeof window.showGalviSight==='function'&&!window.__galviLegacyShowGalviSight){
+      window.__galviLegacyShowGalviSight=window.showGalviSight;
+      window.showGalviSight=async function(){
+        const response=await call(STAGES.GalviSight.get,{});
+        if(String(response.status||'').toLowerCase()==='needs_followup') return exposeFollowupStage('GalviSight',response);
+        return window.__galviLegacyShowGalviSight();
+      };
+    }
+    if(typeof window.showGalviPath==='function'&&!window.__galviLegacyShowGalviPath){
+      window.__galviLegacyShowGalviPath=window.showGalviPath;
+      window.showGalviPath=async function(){
+        const response=await call(STAGES.GalviPath.get,{});
+        if(String(response.status||'').toLowerCase()==='needs_followup') return exposeFollowupStage('GalviPath',response);
+        return window.__galviLegacyShowGalviPath();
+      };
+    }
   }
 
   function interceptFetch(){
@@ -102,10 +151,8 @@
           const request=JSON.parse(init.body),action=String(request?.action||'');
           const product=action.includes('galvipath')?'GalviPath':action.includes('galvisight')?'GalviSight':action.includes('galvishot')?'GalviShot':null;
           if(product&&STAGES[product].get===action){
-            const clone=response.clone(),body=await clone.json();
-            if(String(body?.status||'').toLowerCase()==='needs_followup'){
-              queueMicrotask(()=>{bind(product);renderQuestions(product,body);const msg=el(STAGES[product].status);if(msg)msg.textContent='Answer the targeted question below so GalviCare can update this stage using your evidence.';});
-            }
+            const body=await response.clone().json();
+            if(String(body?.status||'').toLowerCase()==='needs_followup') queueMicrotask(()=>exposeFollowupStage(product,body));
           }
         }
       }catch(error){console.warn('Day 7D response inspection skipped',error);}
@@ -113,6 +160,10 @@
     };
   }
 
-  document.addEventListener('DOMContentLoaded',()=>{Object.keys(STAGES).forEach(bind);interceptFetch();});
-  window.GalviCareDay7D={renderQuestions,saveAnswers,ensureStageUi};
+  document.addEventListener('DOMContentLoaded',()=>{
+    Object.keys(STAGES).forEach(bind);
+    installAuthoritativeStageRoutes();
+    interceptFetch();
+  });
+  window.GalviCareDay7D={renderQuestions,saveAnswers,ensureStageUi,exposeFollowupStage};
 })();
