@@ -879,7 +879,6 @@ async function renderGalviScoreAfterPayment(sessionId){
     localStorage.setItem('payment_galviscore','paid');
     renderUnlockedGalviScore(restored);
     clearGalviCareReturnPending();
-    queueMicrotask(()=>routeByGalviScoreConfidence(restored));
     return true;
   }catch(error){
     showPaymentSessionRecoveryError(error,canonicalSessionId);
@@ -919,6 +918,7 @@ async function routeGalviCareOnLoad(){
       fireGalviEvent('stripe_success',{product,session_id:paidSessionId,stripe_session_id:stripeSessionId,stage:'GalviScore Paid'});
       const rendered=await renderGalviScoreAfterPayment(paidSessionId);
       if(rendered===false) throw new Error('Verified GalviScore payment did not restore a GalviScore result.');
+      queueMicrotask(()=>{ const cached=getCachedGalviScoreResult(); if(cached) routeByGalviScoreConfidence(cached); });
       cleanPaidReturnCustomerUrl();
       return true;
     }catch(error){
