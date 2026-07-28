@@ -1,6 +1,6 @@
 import legacyWorker from './worker.js';
 
-export const DAY7D_RULES_VERSION = 'galviengine_customer_intelligence_v0_5_2';
+export const DAY7D_RULES_VERSION = 'galviengine_customer_intelligence_v0_5_1';
 export const DAY7D_QUESTION_VERSION = 'clinical_followups_v0_5_1';
 export const DAY7D_CONTENT_VERSION = 'galvicare_day7d_customer_intelligence_v0_5_2';
 export const DAY7D_SCHEMA_VERSION = 'day7d_dedicated_tables_v1';
@@ -150,6 +150,8 @@ export function chooseFollowups(r,existing={},product='GalviShot') {
   if(r.confidence<60) count=3;
   else if(r.confidence<80) count=2;
   else if(divergence) count=1;
+  // Day 7D product contract: every new clinical stage collects at least one
+  // stage-specific founder intelligence input before finalizing its deliverable.
   if(Object.keys(existing||{}).length===0) count=Math.max(count,1);
   if(!count) return [];
   const dims=[r.weakest_dimension,r.stated?.biggest_challenge,'general'].filter(Boolean);
