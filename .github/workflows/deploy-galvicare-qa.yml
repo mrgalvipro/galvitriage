@@ -116,6 +116,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          packageManager: npm
           command: d1 execute galvivault-0-5-qa --remote --file=migrations/0006_day7d_customer_intelligence.sql --config wrangler.json
 
       - name: Verify all three Day 7D tables exist in existing QA D1
@@ -123,6 +125,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          packageManager: npm
           command: d1 execute galvivault-0-5-qa --remote --command="SELECT (SELECT COUNT(*) FROM day7d_context_evidence) AS context_rows, (SELECT COUNT(*) FROM clinical_evidence_versions) AS version_rows, (SELECT COUNT(*) FROM day7d_observations) AS observation_rows;" --config wrangler.json
 
       - name: Deploy authoritative Day 7D API and E2E release identity
@@ -130,6 +134,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          packageManager: npm
           command: deploy --config wrangler.json --var DAY7D_DEPLOY_SHA:${{ env.DAY7D_RELEASE_ID }} --var DAY7D_DEPLOY_TARGET:galvicare-triage-intake
 
       - name: Confirm active Cloudflare API deployment
@@ -137,6 +143,8 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          packageManager: npm
           command: deployments list --config wrangler.json
 
       - name: Wait for stable authoritative Day 7D E2E runtime convergence
