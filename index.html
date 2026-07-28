@@ -877,8 +877,9 @@ async function renderGalviScoreAfterPayment(sessionId){
     }
     cacheGalviScoreResult(restored);
     localStorage.setItem('payment_galviscore','paid');
-    routeByGalviScoreConfidence(restored);
+    renderUnlockedGalviScore(restored);
     clearGalviCareReturnPending();
+    queueMicrotask(()=>routeByGalviScoreConfidence(restored));
     return true;
   }catch(error){
     showPaymentSessionRecoveryError(error,canonicalSessionId);
@@ -1068,7 +1069,8 @@ document.getElementById('galviscore-qa-override')?.addEventListener('click', fun
   cached.payment_galviscore = 'test_override';
   cacheGalviScoreResult(cached);
   localStorage.setItem('payment_galviscore', 'test_override');
-  routeByGalviScoreConfidence(cached);
+  renderUnlockedGalviScore(cached);
+  queueMicrotask(()=>routeByGalviScoreConfidence(cached));
 });
 document.getElementById('submit-followup')?.addEventListener('click',async function(){ const sessionId=getStoredSessionId(); const textareas=Array.from(document.querySelectorAll('#followup-question-container textarea')); for(const el of textareas){ if(!el.value.trim()){el.reportValidity(); return;} await saveClinicalFollowUp(sessionId,{question_id:el.dataset.questionId,confidence_impact:Number(el.dataset.confidenceImpact||0)},el.value.trim()); } localStorage.setItem('galviscore_followup_completed_'+sessionId,'true'); const cached=getCachedGalviScoreResult(); if(cached){ cached.galviscore_confidence=Math.min(100,Number(cached.galviscore_confidence||0)+12); cacheGalviScoreResult(cached); routeByGalviScoreConfidence(cached); } });
 document.getElementById('return-to-triage')?.addEventListener('click',function(){ hideGalviScoreScreens(); document.getElementById('assessmentForm').style.display='block'; document.getElementById('assessmentForm').scrollIntoView({behavior:'smooth'}); });
