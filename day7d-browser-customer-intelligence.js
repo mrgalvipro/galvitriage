@@ -102,23 +102,15 @@
     const missing=fields.find(x=>!x.value.trim()); if(missing){missing.focus();return;}
     if(status) status.textContent='Saving your evidence and updating your Founder Health Record…';
     const saved=await call(cfg.save,{answers:fields.map(x=>({question_id:x.dataset.questionCode,question_code:x.dataset.questionCode,question_text:x.dataset.questionText,answer:x.value.trim(),answer_text:x.value.trim(),confidence_impact:Number(x.dataset.confidenceImpact||5)}))});
-    if(saved.evidence_version_bumped!==true&&Number(saved.evidence_version||0)<=Number(saved.evidence_version_before||0)) throw new Error('Follow-up saved without an evidence-version bump.');
     const savedStatus=String(saved.status||saved.evaluation?.status||'').toLowerCase();
+    if(savedStatus==='validation_error'||savedStatus==='unexpected_error'||saved.success===false) throw new Error(saved.detail||saved.message||'Unable to save this evidence.');
     if(savedStatus==='needs_followup'){
       renderQuestions(product,saved.evaluation||saved);
       if(status) status.textContent='Evidence saved. One additional targeted answer is needed before GalviCare finalizes this stage.';
       return;
     }
-
-    if(product==='GalviShot'){
-      el(cfg.followup)?.classList.add('hidden');
-      if(status) status.textContent='Evidence saved. Unlock GalviShot to generate your enriched diagnosis.';
-      if(typeof window.showIntegratedGalviShotPaywall==='function') await window.showIntegratedGalviShotPaywall();
-      return;
-    }
-
-    if(status) status.textContent='Evidence saved. Regenerating your more specific result…';
-    const regenerated=await call(cfg.get,{});
+    if(status) status.textContent=String(saved.save_status||'').toLowerCase()==='already_saved'?'Answer already saved. Restoring your enriched result…':'Evidence saved. Rendering your enriched result…';
+    const regenerated=(saved.result||saved.data)?saved:await call(cfg.get,{});
     if(String(regenerated.status||'').toLowerCase()==='needs_followup'){
       exposeFollowupStage(product,regenerated);
       if(status) status.textContent='Evidence saved. One additional targeted answer is needed before GalviCare finalizes this stage.';
