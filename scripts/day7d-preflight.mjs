@@ -35,13 +35,16 @@ if(legacy.includes('env.D1')) failures.push('worker/worker.js must not be migrat
 
 const engine=fs.readFileSync('worker/day7d-engine.js','utf8');
 for(const token of [
-  'galviengine_customer_intelligence_v0_5_2',
-  'clinical_followups_v0_5_2',
+  'galviengine_customer_intelligence_v0_5_3',
+  'clinical_followups_v0_5_3',
+  'galvicare_day7d_customer_intelligence_v0_5_4',
   'day7d_dedicated_tables_v1',
   'day7d_progressive_customer_intelligence_v2',
   'day7d_context_evidence',
   'clinical_evidence_versions',
   'progressive_followups:true',
+  'dynamic_question_count:true',
+  'approved_low_confidence_question_count:3',
   'atomic_followup_save:true',
   'server_selected_question_validation:true',
   'save_returns_regenerated_result:true',
@@ -56,8 +59,9 @@ const browser=fs.readFileSync('day7d-browser-customer-intelligence.js','utf8');
 for(const token of [
   'needs_followup','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions',
   'save_galvishot_followup','save_galvisight_followup','save_galvipath_followup',
-  'evidence_version_bumped','installAuthoritativeStageRoutes','invokeLegacyWithResponse'
+  'skipCurrentQuestion','SKIPPED_ANSWER','stopImmediatePropagation','installAuthoritativeStageRoutes','invokeLegacyWithResponse'
 ]) if(!browser.includes(token)) failures.push(`Day 7D browser adapter missing: ${token}`);
+if(!browser.includes('MAX_VISIBLE_TARGETED_QUESTIONS=3')) failures.push('Day 7D browser must preserve a bounded maximum of three targeted questions');
 
 const migration=fs.readFileSync('migrations/0006_day7d_customer_intelligence.sql','utf8');
 for(const table of ['day7d_context_evidence','clinical_evidence_versions','day7d_observations']) if(!migration.includes(table)) failures.push(`migration 0006 missing dedicated Day 7D table: ${table}`);
@@ -70,7 +74,9 @@ if(failures.length){
 console.log(JSON.stringify({
   status:'PASS',environment:'qa',api_worker:wrangler.name,entrypoint:wrangler.main,binding:'DB',database:db.database_name,
   runtime_schema_adapter:'day7d_dedicated_tables_v1',release_contract:'day7d_progressive_customer_intelligence_v2',
-  progressive_followups:true,atomic_followup_save:true,server_selected_question_validation:true,
-  save_returns_regenerated_result:true,evidence_versioned_results:true,legacy_runtime_preservation:true,
+  rules_version:'galviengine_customer_intelligence_v0_5_3',question_version:'clinical_followups_v0_5_3',content_version:'galvicare_day7d_customer_intelligence_v0_5_4',
+  progressive_followups:true,dynamic_question_count:true,approved_low_confidence_question_count:3,
+  atomic_followup_save:true,server_selected_question_validation:true,save_returns_regenerated_result:true,
+  skip_never_routes_to_stripe:true,evidence_versioned_results:true,legacy_runtime_preservation:true,
   payment_intelligence_decoupled:true,frontend_d1_required:false
 },null,2));
