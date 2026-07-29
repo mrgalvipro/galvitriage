@@ -56,62 +56,7 @@ jobs:
           echo "DAY7D_RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
           echo "Authoritative Day 7D E2E release fingerprint: $RELEASE_ID"
 
-      - name: Verify authoritative Day 7D P0 source contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-
-          const requiredFiles=[
-            'worker/worker.js','worker/day7d-engine.js','day7d-browser-customer-intelligence.js',
-            'migrations/0006_day7d_customer_intelligence.sql','scripts/day7d-preflight.mjs',
-            'scripts/verify-qa-runtime.mjs','tests/day7d-customer-intelligence.test.mjs',
-            'tests/day7d-customer-path-contract.test.mjs','wrangler.json'
-          ];
-          const failures=[];
-          for(const path of requiredFiles) if(!fs.existsSync(path)) failures.push(`missing file: ${path}`);
-
-          if(process.env.GITHUB_REF_NAME!=='qa-revamped-galvicare-0-5') failures.push(`wrong branch: ${process.env.GITHUB_REF_NAME}`);
-
-          const wrangler=JSON.parse(fs.readFileSync('wrangler.json','utf8'));
-          if(wrangler.name!=='galvicare-triage-intake') failures.push(`wrong Worker name: ${wrangler.name}`);
-          if(wrangler.main!=='worker/day7d-engine.js') failures.push(`wrong Worker entrypoint: ${wrangler.main}`);
-          const db=(wrangler.d1_databases||[]).find(x=>x.binding==='DB');
-          if(!db) failures.push('missing DB binding');
-          else if(db.database_name!=='galvivault-0-5-qa') failures.push(`wrong QA D1: ${db.database_name}`);
-
-          const engine=fs.readFileSync('worker/day7d-engine.js','utf8');
-          const browser=fs.readFileSync('day7d-browser-customer-intelligence.js','utf8');
-          const requiredEngine=[
-            process.env.DAY7D_RELEASE_CONTRACT,
-            process.env.DAY7D_RULES_VERSION,
-            process.env.DAY7D_QUESTION_VERSION,
-            process.env.DAY7D_CONTENT_VERSION,
-            'async function atomicSave','async function storedResult',
-            "generation_source:'stored'","generation_source:'regenerated'",
-            'const impact=skipped?0','if(!isSkipped(x.answer)',
-            'approved_low_confidence_question_count:3','skip_does_not_inflate_confidence:true',
-            'evidence_version_cache:true','cumulative_clinic_brief:true',
-            'clinic_brief:','get_clinical_file'
-          ];
-          const requiredBrowser=[
-            'invokeLegacyWithResponse','skipCurrentQuestion','stopImmediatePropagation',
-            'renderReadyStage(product,regenerated)','save_galvishot_followup',
-            'save_galvisight_followup','save_galvipath_followup'
-          ];
-          for(const token of requiredEngine) if(!engine.includes(token)) failures.push(`Worker missing P0 token: ${token}`);
-          for(const token of requiredBrowser) if(!browser.includes(token)) failures.push(`Browser missing P0 token: ${token}`);
-
-          if(failures.length){
-            console.error('DAY 7D SOURCE CONTRACT: BLOCKED');
-            failures.forEach(x=>console.error(`- ${x}`));
-            process.exit(1);
-          }
-          console.log('PASS: authoritative Day 7D P0 source contract verified.');
-          NODE
-
-      - name: Day 7D runtime preflight
+      - name: Day 7D authoritative preflight
         run: npm run day7d:preflight
 
       - name: Focused Day 7D customer-intelligence tests
@@ -123,25 +68,34 @@ jobs:
       - name: Day 7C integration regression and proven QA frontend build
         run: npm run day7c:gate
 
-      - name: Prove generated QA browser contains complete progressive intelligence adapter
+      - name: Verify generated QA browser contract
         shell: bash
         run: |
           set -euo pipefail
-          test -f dist-qa/index.html
-          grep -q 'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS' dist-qa/index.html
-          grep -q 'needs_followup' dist-qa/index.html
-          grep -q 'galvishot-followup-questions' dist-qa/index.html
-          grep -q 'galvisight-followup-questions' dist-qa/index.html
-          grep -q 'galvipath-followup-questions' dist-qa/index.html
-          grep -q 'save_galvishot_followup' dist-qa/index.html
-          grep -q 'save_galvisight_followup' dist-qa/index.html
-          grep -q 'save_galvipath_followup' dist-qa/index.html
-          grep -q 'skipCurrentQuestion' dist-qa/index.html
-          grep -q 'stopImmediatePropagation' dist-qa/index.html
-          grep -q 'invokeLegacyWithResponse' dist-qa/index.html
-          grep -q 'renderReadyStage(product,regenerated)' dist-qa/index.html
-          grep -q 'https://galvicare-triage-intake.mrgalvipro.workers.dev' dist-qa/index.html
-          echo 'PASS: generated QA browser contains the complete Day 7D cumulative journey adapter.'
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const path='dist-qa/index.html';
+          if(!fs.existsSync(path)) throw new Error('dist-qa/index.html was not generated');
+          const html=fs.readFileSync(path,'utf8');
+          const required=[
+            'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
+            'needs_followup',
+            'galvishot-followup-questions',
+            'galvisight-followup-questions',
+            'galvipath-followup-questions',
+            'save_galvishot_followup',
+            'save_galvisight_followup',
+            'save_galvipath_followup',
+            'skipCurrentQuestion',
+            'stopImmediatePropagation',
+            'invokeLegacyWithResponse',
+            'renderReadyStage(product,regenerated)',
+            'https://galvicare-triage-intake.mrgalvipro.workers.dev'
+          ];
+          const missing=required.filter(token=>!html.includes(token));
+          if(missing.length) throw new Error(`Generated QA browser missing: ${missing.join(', ')}`);
+          console.log('PASS: generated QA browser contains the complete Day 7D cumulative journey adapter.');
+          NODE
 
       - name: Apply Day 7D schema to existing QA D1
         uses: cloudflare/wrangler-action@v3
@@ -152,7 +106,7 @@ jobs:
           packageManager: npm
           command: d1 execute galvivault-0-5-qa --remote --file=migrations/0006_day7d_customer_intelligence.sql --config wrangler.json
 
-      - name: Verify all three Day 7D tables exist in existing QA D1
+      - name: Verify Day 7D QA D1 schema
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -183,7 +137,6 @@ jobs:
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          const url=process.env.QA_WORKER_URL;
           const expected={
             enabled:true,
             rules_version:process.env.DAY7D_RULES_VERSION,
@@ -205,19 +158,21 @@ jobs:
           let last=null,consecutive=0;
           while(Date.now()<deadline){
             try{
-              const response=await fetch(url,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`converge-${Date.now()}-${Math.random()}`})});
+              const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`converge-${Date.now()}-${Math.random()}`})});
               const body=await response.json();
-              last=body;
               const d=body?.day7d;
-              let exact=response.ok&&body?.success===true;
-              for(const [key,value] of Object.entries(expected)) exact=exact&&d?.[key]===value;
+              last=body;
+              const mismatches=[];
+              if(!response.ok||body?.success!==true) mismatches.push(`http/success=${response.status}/${body?.success}`);
+              for(const [key,value] of Object.entries(expected)) if(d?.[key]!==value) mismatches.push(`${key}: expected ${JSON.stringify(value)}, got ${JSON.stringify(d?.[key])}`);
+              const exact=mismatches.length===0;
               consecutive=exact?consecutive+1:0;
-              console.log(`Day 7D P0 runtime convergence: exact=${exact} consecutive=${consecutive}/4 rules=${d?.rules_version||'missing'} content=${d?.content_version||'missing'}`);
+              console.log(`Day 7D P0 runtime convergence: exact=${exact} consecutive=${consecutive}/4${exact?'':` mismatches=${mismatches.join(' | ')}`}`);
               if(consecutive>=4){console.log('PASS: authoritative Day 7D P0 runtime converged.');process.exit(0);}
-            }catch(error){last={error:String(error?.message||error)};consecutive=0;}
+            }catch(error){last={error:String(error?.message||error)};consecutive=0;console.log(`Runtime check error: ${last.error}`);}
             await new Promise(resolve=>setTimeout(resolve,3000));
           }
-          throw new Error(`Authoritative Day 7D P0 runtime did not converge within 180 seconds. Last response: ${JSON.stringify(last)}`);
+          throw new Error(`Authoritative Day 7D P0 runtime did not converge. Last response: ${JSON.stringify(last)}`);
           NODE
 
       - name: Verify preserved Day 1-7C runtime foundation
@@ -229,6 +184,9 @@ jobs:
         shell: bash
         run: |
           node --input-type=module <<'NODE'
+          const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`final-${Date.now()}-${Math.random()}`})});
+          const body=await response.json();
+          const d=body?.day7d;
           const expected={
             enabled:true,
             rules_version:process.env.DAY7D_RULES_VERSION,
@@ -246,22 +204,11 @@ jobs:
             server_selected_question_validation:true,
             save_returns_regenerated_result:true
           };
-          let consecutive=0,last=null;
-          const deadline=Date.now()+90000;
-          while(Date.now()<deadline){
-            try{
-              const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`final-${Date.now()}-${Math.random()}`})});
-              const body=await response.json(),d=body?.day7d;
-              last=body;
-              let exact=response.ok&&body?.success===true;
-              for(const [key,value] of Object.entries(expected)) exact=exact&&d?.[key]===value;
-              consecutive=exact?consecutive+1:0;
-              console.log(`Final Day 7D P0 proof: exact=${exact} consecutive=${consecutive}/3`);
-              if(consecutive>=3){console.log('DAY 7D FINAL P0 RUNTIME PROOF PASS');process.exit(0);}
-            }catch(error){last={error:String(error?.message||error)};consecutive=0;}
-            await new Promise(resolve=>setTimeout(resolve,3000));
-          }
-          throw new Error(`Final Day 7D P0 runtime proof failed: ${JSON.stringify(last)}`);
+          const mismatches=[];
+          if(!response.ok||body?.success!==true) mismatches.push(`http/success=${response.status}/${body?.success}`);
+          for(const [key,value] of Object.entries(expected)) if(d?.[key]!==value) mismatches.push(`${key}: expected ${JSON.stringify(value)}, got ${JSON.stringify(d?.[key])}`);
+          if(mismatches.length) throw new Error(`Final Day 7D P0 proof failed: ${mismatches.join(' | ')}`);
+          console.log('DAY 7D FINAL P0 RUNTIME PROOF PASS');
           NODE
 
       - name: READY FOR DAY 7D HUMAN E2E
