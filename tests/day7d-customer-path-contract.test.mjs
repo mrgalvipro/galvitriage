@@ -45,11 +45,13 @@ test('GalviScore clarification is Worker-owned and objective score remains immut
 test('follow-up persistence is idempotent, evidence-versioned and skip-safe',()=>{
   has(engine,'allowed.find','server-selected validation');
   has(engine,'already_saved:true','duplicate answer idempotency');
-  has(engine,'await bump(db,sid','evidence-version increment');
+  has(engine,'await bump(env.DB,sid','single bounded evidence-version increment');
   has(engine,'evidence_version_bumped:after>before','evidence-version response proof');
   has(engine,"status:'validation_error'",'invalid answer rejection');
-  has(engine,'const impact=skipped?0','skip zero-confidence contract');
+  has(engine,'impact=skipped?0','skip zero-confidence contract');
   has(engine,'if(!isSkipped(row.answer)','skip excluded from evidence');
+  has(engine,'collision_safe_followup_save:true','collision-safe save runtime capability');
+  has(engine,'bounded_multi_question_submit:true','bounded multi-question runtime capability');
 });
 
 test('approved dynamic 0–3 selector is stage-specific and non-repetitive',()=>{
@@ -62,10 +64,13 @@ test('approved dynamic 0–3 selector is stage-specific and non-repetitive',()=>
   has(browser,'MAX_VISIBLE_TARGETED_QUESTIONS=3','bounded UI');
 });
 
-test('Shot, Sight, Path and Clinic consume cumulative evidence',()=>{
+test('Shot, Sight, Path and Clinic consume cumulative evidence and prior results',()=>{
   has(engine,"evidence(file,'GalviShot')",'GalviShot evidence consumption');
-  has(engine,'customerEvidence=evidence(file)','GalviSight cumulative evidence');
-  has(engine,'customerEvidence=evidence(file)','GalviPath cumulative evidence');
+  has(engine,'loadPriorResults','prior product result loading');
+  has(engine,'prior_results','clinical-file prior result inheritance');
+  has(engine,'priorFindingEvidence','prior finding evidence transformation');
+  has(engine,'source_findings:','downstream source finding linkage');
+  has(engine,'source_interpretation:interpretation','Path source interpretation linkage');
   has(engine,'clinic_brief:','cumulative Clinic brief');
   for(const token of ['priority_findings:','stated_30_day_outcome:','stated_90_day_outcome:','unresolved_hypotheses:','customer_intelligence_evidence:customerEvidence'])has(engine,token,'Clinic inheritance');
 });
@@ -90,6 +95,7 @@ test('browser renders Worker-selected questions and prevents legacy bypass',()=>
   has(browser,"savedStatus==='needs_followup'",'remaining-question advancement');
   has(browser,"document.addEventListener('DOMContentLoaded',initialize)",'refresh initialization');
   has(browser,"if(document.readyState!=='loading')queueMicrotask(initialize)",'already-loaded restoration');
+  has(engine,'legacy_generation_bypass_closed:true','Worker legacy bypass closure capability');
 });
 
 test('QA builder produces one isolated cumulative frontend candidate',()=>{
@@ -107,14 +113,15 @@ test('QA builder produces one isolated cumulative frontend candidate',()=>{
 test('preflight and runtime share one v3 release contract',()=>{
   for(const token of [
     'galviengine_customer_intelligence_v0_5_4','clinical_followups_v0_5_4',
-    'galvicare_day7d_customer_intelligence_v0_5_5','day7d_cumulative_customer_intelligence_v3'
+    'galvicare_day7d_customer_intelligence_v0_5_6','day7d_cumulative_customer_intelligence_v3'
   ]){has(engine,token,'Worker version');has(preflight,token,'preflight version');}
   for(const token of [
     "entrypoint:'worker/day7d-engine.js'",'progressive_followups:true','dynamic_question_count:true',
     'approved_low_confidence_question_count:3','galviscore_clarification_server_owned:true',
     'objective_score_immutable:true','skip_does_not_inflate_confidence:true','evidence_version_cache:true',
-    'cumulative_clinic_brief:true','atomic_followup_save:true','server_selected_question_validation:true',
-    'save_returns_regenerated_result:true'
+    'cumulative_clinic_brief:true','prior_product_results_in_clinical_file:true','bounded_multi_question_submit:true',
+    'collision_safe_followup_save:true','legacy_generation_bypass_closed:true','atomic_followup_save:true',
+    'server_selected_question_validation:true','save_returns_regenerated_result:true'
   ])has(engine,token,'runtime health capability');
 });
 
