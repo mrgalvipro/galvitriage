@@ -24,6 +24,10 @@ concurrency:
 
 env:
   QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
+  DAY7D_RULES_VERSION: galviengine_customer_intelligence_v0_5_3
+  DAY7D_QUESTION_VERSION: clinical_followups_v0_5_3
+  DAY7D_CONTENT_VERSION: galvicare_day7d_customer_intelligence_v0_5_4
+  DAY7D_RELEASE_CONTRACT: day7d_progressive_customer_intelligence_v2
 
 jobs:
   qa-release-gate:
@@ -52,7 +56,7 @@ jobs:
           echo "DAY7D_RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
           echo "Authoritative Day 7D E2E release fingerprint: $RELEASE_ID"
 
-      - name: Verify authoritative Day 7D v2 source without infrastructure expansion
+      - name: Verify authoritative Day 7D P0 source without infrastructure expansion
         shell: bash
         run: |
           set -euo pipefail
@@ -69,22 +73,29 @@ jobs:
           grep -q '"main": "worker/day7d-engine.js"' wrangler.json
           grep -q '"binding": "DB"' wrangler.json
           grep -q '"database_name": "galvivault-0-5-qa"' wrangler.json
-          grep -q 'day7d_progressive_customer_intelligence_v2' worker/day7d-engine.js
-          grep -q 'galviengine_customer_intelligence_v0_5_2' worker/day7d-engine.js
-          grep -q 'clinical_followups_v0_5_2' worker/day7d-engine.js
+          grep -q "$DAY7D_RELEASE_CONTRACT" worker/day7d-engine.js
+          grep -q "$DAY7D_RULES_VERSION" worker/day7d-engine.js
+          grep -q "$DAY7D_QUESTION_VERSION" worker/day7d-engine.js
+          grep -q "$DAY7D_CONTENT_VERSION" worker/day7d-engine.js
           grep -q 'async function atomicSave' worker/day7d-engine.js
-          grep -q 'allowed.find' worker/day7d-engine.js
-          grep -q 'already_saved:true' worker/day7d-engine.js
-          grep -q 'server_selected_question_validation:true' worker/day7d-engine.js
-          grep -q 'save_returns_regenerated_result:true' worker/day7d-engine.js
-          grep -q 'evidence_version_bumped:after>before' worker/day7d-engine.js
+          grep -q 'async function storedResult' worker/day7d-engine.js
+          grep -q 'generation_source:'"'"'stored'"'"'' worker/day7d-engine.js
+          grep -q 'generation_source:'"'"'regenerated'"'"'' worker/day7d-engine.js
+          grep -q 'const impact=skipped?0' worker/day7d-engine.js
+          grep -q 'if(!isSkipped(x.answer)' worker/day7d-engine.js
+          grep -q 'approved_low_confidence_question_count:3' worker/day7d-engine.js
+          grep -q 'skip_does_not_inflate_confidence:true' worker/day7d-engine.js
+          grep -q 'evidence_version_cache:true' worker/day7d-engine.js
+          grep -q 'cumulative_clinic_brief:true' worker/day7d-engine.js
           grep -q 'clinic_brief:' worker/day7d-engine.js
+          grep -q 'get_clinical_file' worker/day7d-engine.js
           grep -q 'invokeLegacyWithResponse' day7d-browser-customer-intelligence.js
+          grep -q 'skipCurrentQuestion' day7d-browser-customer-intelligence.js
+          grep -q 'stopImmediatePropagation' day7d-browser-customer-intelligence.js
           grep -q 'renderReadyStage(product,regenerated)' day7d-browser-customer-intelligence.js
-          grep -q 'evidence_version_bumped' day7d-browser-customer-intelligence.js
-          echo 'PASS: authoritative Worker and downstream adapter are one verified Day 7D v2 release.'
+          echo 'PASS: authoritative Day 7D P0 source contract verified.'
 
-      - name: Day 7D preflight
+      - name: Day 7D runtime preflight
         run: npm run day7d:preflight
 
       - name: Focused Day 7D customer-intelligence tests
@@ -109,11 +120,12 @@ jobs:
           grep -q 'save_galvishot_followup' dist-qa/index.html
           grep -q 'save_galvisight_followup' dist-qa/index.html
           grep -q 'save_galvipath_followup' dist-qa/index.html
-          grep -q 'evidence_version_bumped' dist-qa/index.html
+          grep -q 'skipCurrentQuestion' dist-qa/index.html
+          grep -q 'stopImmediatePropagation' dist-qa/index.html
           grep -q 'invokeLegacyWithResponse' dist-qa/index.html
           grep -q 'renderReadyStage(product,regenerated)' dist-qa/index.html
           grep -q 'https://galvicare-triage-intake.mrgalvipro.workers.dev' dist-qa/index.html
-          echo 'PASS: generated QA browser contains the complete Day 7D downstream journey adapter.'
+          echo 'PASS: generated QA browser contains the complete Day 7D cumulative journey adapter.'
 
       - name: Apply Day 7D schema to existing QA D1
         uses: cloudflare/wrangler-action@v3
@@ -151,11 +163,28 @@ jobs:
           packageManager: npm
           command: deployments list --config wrangler.json
 
-      - name: Wait for stable authoritative Day 7D v2 runtime convergence
+      - name: Wait for authoritative Day 7D P0 runtime convergence
         shell: bash
         run: |
           node --input-type=module <<'NODE'
           const url=process.env.QA_WORKER_URL;
+          const expected={
+            enabled:true,
+            rules_version:process.env.DAY7D_RULES_VERSION,
+            question_version:process.env.DAY7D_QUESTION_VERSION,
+            content_version:process.env.DAY7D_CONTENT_VERSION,
+            entrypoint:'worker/day7d-engine.js',
+            release_contract:process.env.DAY7D_RELEASE_CONTRACT,
+            progressive_followups:true,
+            dynamic_question_count:true,
+            approved_low_confidence_question_count:3,
+            skip_does_not_inflate_confidence:true,
+            evidence_version_cache:true,
+            cumulative_clinic_brief:true,
+            atomic_followup_save:true,
+            server_selected_question_validation:true,
+            save_returns_regenerated_result:true
+          };
           const deadline=Date.now()+180000;
           let last=null,consecutive=0;
           while(Date.now()<deadline){
@@ -164,14 +193,15 @@ jobs:
               const body=await response.json();
               last=body;
               const d=body?.day7d;
-              const exact=response.ok&&body?.success===true&&d?.enabled===true&&d?.rules_version==='galviengine_customer_intelligence_v0_5_2'&&d?.question_version==='clinical_followups_v0_5_2'&&d?.entrypoint==='worker/day7d-engine.js'&&d?.release_contract==='day7d_progressive_customer_intelligence_v2'&&d?.progressive_followups===true&&d?.atomic_followup_save===true&&d?.server_selected_question_validation===true&&d?.save_returns_regenerated_result===true;
+              let exact=response.ok&&body?.success===true;
+              for(const [key,value] of Object.entries(expected)) exact=exact&&d?.[key]===value;
               consecutive=exact?consecutive+1:0;
-              console.log(`Day 7D v2 runtime convergence: exact=${exact} consecutive=${consecutive}/4 rules=${d?.rules_version||'missing'} contract=${d?.release_contract||'missing'}`);
-              if(consecutive>=4){console.log('PASS: authoritative Day 7D v2 runtime converged.');process.exit(0);}
+              console.log(`Day 7D P0 runtime convergence: exact=${exact} consecutive=${consecutive}/4 rules=${d?.rules_version||'missing'} content=${d?.content_version||'missing'}`);
+              if(consecutive>=4){console.log('PASS: authoritative Day 7D P0 runtime converged.');process.exit(0);}
             }catch(error){last={error:String(error?.message||error)};consecutive=0;}
             await new Promise(resolve=>setTimeout(resolve,3000));
           }
-          throw new Error(`Authoritative Day 7D v2 runtime did not converge within 180 seconds. Last response: ${JSON.stringify(last)}`);
+          throw new Error(`Authoritative Day 7D P0 runtime did not converge within 180 seconds. Last response: ${JSON.stringify(last)}`);
           NODE
 
       - name: Verify preserved Day 1-7C runtime foundation
@@ -179,11 +209,27 @@ jobs:
           GALVICARE_QA_WORKER_URL: ${{ env.QA_WORKER_URL }}
         run: node scripts/verify-qa-runtime.mjs
 
-      - name: Final stable Day 7D v2 runtime proof
+      - name: Final Day 7D cumulative E2E contract proof
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          const expected={enabled:true,rules_version:'galviengine_customer_intelligence_v0_5_2',question_version:'clinical_followups_v0_5_2',entrypoint:'worker/day7d-engine.js',release_contract:'day7d_progressive_customer_intelligence_v2',progressive_followups:true,atomic_followup_save:true,server_selected_question_validation:true,save_returns_regenerated_result:true};
+          const expected={
+            enabled:true,
+            rules_version:process.env.DAY7D_RULES_VERSION,
+            question_version:process.env.DAY7D_QUESTION_VERSION,
+            content_version:process.env.DAY7D_CONTENT_VERSION,
+            entrypoint:'worker/day7d-engine.js',
+            release_contract:process.env.DAY7D_RELEASE_CONTRACT,
+            progressive_followups:true,
+            dynamic_question_count:true,
+            approved_low_confidence_question_count:3,
+            skip_does_not_inflate_confidence:true,
+            evidence_version_cache:true,
+            cumulative_clinic_brief:true,
+            atomic_followup_save:true,
+            server_selected_question_validation:true,
+            save_returns_regenerated_result:true
+          };
           let consecutive=0,last=null;
           const deadline=Date.now()+90000;
           while(Date.now()<deadline){
@@ -194,12 +240,12 @@ jobs:
               let exact=response.ok&&body?.success===true;
               for(const [key,value] of Object.entries(expected)) exact=exact&&d?.[key]===value;
               consecutive=exact?consecutive+1:0;
-              console.log(`Final Day 7D v2 proof: exact=${exact} consecutive=${consecutive}/3`);
-              if(consecutive>=3){console.log('DAY 7D FINAL RUNTIME PROOF PASS');process.exit(0);}
+              console.log(`Final Day 7D P0 proof: exact=${exact} consecutive=${consecutive}/3`);
+              if(consecutive>=3){console.log('DAY 7D FINAL P0 RUNTIME PROOF PASS');process.exit(0);}
             }catch(error){last={error:String(error?.message||error)};consecutive=0;}
             await new Promise(resolve=>setTimeout(resolve,3000));
           }
-          throw new Error(`Final Day 7D v2 runtime proof failed: ${JSON.stringify(last)}`);
+          throw new Error(`Final Day 7D P0 runtime proof failed: ${JSON.stringify(last)}`);
           NODE
 
       - name: READY FOR DAY 7D HUMAN E2E
@@ -207,11 +253,15 @@ jobs:
         run: |
           echo '## DAY 7D QA RELEASE GATE: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 1-7C regression preservation: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Server-selected atomic/idempotent follow-up persistence: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviShot targeted question and enriched diagnosis contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviSight targeted question and enriched prescription contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviPath targeted question and enriched 90-day plan contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviClinic cumulative brief contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviTriage qualitative evidence persistence: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviVitals / GalviScore deterministic scoring preservation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Dynamic Worker-selected 0–3 follow-up contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Skip advancement without confidence/evidence inflation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Evidence-version stored replay/regeneration: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviShot enriched diagnosis contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviSight enriched interpretation contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviPath enriched 90-day treatment-plan contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviClinic cumulative Founder Health Record contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA D1 schema: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo "- Authoritative source fingerprint: $DAY7D_RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
           echo '- Stable deployed API runtime: PASS' >> "$GITHUB_STEP_SUMMARY"
