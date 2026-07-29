@@ -36,11 +36,15 @@ const day7dRequired = [
   'save_galvishot_followup',
   'save_galvisight_followup',
   'save_galvipath_followup',
+  'galvishot-followup-questions',
   'galvisight-followup-questions',
   'galvipath-followup-questions',
-  'evidence_version_bumped',
+  'skipCurrentQuestion',
+  'SKIPPED_ANSWER',
+  'stopImmediatePropagation',
   'installAuthoritativeStageRoutes',
   'invokeLegacyWithResponse',
+  'renderReadyStage(product,regenerated)',
   'MAX_VISIBLE_TARGETED_QUESTIONS=3',
   'slice(0,MAX_VISIBLE_TARGETED_QUESTIONS)'
 ];
@@ -85,8 +89,17 @@ if (adapterCount !== 1) throw new Error(`Generated QA frontend must contain exac
 if (html.includes(LEGACY_SIGNATURE)) throw new Error('Legacy Day 7D adapter marker survived the QA build.');
 if (html.includes("if(product==='GalviShot') return;")) throw new Error('Stale GalviShot adapter bypass survived the QA build.');
 
-for (const required of [QA_WORKER, QA_CUSTOMER_URL, TEST_STRIPE_MARKER, QA_GA4, QA_CLARITY, QA_CALENDLY, 'galvisight-followup-questions', 'galvipath-followup-questions', 'evidence_version_bumped', 'installAuthoritativeStageRoutes', 'invokeLegacyWithResponse', 'MAX_VISIBLE_TARGETED_QUESTIONS=3']) {
-  if (!html.includes(required)) throw new Error(`Generated QA frontend missing: ${required}`);
+const cumulativeJourneyContracts = [
+  QA_WORKER, QA_CUSTOMER_URL, TEST_STRIPE_MARKER, QA_GA4, QA_CLARITY, QA_CALENDLY,
+  'galviscore-followup','submit-followup','renderUnlockedGalviScore',
+  'galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions',
+  'save_galvishot_followup','save_galvisight_followup','save_galvipath_followup',
+  'skipCurrentQuestion','SKIPPED_ANSWER','stopImmediatePropagation',
+  'installAuthoritativeStageRoutes','invokeLegacyWithResponse','renderReadyStage(product,regenerated)',
+  'MAX_VISIBLE_TARGETED_QUESTIONS=3','continue-galvishot','continue-galvisight','continue-galvipath','galvipath-book-galviclinic'
+];
+for (const required of cumulativeJourneyContracts) {
+  if (!html.includes(required)) throw new Error(`Generated QA frontend missing cumulative journey contract: ${required}`);
 }
 if (html.includes(PROD_WORKER)) throw new Error('Production Worker leaked into QA frontend.');
 
@@ -102,8 +115,10 @@ for (const link of liveLinks) {
 
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(OUT, html, 'utf8');
-console.log(`PASS — ${OUT} generated with exactly one authoritative Day 7D downstream controller.`);
+console.log(`PASS — ${OUT} generated with exactly one authoritative Day 7D cumulative journey controller.`);
+console.log('PASS — GalviScore clarification remains objective-score-safe; Worker evidence-versioning governs downstream regeneration.');
 console.log('PASS — follow-up UI is bounded to three visible questions; the Worker determines the approved 0–3 count.');
+console.log('PASS — QA journey contract: Triage → Vitals → Score clarification/result → Shot → Sight → Path → Clinic.');
 console.log(`QA URL: ${QA_CUSTOMER_URL}`);
 console.log(`QA API: ${QA_WORKER}/api`);
 console.log(`QA Calendly: ${QA_CALENDLY}`);
