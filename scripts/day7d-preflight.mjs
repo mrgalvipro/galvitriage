@@ -57,7 +57,7 @@ for(const token of [
   'save_galvishot_followup','save_galvisight_followup','save_galvipath_followup','skipCurrentQuestion','SKIPPED_ANSWER',
   'stopImmediatePropagation','installAuthoritativeStageRoutes','invokeLegacyWithResponse','MAX_VISIBLE_TARGETED_QUESTIONS=3'
 ]) if(!browser.includes(token)) failures.push(`Day 7D browser adapter missing: ${token}`);
-if(browser.includes('galviscore_confidence||0)+12') failures.push('Browser must not locally mutate GalviScore confidence');
+if(browser.includes('galviscore_confidence||0)+12')) failures.push('Browser must not locally mutate GalviScore confidence');
 if(browser.includes('galviscore_followup_completed_')) failures.push('Browser adapter must not own GalviScore completion state');
 
 const builder=fs.readFileSync('scripts/day7b-build-qa-frontend.mjs','utf8');
