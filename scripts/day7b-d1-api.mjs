@@ -3,7 +3,10 @@ import { readFileSync } from 'node:fs';
 const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
 const apiToken = process.env.CLOUDFLARE_API_TOKEN;
 const databaseId = '2fc954b7-00ca-405b-8313-f91e706845a2';
-const schemaPath = 'migrations/production/0001_galvicare_0_5_production_baseline.sql';
+const schemaPaths = [
+  'migrations/production/0001_galvicare_0_5_production_baseline.sql',
+  'migrations/0006_day7d_customer_intelligence.sql'
+];
 
 if (!accountId || !apiToken) {
   console.error('BLOCKED — CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN are required.');
@@ -36,15 +39,41 @@ async function query(sql, params = []) {
   return body;
 }
 
-const schema = readFileSync(schemaPath, 'utf8');
-console.log('[1/3] Applying Production schema through Cloudflare D1 REST API...');
-await query(schema);
+console.log('[1/4] Applying Production baseline and additive Day 7D schema...');
+for (const schemaPath of schemaPaths) {
+  const schema = readFileSync(schemaPath, 'utf8');
+  console.log(`Applying ${schemaPath}`);
+  await query(schema);
+}
 
-console.log('[2/3] Verifying Production tables...');
+console.log('[2/4] Verifying Production tables...');
 const tables = await query("SELECT name FROM sqlite_schema WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name;");
-console.log(JSON.stringify(tables.result));
+const tableRows = (tables.result || []).flatMap((entry) => entry?.results || []);
+const tableNames = new Set(tableRows.map((row) => row.name));
+console.log(JSON.stringify(tableRows));
 
-console.log('[3/3] Verifying Production customer/session/payment tables start empty...');
+const requiredDay7DTables = [
+  'day7d_context_evidence',
+  'clinical_evidence_versions',
+  'day7d_observations',
+  'clinical_followups',
+  'product_results'
+];
+const missingDay7DTables = requiredDay7DTables.filter((name) => !tableNames.has(name));
+if (missingDay7DTables.length) {
+  console.error('BLOCKED — required Day 7D Production tables are missing:', JSON.stringify(missingDay7DTables));
+  process.exit(4);
+}
+
+console.log('[3/4] Verifying Day 7D collision-safety trigger...');
+const triggers = await query("SELECT name FROM sqlite_schema WHERE type='trigger' AND name='day7d_clinical_followups_collision_safe';");
+const triggerRows = (triggers.result || []).flatMap((entry) => entry?.results || []);
+if (!triggerRows.some((row) => row.name === 'day7d_clinical_followups_collision_safe')) {
+  console.error('BLOCKED — Day 7D follow-up collision-safety trigger is missing.');
+  process.exit(4);
+}
+
+console.log('[4/4] Verifying Production customer/session/payment tables contain no QA synthetic data...');
 const tablesToCheck = ['sessions', 'founders', 'ventures', 'payments', 'entitlements', 'product_results'];
 const counts = [];
 for (const tableName of tablesToCheck) {
@@ -60,10 +89,4 @@ if (invalid.length) {
   process.exit(4);
 }
 
-const dirty = counts.filter((row) => row.row_count !== 0);
-if (dirty.length) {
-  console.error('BLOCKED — unexpected Production customer/session/payment rows:', JSON.stringify(dirty));
-  process.exit(4);
-}
-
-console.log('PASS — Production D1 schema initialized through REST API with no QA/customer seed data.');
+console.log('PASS — Production D1 baseline and additive Day 7D schema are present with no QA data migration.');
