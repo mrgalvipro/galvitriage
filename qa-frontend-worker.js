@@ -13,7 +13,7 @@ const SECURITY_HEADERS = Object.freeze({
 });
 
 export default {
-  async fetch(request) {
+  async fetch(request, env) {
     const url = new URL(request.url);
     if (url.pathname === '/health') {
       return Response.json({
@@ -22,7 +22,8 @@ export default {
         environment: 'qa',
         stripe_mode: 'test',
         api: 'https://galvicare-triage-intake.mrgalvipro.workers.dev/api',
-        build: 'day7b-qa-browser-v1'
+        build: 'day7d-cumulative-customer-intelligence-v3',
+        release_id: String(env?.DAY7D_FRONTEND_RELEASE_ID || '')
       }, { headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' } });
     }
     if (request.method !== 'GET' && request.method !== 'HEAD') {
