@@ -42,3 +42,29 @@ CREATE TABLE IF NOT EXISTS day7d_observations (
 );
 CREATE INDEX IF NOT EXISTS idx_day7d_observations_session
   ON day7d_observations(session_id);
+
+-- Permanent D1 backstop for overlapping browser/legacy submissions.
+-- The application owns normal idempotency. This trigger guarantees that a
+-- second write for the required unique key updates the canonical answer
+-- instead of returning HTTP 500 and breaking Shot → Sight → Path → Clinic.
+CREATE TRIGGER IF NOT EXISTS day7d_clinical_followups_collision_safe
+BEFORE INSERT ON clinical_followups
+WHEN EXISTS (
+  SELECT 1
+  FROM clinical_followups
+  WHERE session_id = NEW.session_id
+    AND product = NEW.product
+    AND question_id = NEW.question_id
+)
+BEGIN
+  UPDATE clinical_followups
+  SET current_stage = NEW.current_stage,
+      question_text = NEW.question_text,
+      answer = NEW.answer,
+      confidence_impact = NEW.confidence_impact,
+      updated_at = NEW.updated_at
+  WHERE session_id = NEW.session_id
+    AND product = NEW.product
+    AND question_id = NEW.question_id;
+  SELECT RAISE(IGNORE);
+END;
