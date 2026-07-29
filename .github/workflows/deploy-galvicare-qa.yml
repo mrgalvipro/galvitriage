@@ -56,44 +56,60 @@ jobs:
           echo "DAY7D_RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
           echo "Authoritative Day 7D E2E release fingerprint: $RELEASE_ID"
 
-      - name: Verify authoritative Day 7D P0 source without infrastructure expansion
+      - name: Verify authoritative Day 7D P0 source contract
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
-          test -f worker/worker.js
-          test -f worker/day7d-engine.js
-          test -f day7d-browser-customer-intelligence.js
-          test -f migrations/0006_day7d_customer_intelligence.sql
-          test -f scripts/day7d-preflight.mjs
-          test -f scripts/verify-qa-runtime.mjs
-          test -f tests/day7d-customer-intelligence.test.mjs
-          test -f tests/day7d-customer-path-contract.test.mjs
-          grep -q '"name": "galvicare-triage-intake"' wrangler.json
-          grep -q '"main": "worker/day7d-engine.js"' wrangler.json
-          grep -q '"binding": "DB"' wrangler.json
-          grep -q '"database_name": "galvivault-0-5-qa"' wrangler.json
-          grep -q "$DAY7D_RELEASE_CONTRACT" worker/day7d-engine.js
-          grep -q "$DAY7D_RULES_VERSION" worker/day7d-engine.js
-          grep -q "$DAY7D_QUESTION_VERSION" worker/day7d-engine.js
-          grep -q "$DAY7D_CONTENT_VERSION" worker/day7d-engine.js
-          grep -q 'async function atomicSave' worker/day7d-engine.js
-          grep -q 'async function storedResult' worker/day7d-engine.js
-          grep -q 'generation_source:'"'"'stored'"'"'' worker/day7d-engine.js
-          grep -q 'generation_source:'"'"'regenerated'"'"'' worker/day7d-engine.js
-          grep -q 'const impact=skipped?0' worker/day7d-engine.js
-          grep -q 'if(!isSkipped(x.answer)' worker/day7d-engine.js
-          grep -q 'approved_low_confidence_question_count:3' worker/day7d-engine.js
-          grep -q 'skip_does_not_inflate_confidence:true' worker/day7d-engine.js
-          grep -q 'evidence_version_cache:true' worker/day7d-engine.js
-          grep -q 'cumulative_clinic_brief:true' worker/day7d-engine.js
-          grep -q 'clinic_brief:' worker/day7d-engine.js
-          grep -q 'get_clinical_file' worker/day7d-engine.js
-          grep -q 'invokeLegacyWithResponse' day7d-browser-customer-intelligence.js
-          grep -q 'skipCurrentQuestion' day7d-browser-customer-intelligence.js
-          grep -q 'stopImmediatePropagation' day7d-browser-customer-intelligence.js
-          grep -q 'renderReadyStage(product,regenerated)' day7d-browser-customer-intelligence.js
-          echo 'PASS: authoritative Day 7D P0 source contract verified.'
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const requiredFiles=[
+            'worker/worker.js','worker/day7d-engine.js','day7d-browser-customer-intelligence.js',
+            'migrations/0006_day7d_customer_intelligence.sql','scripts/day7d-preflight.mjs',
+            'scripts/verify-qa-runtime.mjs','tests/day7d-customer-intelligence.test.mjs',
+            'tests/day7d-customer-path-contract.test.mjs','wrangler.json'
+          ];
+          const failures=[];
+          for(const path of requiredFiles) if(!fs.existsSync(path)) failures.push(`missing file: ${path}`);
+
+          if(process.env.GITHUB_REF_NAME!=='qa-revamped-galvicare-0-5') failures.push(`wrong branch: ${process.env.GITHUB_REF_NAME}`);
+
+          const wrangler=JSON.parse(fs.readFileSync('wrangler.json','utf8'));
+          if(wrangler.name!=='galvicare-triage-intake') failures.push(`wrong Worker name: ${wrangler.name}`);
+          if(wrangler.main!=='worker/day7d-engine.js') failures.push(`wrong Worker entrypoint: ${wrangler.main}`);
+          const db=(wrangler.d1_databases||[]).find(x=>x.binding==='DB');
+          if(!db) failures.push('missing DB binding');
+          else if(db.database_name!=='galvivault-0-5-qa') failures.push(`wrong QA D1: ${db.database_name}`);
+
+          const engine=fs.readFileSync('worker/day7d-engine.js','utf8');
+          const browser=fs.readFileSync('day7d-browser-customer-intelligence.js','utf8');
+          const requiredEngine=[
+            process.env.DAY7D_RELEASE_CONTRACT,
+            process.env.DAY7D_RULES_VERSION,
+            process.env.DAY7D_QUESTION_VERSION,
+            process.env.DAY7D_CONTENT_VERSION,
+            'async function atomicSave','async function storedResult',
+            "generation_source:'stored'","generation_source:'regenerated'",
+            'const impact=skipped?0','if(!isSkipped(x.answer)',
+            'approved_low_confidence_question_count:3','skip_does_not_inflate_confidence:true',
+            'evidence_version_cache:true','cumulative_clinic_brief:true',
+            'clinic_brief:','get_clinical_file'
+          ];
+          const requiredBrowser=[
+            'invokeLegacyWithResponse','skipCurrentQuestion','stopImmediatePropagation',
+            'renderReadyStage(product,regenerated)','save_galvishot_followup',
+            'save_galvisight_followup','save_galvipath_followup'
+          ];
+          for(const token of requiredEngine) if(!engine.includes(token)) failures.push(`Worker missing P0 token: ${token}`);
+          for(const token of requiredBrowser) if(!browser.includes(token)) failures.push(`Browser missing P0 token: ${token}`);
+
+          if(failures.length){
+            console.error('DAY 7D SOURCE CONTRACT: BLOCKED');
+            failures.forEach(x=>console.error(`- ${x}`));
+            process.exit(1);
+          }
+          console.log('PASS: authoritative Day 7D P0 source contract verified.');
+          NODE
 
       - name: Day 7D runtime preflight
         run: npm run day7d:preflight
