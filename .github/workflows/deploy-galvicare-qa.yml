@@ -30,7 +30,7 @@ env:
   QA_FRONTEND_URL: https://galvicare-0-5-qa.mrgalvipro.workers.dev
   DAY7D_RULES_VERSION: galviengine_customer_intelligence_v0_5_4
   DAY7D_QUESTION_VERSION: clinical_followups_v0_5_4
-  DAY7D_CONTENT_VERSION: galvicare_day7d_customer_intelligence_v0_5_5
+  DAY7D_CONTENT_VERSION: galvicare_day7d_customer_intelligence_v0_5_6
   DAY7D_RELEASE_CONTRACT: day7d_cumulative_customer_intelligence_v3
 
 jobs:
@@ -79,9 +79,9 @@ jobs:
             'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
             'Day 7D cumulative customer-intelligence browser adapter.',
             'galviscore-followup','save_galviscore_followup','get_or_generate_galviscore','renderUnlockedGalviScore',
-            'galvishot-followup-questions','save_galvishot_followup',
-            'galvisight-followup-questions','save_galvisight_followup',
-            'galvipath-followup-questions','save_galvipath_followup','galvipath-book-galviclinic',
+            'galvishot-followup-questions','save_galvishot-followup',
+            'galvisight-followup-questions','save_galvisight-followup',
+            'galvipath-followup-questions','save_galvipath-followup','galvipath-book-galviclinic',
             'skipCurrentQuestion','stopImmediatePropagation','MAX_VISIBLE_TARGETED_QUESTIONS=3',
             'https://galvicare-triage-intake.mrgalvipro.workers.dev',
             'G-V5ZPM5L19T','xswd8m446z','https://calendly.com/galvilpro/galviclinic-day7c-qa'
@@ -158,6 +158,10 @@ jobs:
             skip_does_not_inflate_confidence:true,
             evidence_version_cache:true,
             cumulative_clinic_brief:true,
+            prior_product_results_in_clinical_file:true,
+            bounded_multi_question_submit:true,
+            collision_safe_followup_save:true,
+            legacy_generation_bypass_closed:true,
             atomic_followup_save:true,
             server_selected_question_validation:true,
             save_returns_regenerated_result:true
@@ -190,9 +194,9 @@ jobs:
             'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
             'Day 7D cumulative customer-intelligence browser adapter.',
             'galviscore-followup','save_galviscore_followup','get_or_generate_galviscore',
-            'galvishot-followup-questions','save_galvishot_followup',
-            'galvisight-followup-questions','save_galvisight_followup',
-            'galvipath-followup-questions','save_galvipath_followup','galvipath-book-galviclinic',
+            'galvishot-followup-questions','save_galvishot-followup',
+            'galvisight-followup-questions','save_galvisight-followup',
+            'galvipath-followup-questions','save_galvipath-followup','galvipath-book-galviclinic',
             'MAX_VISIBLE_TARGETED_QUESTIONS=3','G-V5ZPM5L19T','xswd8m446z'
           ];
           const deadline=Date.now()+120000;
