@@ -18,7 +18,7 @@ function reconciliation(confidence,overrides={}){return{confidence,weakest_dimen
 test('Day 7D versions identify one cumulative authoritative release',()=>{
   assert.equal(DAY7D_RULES_VERSION,'galviengine_customer_intelligence_v0_5_4');
   assert.equal(DAY7D_QUESTION_VERSION,'clinical_followups_v0_5_4');
-  assert.equal(DAY7D_CONTENT_VERSION,'galvicare_day7d_customer_intelligence_v0_5_5');
+  assert.equal(DAY7D_CONTENT_VERSION,'galvicare_day7d_customer_intelligence_v0_5_6');
   assert.equal(DAY7D_RELEASE_CONTRACT,'day7d_cumulative_customer_intelligence_v3');
 });
 
