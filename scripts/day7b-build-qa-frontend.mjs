@@ -41,10 +41,14 @@ const day7dRequired = [
   'evidence_version_bumped',
   'installAuthoritativeStageRoutes',
   'invokeLegacyWithResponse',
-  'slice(0,3)'
+  'MAX_VISIBLE_TARGETED_QUESTIONS=3',
+  'slice(0,MAX_VISIBLE_TARGETED_QUESTIONS)'
 ];
 for (const contract of day7dRequired) {
   if (!day7dBrowser.includes(contract)) throw new Error(`Day 7D browser contract missing: ${contract}`);
+}
+if (day7dBrowser.includes('MAX_TARGETED_QUESTIONS_PER_STAGE=1')) {
+  throw new Error('Day 7D browser must not hard-code a universal one-question rule.');
 }
 
 html = html.replaceAll('G-KXJFKN7RTS', QA_GA4);
@@ -60,7 +64,7 @@ html = html.replace(
 
 const qaBanner = `\n<div id="galvicare-qa-environment-banner" role="status" style="position:sticky;top:0;z-index:99999;background:#7f1d1d;color:#fff;text-align:center;font:700 13px/1.3 Arial,sans-serif;padding:8px 12px;letter-spacing:.08em;">GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS</div>`;
 html = html.replace(/<body([^>]*)>/, `<body$1>${qaBanner}`);
-html = html.replace('</head>', `  <meta name="galvicare-environment" content="qa" />\n  <meta name="galvicare-qa-frontend" content="day7d-progressive-intelligence-v1" />\n</head>`);
+html = html.replace('</head>', `  <meta name="galvicare-environment" content="qa" />\n  <meta name="galvicare-qa-frontend" content="day7d-progressive-intelligence-v2" />\n</head>`);
 
 function removeEmbeddedAdapter(signature) {
   while (html.includes(signature)) {
@@ -81,7 +85,7 @@ if (adapterCount !== 1) throw new Error(`Generated QA frontend must contain exac
 if (html.includes(LEGACY_SIGNATURE)) throw new Error('Legacy Day 7D adapter marker survived the QA build.');
 if (html.includes("if(product==='GalviShot') return;")) throw new Error('Stale GalviShot adapter bypass survived the QA build.');
 
-for (const required of [QA_WORKER, QA_CUSTOMER_URL, TEST_STRIPE_MARKER, QA_GA4, QA_CLARITY, QA_CALENDLY, 'galvisight-followup-questions', 'galvipath-followup-questions', 'evidence_version_bumped', 'installAuthoritativeStageRoutes', 'invokeLegacyWithResponse']) {
+for (const required of [QA_WORKER, QA_CUSTOMER_URL, TEST_STRIPE_MARKER, QA_GA4, QA_CLARITY, QA_CALENDLY, 'galvisight-followup-questions', 'galvipath-followup-questions', 'evidence_version_bumped', 'installAuthoritativeStageRoutes', 'invokeLegacyWithResponse', 'MAX_VISIBLE_TARGETED_QUESTIONS=3']) {
   if (!html.includes(required)) throw new Error(`Generated QA frontend missing: ${required}`);
 }
 if (html.includes(PROD_WORKER)) throw new Error('Production Worker leaked into QA frontend.');
@@ -99,6 +103,7 @@ for (const link of liveLinks) {
 mkdirSync(OUT_DIR, { recursive: true });
 writeFileSync(OUT, html, 'utf8');
 console.log(`PASS — ${OUT} generated with exactly one authoritative Day 7D downstream controller.`);
+console.log('PASS — follow-up UI is bounded to three visible questions; the Worker determines the approved 0–3 count.');
 console.log(`QA URL: ${QA_CUSTOMER_URL}`);
 console.log(`QA API: ${QA_WORKER}/api`);
 console.log(`QA Calendly: ${QA_CALENDLY}`);
