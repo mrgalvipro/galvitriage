@@ -65,7 +65,9 @@ jobs:
           grep -q 'save_galvisight_followup' "$DAY7D_API_ENTRY"
           grep -q 'save_galvipath_followup' "$DAY7D_API_ENTRY"
           grep -q 'evidence_version_bumped' "$DAY7D_API_ENTRY"
-          grep -q 'slice(0,3)' "$DAY7D_BROWSER_ENTRY"
+          grep -q 'MAX_VISIBLE_TARGETED_QUESTIONS=3' "$DAY7D_BROWSER_ENTRY"
+          grep -q 'slice(0,MAX_VISIBLE_TARGETED_QUESTIONS)' "$DAY7D_BROWSER_ENTRY"
+          ! grep -q 'MAX_TARGETED_QUESTIONS_PER_STAGE=1' "$DAY7D_BROWSER_ENTRY"
           grep -q 'installAuthoritativeStageRoutes' "$DAY7D_BROWSER_ENTRY"
           grep -q 'invokeLegacyWithResponse' "$DAY7D_BROWSER_ENTRY"
           grep -q 'GalviShot' "$DAY7D_BROWSER_ENTRY"
@@ -94,6 +96,7 @@ jobs:
           grep -q 'galvisight-followup-questions' dist-qa/index.html
           grep -q 'galvipath-followup-questions' dist-qa/index.html
           grep -q 'evidence_version_bumped' dist-qa/index.html
+          grep -q 'MAX_VISIBLE_TARGETED_QUESTIONS=3' dist-qa/index.html
           grep -q 'G-V5ZPM5L19T' dist-qa/index.html
           grep -q 'xswd8m446z' dist-qa/index.html
           ! grep -q 'G-KXJFKN7RTS' dist-qa/index.html
@@ -137,6 +140,7 @@ jobs:
           grep -q 'galvisight-followup-questions' /tmp/qa-index.html
           grep -q 'galvipath-followup-questions' /tmp/qa-index.html
           grep -q 'evidence_version_bumped' /tmp/qa-index.html
+          grep -q 'MAX_VISIBLE_TARGETED_QUESTIONS=3' /tmp/qa-index.html
           grep -q 'G-V5ZPM5L19T' /tmp/qa-index.html
           grep -q 'xswd8m446z' /tmp/qa-index.html
           curl --fail --silent --show-error --retry 8 --retry-delay 3 "$QA_BACKEND_URL/health" -o /tmp/qa-health.json
@@ -153,7 +157,7 @@ jobs:
           echo '- Source mutation from CI: DISABLED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Authoritative API: worker/day7d-engine.js' >> "$GITHUB_STEP_SUMMARY"
           echo '- Authoritative browser adapter: day7d-browser-customer-intelligence.js' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Maximum targeted questions per stage: 3' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Follow-up behavior: Worker-selected 0–3; browser bounded to 3 visible questions' >> "$GITHUB_STEP_SUMMARY"
           echo '- Atomic/idempotent follow-up persistence: VERIFIED' >> "$GITHUB_STEP_SUMMARY"
           echo '- GalviShot enrichment path: VERIFIED' >> "$GITHUB_STEP_SUMMARY"
           echo '- GalviSight enrichment path: VERIFIED' >> "$GITHUB_STEP_SUMMARY"
