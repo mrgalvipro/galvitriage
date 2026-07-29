@@ -91,7 +91,7 @@ test('browser renders Worker-selected questions and prevents legacy bypass',()=>
     'save_galviscore_followup','save_galvishot_followup','save_galvisight_followup','save_galvipath_followup',
     'skipCurrentQuestion','SKIPPED_ANSWER','stopImmediatePropagation','installAuthoritativeStageRoutes','invokeLegacyWithResponse'
   ])has(browser,token,'cumulative browser contract');
-  has(browser,'completeCurrentQuestion(product,true)','skip invokes authoritative completion');
+  has(browser,'completeVisibleQuestions(product,true)','skip invokes authoritative completion');
   has(browser,"savedStatus==='needs_followup'",'remaining-question advancement');
   has(browser,"document.addEventListener('DOMContentLoaded',initialize)",'refresh initialization');
   has(browser,"if(document.readyState!=='loading')queueMicrotask(initialize)",'already-loaded restoration');
