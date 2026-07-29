@@ -2,6 +2,7 @@
    Browser renders Worker-owned follow-ups and regenerated results only. */
 (function(){
   'use strict';
+
   const STAGES={
     GalviScore:{host:'galviscore-followup',followup:'galviscore-followup',questions:'followup-question-container',submit:'submit-followup',skip:'skip-galviscore-followup',status:'galviscore-followup-status',error:'galviscore-error',save:'save_galviscore_followup',get:'get_or_generate_galviscore'},
     GalviShot:{host:'galvishot-paywall',followup:'galvishot-followup',questions:'galvishot-followup-questions',submit:'submit-galvishot-followup',skip:'skip-galvishot-followup',status:'galvishot-followup-status',error:'galvishot-paywall-error',save:'save_galvishot_followup',get:'get_or_create_galvishot'},
@@ -11,21 +12,191 @@
   const MAX_VISIBLE_TARGETED_QUESTIONS=3;
   const SKIPPED_ANSWER='Skipped for now — no additional evidence supplied.';
   const queues={GalviScore:[],GalviShot:[],GalviSight:[],GalviPath:[]};
+  const inFlight={GalviScore:null,GalviShot:null,GalviSight:null,GalviPath:null};
+  const scoreBaseline={value:null};
   const el=id=>document.getElementById(id);
   const session=()=>typeof getStoredSessionId==='function'?getStoredSessionId():(localStorage.getItem('galvicare_session_id')||localStorage.getItem('galvishot_session_id')||'');
   const endpoint=()=>typeof GALVICARE_API_ENDPOINT!=='undefined'?GALVICARE_API_ENDPOINT:`${GALVICARE_INTAKE_ENDPOINT}/api`;
-  async function call(action,payload={}){if(typeof callGalviCareApi==='function')return callGalviCareApi({action,session_id:session(),payload});const response=await fetch(endpoint(),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action,session_id:session(),payload})});const body=await response.json();if(!response.ok||body?.success===false)throw new Error(body?.detail||body?.message||`GalviCare request failed (${response.status})`);return body;}
-  function ensureStageUi(product){const cfg=STAGES[product];if(product==='GalviScore'){const panel=el(cfg.followup),questions=el(cfg.questions),submit=el(cfg.submit);if(!panel||!questions||!submit)return null;let status=el(cfg.status);if(!status){status=document.createElement('p');status.id=cfg.status;status.setAttribute('aria-live','polite');submit.closest('.button-row')?.after(status);}if(!el(cfg.skip)){const skip=document.createElement('button');skip.id=cfg.skip;skip.className='secondary-button';skip.type='button';skip.textContent='Skip for Now';submit.closest('.button-row')?.appendChild(skip);}return panel;}const host=el(cfg.host);if(!host)return null;let panel=el(cfg.followup);if(!panel){panel=document.createElement('div');panel.id=cfg.followup;panel.className='gshot-followup hidden';host.insertBefore(panel,host.lastChild);}if(!el(cfg.questions))panel.innerHTML=`<p class="eyebrow">GALVIENGINE CUSTOMER INTELLIGENCE</p><h3>A few details will help sharpen your ${product} result.</h3><div id="${cfg.questions}"></div><div class="button-row"><button id="${cfg.submit}" class="primary-btn" type="button">Save Answer & Continue</button><button id="${cfg.skip}" class="secondary-button" type="button">Skip for Now</button></div><p id="${cfg.status}" aria-live="polite"></p>`;return panel;}
+  const objectiveScore=value=>{
+    const result=value?.result||value?.data||value||{};
+    const candidates=[result.galviscore_score,result.score,result.overall_score,result.total_score];
+    const found=candidates.find(candidate=>Number.isFinite(Number(candidate)));
+    return found===undefined?null:Number(found);
+  };
+
+  async function call(action,payload={}){
+    const sid=session();
+    if(!sid)throw new Error('GalviCare session is unavailable. Refresh and resume the same QA journey.');
+    if(typeof callGalviCareApi==='function')return callGalviCareApi({action,session_id:sid,payload});
+    const response=await fetch(endpoint(),{method:'POST',headers:{'Content-Type':'application/json','Cache-Control':'no-cache'},body:JSON.stringify({action,session_id:sid,payload})});
+    const body=await response.json();
+    if(!response.ok||body?.success===false)throw new Error(body?.detail||body?.message||`GalviCare request failed (${response.status})`);
+    return body;
+  }
+
+  function ensureStageUi(product){
+    const cfg=STAGES[product];
+    if(product==='GalviScore'){
+      const panel=el(cfg.followup),questions=el(cfg.questions),submit=el(cfg.submit);
+      if(!panel||!questions||!submit)return null;
+      let status=el(cfg.status);
+      if(!status){status=document.createElement('p');status.id=cfg.status;status.setAttribute('aria-live','polite');submit.closest('.button-row')?.after(status);}
+      if(!el(cfg.skip)){const skip=document.createElement('button');skip.id=cfg.skip;skip.className='secondary-button';skip.type='button';skip.textContent='Skip for Now';submit.closest('.button-row')?.appendChild(skip);}
+      return panel;
+    }
+    const host=el(cfg.host);
+    if(!host)return null;
+    let panel=el(cfg.followup);
+    if(!panel){panel=document.createElement('div');panel.id=cfg.followup;panel.className='gshot-followup hidden';host.insertBefore(panel,host.lastChild);}
+    if(!el(cfg.questions))panel.innerHTML=`<p class="eyebrow">GALVIENGINE CUSTOMER INTELLIGENCE</p><h3>A few details will help sharpen your ${product} result.</h3><div id="${cfg.questions}"></div><div class="button-row"><button id="${cfg.submit}" class="primary-btn" type="button">Save Answers & Continue</button><button id="${cfg.skip}" class="secondary-button" type="button">Skip for Now</button></div><p id="${cfg.status}" aria-live="polite"></p>`;
+    return panel;
+  }
+
   const questionsFrom=response=>response?.followup_questions||response?.followups||response?.evaluation?.followup_questions||response?.evaluation?.followups||[];
-  function renderCurrentQuestion(product){const cfg=STAGES[product],panel=ensureStageUi(product),host=el(cfg.questions),question=queues[product][0];if(!panel||!host)return false;host.innerHTML='';if(!question){panel.classList.add('hidden');return false;}const label=document.createElement('label');label.htmlFor=`${cfg.questions}-0`;label.textContent=question.question_text||question.question;const textarea=document.createElement('textarea');textarea.id=label.htmlFor;textarea.dataset.questionCode=question.question_id||question.question_code||'';textarea.dataset.questionText=question.question_text||question.question||'';textarea.dataset.confidenceImpact=String(question.confidence_impact||5);host.append(label,textarea);panel.classList.remove('hidden');return true;}
-  function renderQuestions(product,response){queues[product]=questionsFrom(response).slice(0,MAX_VISIBLE_TARGETED_QUESTIONS);return renderCurrentQuestion(product);}
-  function exposeFollowupStage(product,response){const cfg=STAGES[product];if(product==='GalviScore'){if(typeof hideGalviScoreScreens==='function')hideGalviScoreScreens();el(cfg.host)?.classList.remove('hidden');}else{if(typeof hideUpstream==='function')hideUpstream();const host=el(cfg.host);if(host){host.classList.remove('hidden');host.style.display='block';}}renderQuestions(product,response);el(cfg.followup)?.scrollIntoView({behavior:'smooth',block:'start'});return true;}
-  async function invokeLegacyWithResponse(action,response,renderer,options={}){if(typeof renderer!=='function')return false;const original=window.callGalviCareApi;let consumed=false;window.callGalviCareApi=async request=>{if(!consumed&&String(request?.action||'')===action){consumed=true;return response;}return original(request);};try{return await renderer(options);}finally{window.callGalviCareApi=original;}}
-  async function renderReadyStage(product,response){if(product==='GalviScore'){const result=response?.result||response?.data||response;if(typeof cacheGalviScoreResult==='function')cacheGalviScoreResult(result);if(typeof renderUnlockedGalviScore==='function'){renderUnlockedGalviScore(result);return true;}}if(product==='GalviShot'){if(response?.result&&typeof window.GalviCareDay7DRenderShotResult==='function')return window.GalviCareDay7DRenderShotResult(response.result);return invokeLegacyWithResponse(STAGES.GalviShot.get,response,window.__galviLegacyShowGalviShotResult);}if(product==='GalviSight')return invokeLegacyWithResponse(STAGES.GalviSight.get,response,window.__galviLegacyShowGalviSight);if(product==='GalviPath')return invokeLegacyWithResponse(STAGES.GalviPath.get,response,window.__galviLegacyShowGalviPath);return false;}
-  async function completeCurrentQuestion(product,skip=false){const cfg=STAGES[product],field=el(cfg.questions)?.querySelector('textarea'),question=queues[product][0],status=el(cfg.status);if(!field||!question)return;const answer=skip?SKIPPED_ANSWER:field.value.trim();if(!answer){field.focus();return;}const saved=await call(cfg.save,{answers:[{question_id:field.dataset.questionCode,question_text:field.dataset.questionText,answer,skipped:skip,confidence_impact:skip?0:Number(field.dataset.confidenceImpact||5)}]});const savedStatus=String(saved.status||saved.evaluation?.status||'').toLowerCase();if(savedStatus==='needs_followup'){renderQuestions(product,saved.evaluation||saved);return true;}const regenerated=(saved.result||saved.data)?saved:await call(cfg.get,{});if(String(regenerated.status||'').toLowerCase()==='needs_followup')return exposeFollowupStage(product,regenerated);el(cfg.followup)?.classList.add('hidden');if(status)status.textContent='Evidence saved. Rendering your enriched result…';const rendered=await renderReadyStage(product,regenerated);if(rendered===false)throw new Error(`${product} result renderer did not complete.`);return true;}
-  function bind(product){const cfg=STAGES[product];ensureStageUi(product);const submit=el(cfg.submit),skip=el(cfg.skip);if(submit&&submit.dataset.day7dAuthoritative!=='1'){submit.dataset.day7dAuthoritative='1';submit.addEventListener('click',async event=>{event.preventDefault();event.stopImmediatePropagation();if(submit.dataset.day7dSaving==='1')return;submit.dataset.day7dSaving='1';submit.disabled=true;try{await completeCurrentQuestion(product,false);}catch(error){const status=el(cfg.status);if(status)status.textContent=error.message;}finally{submit.dataset.day7dSaving='0';submit.disabled=false;}},true);}if(skip&&skip.dataset.day7dAuthoritative!=='1'){skip.dataset.day7dAuthoritative='1';skip.addEventListener('click',async event=>{event.preventDefault();event.stopImmediatePropagation();try{await completeCurrentQuestion(product,true);}catch(error){const status=el(cfg.status);if(status)status.textContent=error.message;}},true);}}
-  function installAuthoritativeStageRoutes(){if(typeof window.routeByGalviScoreConfidence==='function'&&!window.__galviLegacyRouteByGalviScoreConfidence){window.__galviLegacyRouteByGalviScoreConfidence=window.routeByGalviScoreConfidence;window.routeByGalviScoreConfidence=async scoreResult=>{if(typeof cacheGalviScoreResult==='function')cacheGalviScoreResult(scoreResult);const response=await call(STAGES.GalviScore.get,{});if(String(response.status||'').toLowerCase()==='needs_followup')return exposeFollowupStage('GalviScore',response);await renderReadyStage('GalviScore',response);return'result';};}if(typeof window.showIntegratedGalviShotResult==='function'&&!window.__galviLegacyShowGalviShotResult){window.__galviLegacyShowGalviShotResult=window.showIntegratedGalviShotResult;window.showIntegratedGalviShotResult=async()=>{const response=await call(STAGES.GalviShot.get,{});return String(response.status||'').toLowerCase()==='needs_followup'?exposeFollowupStage('GalviShot',response):renderReadyStage('GalviShot',response);};}if(typeof window.showGalviSight==='function'&&!window.__galviLegacyShowGalviSight){window.__galviLegacyShowGalviSight=window.showGalviSight;window.showGalviSight=async()=>{const response=await call(STAGES.GalviSight.get,{});return String(response.status||'').toLowerCase()==='needs_followup'?exposeFollowupStage('GalviSight',response):renderReadyStage('GalviSight',response);};}if(typeof window.showGalviPath==='function'&&!window.__galviLegacyShowGalviPath){window.__galviLegacyShowGalviPath=window.showGalviPath;window.showGalviPath=async()=>{const response=await call(STAGES.GalviPath.get,{});return String(response.status||'').toLowerCase()==='needs_followup'?exposeFollowupStage('GalviPath',response):renderReadyStage('GalviPath',response);};}}
+
+  function renderQuestions(product,response){
+    const cfg=STAGES[product],panel=ensureStageUi(product),host=el(cfg.questions);
+    if(!panel||!host)return false;
+    queues[product]=questionsFrom(response).slice(0,MAX_VISIBLE_TARGETED_QUESTIONS);
+    host.innerHTML='';
+    if(!queues[product].length){panel.classList.add('hidden');return false;}
+    queues[product].forEach((question,index)=>{
+      const wrapper=document.createElement('div');wrapper.className='day7d-targeted-question';
+      const label=document.createElement('label');label.htmlFor=`${cfg.questions}-${index}`;label.textContent=question.question_text||question.question;
+      const textarea=document.createElement('textarea');textarea.id=label.htmlFor;textarea.required=true;textarea.dataset.questionCode=question.question_id||question.question_code||'';textarea.dataset.questionText=question.question_text||question.question||'';textarea.dataset.confidenceImpact=String(question.confidence_impact||5);textarea.dataset.day7dAuthoritative='1';
+      wrapper.append(label,textarea);host.append(wrapper);
+    });
+    panel.classList.remove('hidden');
+    return true;
+  }
+
+  function exposeFollowupStage(product,response){
+    const cfg=STAGES[product];
+    if(product==='GalviScore'){if(typeof hideGalviScoreScreens==='function')hideGalviScoreScreens();el(cfg.host)?.classList.remove('hidden');}
+    else{if(typeof hideUpstream==='function')hideUpstream();const host=el(cfg.host);if(host){host.classList.remove('hidden');host.style.display='block';}}
+    renderQuestions(product,response);el(cfg.followup)?.scrollIntoView({behavior:'smooth',block:'start'});return true;
+  }
+
+  async function invokeLegacyWithResponse(action,response,renderer,options={}){
+    if(typeof renderer!=='function')return false;
+    const original=window.callGalviCareApi;
+    let consumed=false;
+    window.callGalviCareApi=async request=>{
+      if(!consumed&&String(request?.action||'')===action){consumed=true;return response;}
+      if(typeof original==='function')return original(request);
+      throw new Error(`Unexpected legacy API request during authoritative ${action} render.`);
+    };
+    try{return await renderer(options);}finally{window.callGalviCareApi=original;}
+  }
+
+  function assertImmutableGalviScore(response){
+    const regenerated=objectiveScore(response);
+    if(scoreBaseline.value!==null&&regenerated!==null&&regenerated!==scoreBaseline.value){
+      throw new Error(`GalviScore objective score changed from ${scoreBaseline.value} to ${regenerated} during clarification.`);
+    }
+    if(regenerated!==null)scoreBaseline.value=regenerated;
+  }
+
+  async function renderReadyStage(product,response){
+    if(product==='GalviScore'){
+      assertImmutableGalviScore(response);
+      const result=response?.result||response?.data||response;
+      if(typeof cacheGalviScoreResult==='function')cacheGalviScoreResult(result);
+      if(typeof renderUnlockedGalviScore==='function'){renderUnlockedGalviScore(result);return true;}
+    }
+    if(product==='GalviShot'){
+      if(response?.result&&typeof window.GalviCareDay7DRenderShotResult==='function')return window.GalviCareDay7DRenderShotResult(response.result);
+      return invokeLegacyWithResponse(STAGES.GalviShot.get,response,window.__galviLegacyShowGalviShotResult);
+    }
+    if(product==='GalviSight')return invokeLegacyWithResponse(STAGES.GalviSight.get,response,window.__galviLegacyShowGalviSight);
+    if(product==='GalviPath')return invokeLegacyWithResponse(STAGES.GalviPath.get,response,window.__galviLegacyShowGalviPath);
+    return false;
+  }
+
+  function collectAnswers(product,skip){
+    const cfg=STAGES[product],fields=[...(el(cfg.questions)?.querySelectorAll('textarea[data-day7d-authoritative="1"]')||[])];
+    if(!fields.length)throw new Error(`${product} follow-up questions are unavailable.`);
+    const answers=fields.map(field=>{
+      const answer=skip?SKIPPED_ANSWER:field.value.trim();
+      if(!answer){field.focus();throw new Error('Please answer every visible question or choose Skip for Now.');}
+      return{question_id:field.dataset.questionCode,question_text:field.dataset.questionText,answer,skipped:skip,confidence_impact:skip?0:Number(field.dataset.confidenceImpact||5)};
+    });
+    return answers.slice(0,MAX_VISIBLE_TARGETED_QUESTIONS);
+  }
+
+  function setBusy(product,busy){
+    const cfg=STAGES[product];
+    for(const control of [el(cfg.submit),el(cfg.skip)])if(control){control.disabled=busy;control.setAttribute('aria-busy',busy?'true':'false');}
+  }
+
+  async function completeVisibleQuestions(product,skip=false){
+    if(inFlight[product])return inFlight[product];
+    const operation=(async()=>{
+      const cfg=STAGES[product],status=el(cfg.status),answers=collectAnswers(product,skip);
+      setBusy(product,true);
+      if(status)status.textContent='Saving evidence…';
+      const saved=await call(cfg.save,{answers,submission_id:`${session()}:${product}:${answers.map(item=>item.question_id).join(',')}`});
+      const savedStatus=String(saved.status||saved.evaluation?.status||'').toLowerCase();
+      if(savedStatus==='needs_followup'){renderQuestions(product,saved.evaluation||saved);if(status)status.textContent='Evidence saved. Continue with the next targeted question.';return true;}
+      const regenerated=(saved.result||saved.data)?saved:await call(cfg.get,{});
+      if(String(regenerated.status||'').toLowerCase()==='needs_followup')return exposeFollowupStage(product,regenerated);
+      el(cfg.followup)?.classList.add('hidden');
+      if(status)status.textContent='Evidence saved. Rendering your enriched result…';
+      const rendered=await renderReadyStage(product,regenerated);
+      if(rendered===false)throw new Error(`${product} result renderer did not complete.`);
+      return true;
+    })();
+    inFlight[product]=operation;
+    try{return await operation;}finally{inFlight[product]=null;setBusy(product,false);}
+  }
+
+  function ownsEvent(product,event){
+    const cfg=STAGES[product],target=event.target;
+    return target===el(cfg.submit)||target===el(cfg.skip)||target?.closest?.(`#${cfg.followup}`);
+  }
+
+  function suppressLegacyFormSubmit(product){
+    const cfg=STAGES[product],panel=el(cfg.followup),form=panel?.closest('form');
+    if(!form||form.dataset.day7dAuthoritativeSubmit==='1')return;
+    form.dataset.day7dAuthoritativeSubmit='1';
+    form.addEventListener('submit',event=>{if(ownsEvent(product,event)){event.preventDefault();event.stopImmediatePropagation();}},true);
+  }
+
+  function bind(product){
+    const cfg=STAGES[product];ensureStageUi(product);suppressLegacyFormSubmit(product);
+    const submit=el(cfg.submit),skip=el(cfg.skip);
+    if(submit&&submit.dataset.day7dAuthoritative!=='1'){
+      submit.dataset.day7dAuthoritative='1';submit.type='button';
+      submit.addEventListener('click',async event=>{event.preventDefault();event.stopImmediatePropagation();try{await completeVisibleQuestions(product,false);}catch(error){const status=el(cfg.status);if(status)status.textContent=error.message;}},true);
+    }
+    if(skip&&skip.dataset.day7dAuthoritative!=='1'){
+      skip.dataset.day7dAuthoritative='1';skip.type='button';
+      skip.addEventListener('click',async event=>{event.preventDefault();event.stopImmediatePropagation();try{await completeVisibleQuestions(product,true);}catch(error){const status=el(cfg.status);if(status)status.textContent=error.message;}},true);
+    }
+  }
+
+  function installAuthoritativeStageRoutes(){
+    if(typeof window.routeByGalviScoreConfidence==='function'&&!window.__galviLegacyRouteByGalviScoreConfidence){
+      window.__galviLegacyRouteByGalviScoreConfidence=window.routeByGalviScoreConfidence;
+      window.routeByGalviScoreConfidence=async scoreResult=>{
+        scoreBaseline.value=objectiveScore(scoreResult);
+        if(typeof cacheGalviScoreResult==='function')cacheGalviScoreResult(scoreResult);
+        const response=await call(STAGES.GalviScore.get,{});
+        if(String(response.status||'').toLowerCase()==='needs_followup')return exposeFollowupStage('GalviScore',response);
+        await renderReadyStage('GalviScore',response);return'result';
+      };
+    }
+    if(typeof window.showIntegratedGalviShotResult==='function'&&!window.__galviLegacyShowGalviShotResult){
+      window.__galviLegacyShowGalviShotResult=window.showIntegratedGalviShotResult;
+      window.showIntegratedGalviShotResult=async()=>{const response=await call(STAGES.GalviShot.get,{});return String(response.status||'').toLowerCase()==='needs_followup'?exposeFollowupStage('GalviShot',response):renderReadyStage('GalviShot',response);};
+    }
+    if(typeof window.showGalviSight==='function'&&!window.__galviLegacyShowGalviSight){window.__galviLegacyShowGalviSight=window.showGalviSight;window.showGalviSight=async()=>{const response=await call(STAGES.GalviSight.get,{});return String(response.status||'').toLowerCase()==='needs_followup'?exposeFollowupStage('GalviSight',response):renderReadyStage('GalviSight',response);};}
+    if(typeof window.showGalviPath==='function'&&!window.__galviLegacyShowGalviPath){window.__galviLegacyShowGalviPath=window.showGalviPath;window.showGalviPath=async()=>{const response=await call(STAGES.GalviPath.get,{});return String(response.status||'').toLowerCase()==='needs_followup'?exposeFollowupStage('GalviPath',response):renderReadyStage('GalviPath',response);};}
+  }
+
   function initialize(){Object.keys(STAGES).forEach(bind);installAuthoritativeStageRoutes();}
-  document.addEventListener('DOMContentLoaded',initialize);if(document.readyState!=='loading')queueMicrotask(initialize);const routeInstaller=setInterval(initialize,50);setTimeout(()=>clearInterval(routeInstaller),5000);
-  window.GalviCareDay7D={renderQuestions,saveAnswers:product=>completeCurrentQuestion(product,false),skipCurrentQuestion:product=>completeCurrentQuestion(product,true),ensureStageUi,exposeFollowupStage,renderReadyStage,installAuthoritativeStageRoutes};
+  document.addEventListener('DOMContentLoaded',initialize);
+  if(document.readyState!=='loading')queueMicrotask(initialize);
+  const routeInstaller=setInterval(initialize,50);setTimeout(()=>clearInterval(routeInstaller),5000);
+  window.GalviCareDay7D={renderQuestions,saveAnswers:product=>completeVisibleQuestions(product,false),skipCurrentQuestion:product=>completeVisibleQuestions(product,true),ensureStageUi,exposeFollowupStage,renderReadyStage,installAuthoritativeStageRoutes,assertImmutableGalviScore};
 })();
