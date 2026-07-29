@@ -137,7 +137,7 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4"
           packageManager: npm
-          command: deploy --config wrangler.qa-frontend.jsonc
+          command: deploy --config wrangler.qa-frontend.jsonc --var DAY7D_FRONTEND_RELEASE_ID:${{ env.DAY7D_RELEASE_ID }}
 
       - name: Verify deployed Worker P0 convergence
         shell: bash
@@ -199,21 +199,27 @@ jobs:
             'galvipath-followup-questions','save_galvipath_followup','galvipath-book-galviclinic',
             'MAX_VISIBLE_TARGETED_QUESTIONS=3','G-V5ZPM5L19T','xswd8m446z'
           ];
-          const deadline=Date.now()+120000;
-          let last=null;
+          const expectedRelease=process.env.DAY7D_RELEASE_ID;
+          const deadline=Date.now()+180000;
+          let consecutive=0,last=null;
           while(Date.now()<deadline){
             try{
+              const healthResponse=await fetch(`${process.env.QA_FRONTEND_URL}/health?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
+              const health=await healthResponse.json();
               const response=await fetch(`${process.env.QA_FRONTEND_URL}/?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
               const html=await response.text();
               const missing=required.filter(token=>!html.includes(token));
               const count=html.split('Day 7D cumulative customer-intelligence browser adapter.').length-1;
-              last={status:response.status,missing,count};
-              if(response.ok&&missing.length===0&&count===1){console.log('PASS: deployed QA frontend matches the cumulative Worker contract.');process.exit(0);}
-              console.log(`Frontend pending: HTTP ${response.status}; missing=${missing.join(', ')}; adapter_count=${count}`);
-            }catch(error){last={error:String(error?.message||error)};}
+              const releaseMatches=healthResponse.ok&&health?.success===true&&health?.release_id===expectedRelease;
+              const valid=response.ok&&missing.length===0&&count===1&&releaseMatches;
+              last={status:response.status,health_status:healthResponse.status,release_id:health?.release_id,expected_release_id:expectedRelease,missing,count};
+              consecutive=valid?consecutive+1:0;
+              console.log(`Frontend convergence ${consecutive}/3: HTTP ${response.status}; health=${healthResponse.status}; release_match=${releaseMatches}; missing=${missing.join(', ')}; adapter_count=${count}`);
+              if(consecutive>=3){console.log('PASS: deployed QA frontend fingerprint and cumulative Worker contract match the exact candidate.');process.exit(0);}
+            }catch(error){last={error:String(error?.message||error)};consecutive=0;}
             await new Promise(resolve=>setTimeout(resolve,3000));
           }
-          throw new Error(`QA frontend did not converge: ${JSON.stringify(last)}`);
+          throw new Error(`QA frontend did not converge to exact release: ${JSON.stringify(last)}`);
           NODE
 
       - name: Verify preserved Day 1–7C runtime foundation
