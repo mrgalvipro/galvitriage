@@ -79,9 +79,9 @@ jobs:
             'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
             'Day 7D cumulative customer-intelligence browser adapter.',
             'galviscore-followup','save_galviscore_followup','get_or_generate_galviscore','renderUnlockedGalviScore',
-            'galvishot-followup-questions','save_galvishot-followup',
-            'galvisight-followup-questions','save_galvisight-followup',
-            'galvipath-followup-questions','save_galvipath-followup','galvipath-book-galviclinic',
+            'galvishot-followup-questions','save_galvishot_followup',
+            'galvisight-followup-questions','save_galvisight_followup',
+            'galvipath-followup-questions','save_galvipath_followup','galvipath-book-galviclinic',
             'skipCurrentQuestion','stopImmediatePropagation','MAX_VISIBLE_TARGETED_QUESTIONS=3',
             'https://galvicare-triage-intake.mrgalvipro.workers.dev',
             'G-V5ZPM5L19T','xswd8m446z','https://calendly.com/galvilpro/galviclinic-day7c-qa'
@@ -194,9 +194,9 @@ jobs:
             'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
             'Day 7D cumulative customer-intelligence browser adapter.',
             'galviscore-followup','save_galviscore_followup','get_or_generate_galviscore',
-            'galvishot-followup-questions','save_galvishot-followup',
-            'galvisight-followup-questions','save_galvisight-followup',
-            'galvipath-followup-questions','save_galvipath-followup','galvipath-book-galviclinic',
+            'galvishot-followup-questions','save_galvishot_followup',
+            'galvisight-followup-questions','save_galvisight_followup',
+            'galvipath-followup-questions','save_galvipath_followup','galvipath-book-galviclinic',
             'MAX_VISIBLE_TARGETED_QUESTIONS=3','G-V5ZPM5L19T','xswd8m446z'
           ];
           const deadline=Date.now()+120000;
