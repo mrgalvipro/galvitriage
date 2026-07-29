@@ -26,12 +26,14 @@ test('Day 7A Worker remains the QA/build source without product-logic rewrite', 
   ]);
 });
 
-test('Production has a separate runtime entrypoint with the locked Day 7B fingerprint', () => {
+test('Production has a separate security boundary around the approved Day 7D runtime', () => {
   expectIncludes(prodWrangler, ['"main": "worker/production-entry.js"']);
   expectIncludes(prodEntry, [
-    "import day7aWorker from './worker.js'",
-    "DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v1'"
+    "import day7dWorker from './day7d-engine.js'",
+    "DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v1'",
+    "DAY7D_PRODUCTION_MARKER = 'day7d-cumulative-customer-intelligence-v1'"
   ]);
+  expectExcludes(prodEntry, ["import day7aWorker from './worker.js'"]);
 });
 
 test('QA and Production Worker services are distinct', () => {
@@ -68,13 +70,14 @@ test('QA-only fixture and override capabilities are denied by Production boundar
   ]);
 });
 
-test('Production health fingerprint identifies RUN lane, Production GalviVault, DB binding and Stripe mode', () => {
+test('Production health fingerprint identifies RUN lane, Production GalviVault, DB binding, Stripe mode and Day 7D runtime', () => {
   expectIncludes(prodEntry, [
     "environment:'production'",
     "galvivault:'galvivault-0-5-production'",
     "release_branch:'qa-revamped-galvicare-0-5'",
     'db_bound:Boolean(env?.DB)',
-    'stripe_mode:stripeMode(env)'
+    'stripe_mode:stripeMode(env)',
+    'day7d_runtime_marker:DAY7D_PRODUCTION_MARKER'
   ]);
 });
 
