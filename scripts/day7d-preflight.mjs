@@ -3,7 +3,7 @@ import fs from 'node:fs';
 const CONTRACT={
   rules:'galviengine_customer_intelligence_v0_5_4',
   questions:'clinical_followups_v0_5_4',
-  content:'galvicare_day7d_customer_intelligence_v0_5_5',
+  content:'galvicare_day7d_customer_intelligence_v0_5_6',
   release:'day7d_cumulative_customer_intelligence_v3'
 };
 const requiredFiles=[
@@ -45,6 +45,7 @@ for(const token of [
   'day7d_context_evidence','clinical_evidence_versions','GalviScore:{','save_galviscore_followup','get_or_generate_galviscore',
   'objective_score_unchanged_by_clarification:true','galviscore_clarification_server_owned:true','objective_score_immutable:true',
   'progressive_followups:true','dynamic_question_count:true','approved_low_confidence_question_count:3',
+  'prior_product_results_in_clinical_file:true','bounded_multi_question_submit:true','collision_safe_followup_save:true','legacy_generation_bypass_closed:true',
   'atomic_followup_save:true','server_selected_question_validation:true','save_returns_regenerated_result:true',
   "entrypoint:'worker/day7d-engine.js'","status:'needs_followup'",'evidence_version_bumped:after>before','clinic_brief:'
 ]) if(!engine.includes(token)) failures.push(`worker/day7d-engine.js missing required contract token: ${token}`);
@@ -71,6 +72,7 @@ console.log(JSON.stringify({
   status:'PASS',environment:'qa',api_worker:wrangler.name,frontend_worker:frontend.name,entrypoint:wrangler.main,binding:'DB',database:db.database_name,
   runtime_schema_adapter:'day7d_dedicated_tables_v1',release_contract:CONTRACT.release,rules_version:CONTRACT.rules,question_version:CONTRACT.questions,content_version:CONTRACT.content,
   galviscore_clarification_server_owned:true,objective_score_immutable:true,progressive_followups:true,dynamic_question_count:true,approved_low_confidence_question_count:3,
+  prior_product_results_in_clinical_file:true,bounded_multi_question_submit:true,collision_safe_followup_save:true,legacy_generation_bypass_closed:true,
   atomic_followup_save:true,server_selected_question_validation:true,save_returns_regenerated_result:true,evidence_versioned_results:true,
   matched_worker_and_frontend_release:true,day7c_compatibility_only:true,production_untouched:true
 },null,2));
