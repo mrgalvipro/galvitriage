@@ -1,5 +1,6 @@
 /* Day 7D cumulative customer-intelligence browser adapter.
-   Browser renders Worker-owned follow-ups and regenerated results only. */
+   Browser renders Worker-owned follow-ups and regenerated results only.
+   QA deployment marker: bounded P0 clarification retest candidate. */
 (function(){
   'use strict';
 
