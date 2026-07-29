@@ -1,7 +1,8 @@
-import day7aWorker from './worker.js';
+import day7dWorker from './day7d-engine.js';
 
 const PRODUCTION_ORIGIN = 'https://www.galvipro.com';
 const DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v1';
+const DAY7D_PRODUCTION_MARKER = 'day7d-cumulative-customer-intelligence-v1';
 
 function productionEnv(env = {}) {
   return {
@@ -59,6 +60,7 @@ function commonHeaders(request) {
     'Referrer-Policy': 'no-referrer',
     'X-GalviCare-Environment': 'production',
     'X-GalviCare-Runtime-Marker': DAY7B_RUNTIME_MARKER,
+    'X-GalviCare-Day7D': DAY7D_PRODUCTION_MARKER,
     ...corsHeaders(request)
   };
 }
@@ -171,7 +173,7 @@ async function verifyProductionStripeReturn(request, env, payload) {
 }
 
 async function delegate(request, env, ctx) {
-  const response = await day7aWorker.fetch(request, productionEnv(env), ctx);
+  const response = await day7dWorker.fetch(request, productionEnv(env), ctx);
   const headers = new Headers(response.headers);
   headers.delete('Access-Control-Allow-Origin');
   headers.delete('Access-Control-Allow-Credentials');
@@ -201,6 +203,7 @@ export default {
         release_branch:'qa-revamped-galvicare-0-5',
         galvivault:'galvivault-0-5-production',
         runtime_marker:DAY7B_RUNTIME_MARKER,
+        day7d_runtime_marker:DAY7D_PRODUCTION_MARKER,
         day7a_runtime_marker:'day7a-payment-products-v1',
         db_bound:Boolean(env?.DB),
         stripe_mode:stripeMode(env)
@@ -218,6 +221,7 @@ export default {
         release_branch:'qa-revamped-galvicare-0-5',
         galvivault:'galvivault-0-5-production',
         runtime_marker:DAY7B_RUNTIME_MARKER,
+        day7d_runtime_marker:DAY7D_PRODUCTION_MARKER,
         day7a_runtime_marker:'day7a-payment-products-v1',
         db_bound:Boolean(env?.DB),
         stripe_mode:stripeMode(env)
