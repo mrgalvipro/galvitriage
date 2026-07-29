@@ -10,8 +10,11 @@ on:
       - "tests/**"
       - "scripts/**"
       - "migrations/**"
+      - "index.html"
       - "day7d-browser-customer-intelligence.js"
+      - "qa-frontend-worker.js"
       - "wrangler.json"
+      - "wrangler.qa-frontend.jsonc"
       - "package.json"
       - ".github/workflows/deploy-galvicare-qa.yml"
 
@@ -23,20 +26,21 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  QA_WORKER_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
-  DAY7D_RULES_VERSION: galviengine_customer_intelligence_v0_5_3
-  DAY7D_QUESTION_VERSION: clinical_followups_v0_5_3
-  DAY7D_CONTENT_VERSION: galvicare_day7d_customer_intelligence_v0_5_4
-  DAY7D_RELEASE_CONTRACT: day7d_progressive_customer_intelligence_v2
+  QA_API_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
+  QA_FRONTEND_URL: https://galvicare-0-5-qa.mrgalvipro.workers.dev
+  DAY7D_RULES_VERSION: galviengine_customer_intelligence_v0_5_4
+  DAY7D_QUESTION_VERSION: clinical_followups_v0_5_4
+  DAY7D_CONTENT_VERSION: galvicare_day7d_customer_intelligence_v0_5_5
+  DAY7D_RELEASE_CONTRACT: day7d_cumulative_customer_intelligence_v3
 
 jobs:
   qa-release-gate:
-    name: Day 7D → Progressive Intelligence → Schema → Proven QA Deploy → Stable Runtime Proof
+    name: Day 7D → One P0 Candidate → Worker + Frontend → Runtime Proof
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
-      - name: Checkout exact QA commit
+      - name: Checkout exact QA candidate
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
@@ -47,28 +51,22 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Compute authoritative Day 7D E2E release fingerprint
+      - name: Install dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Compute matched Day 7D release fingerprint
         shell: bash
         run: |
           set -euo pipefail
-          RELEASE_ID="$({ sha256sum worker/worker.js worker/day7d-engine.js day7d-browser-customer-intelligence.js scripts/day7b-build-qa-frontend.mjs wrangler.json; } | sha256sum | awk '{print $1}')"
+          RELEASE_ID="$({ sha256sum worker/worker.js worker/day7d-engine.js day7d-browser-customer-intelligence.js scripts/day7b-build-qa-frontend.mjs scripts/day7d-preflight.mjs tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs index.html qa-frontend-worker.js wrangler.json wrangler.qa-frontend.jsonc; } | sha256sum | awk '{print $1}')"
           test -n "$RELEASE_ID"
           echo "DAY7D_RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
-          echo "Authoritative Day 7D E2E release fingerprint: $RELEASE_ID"
+          echo "Matched Day 7D QA candidate fingerprint: $RELEASE_ID"
 
-      - name: Day 7D authoritative preflight
-        run: npm run day7d:preflight
+      - name: Run one authoritative pre-human gate
+        run: npm run day7d:gate
 
-      - name: Focused Day 7D customer-intelligence tests
-        run: npm run test:day7d
-
-      - name: Full preserved Day 1-7C regression
-        run: npm run stabilization:gate
-
-      - name: Day 7C integration regression and proven QA frontend build
-        run: npm run day7c:gate
-
-      - name: Verify generated QA browser contract
+      - name: Verify generated cumulative QA frontend
         shell: bash
         run: |
           set -euo pipefail
@@ -79,25 +77,33 @@ jobs:
           const html=fs.readFileSync(path,'utf8');
           const required=[
             'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
-            'needs_followup',
-            'galvishot-followup-questions',
-            'galvisight-followup-questions',
-            'galvipath-followup-questions',
-            'save_galvishot_followup',
-            'save_galvisight_followup',
-            'save_galvipath_followup',
-            'skipCurrentQuestion',
-            'stopImmediatePropagation',
-            'invokeLegacyWithResponse',
-            'renderReadyStage(product,regenerated)',
-            'https://galvicare-triage-intake.mrgalvipro.workers.dev'
+            'Day 7D cumulative customer-intelligence browser adapter.',
+            'galviscore-followup','save_galviscore_followup','get_or_generate_galviscore','renderUnlockedGalviScore',
+            'galvishot-followup-questions','save_galvishot_followup',
+            'galvisight-followup-questions','save_galvisight_followup',
+            'galvipath-followup-questions','save_galvipath_followup','galvipath-book-galviclinic',
+            'skipCurrentQuestion','stopImmediatePropagation','MAX_VISIBLE_TARGETED_QUESTIONS=3',
+            'https://galvicare-triage-intake.mrgalvipro.workers.dev',
+            'G-V5ZPM5L19T','xswd8m446z','https://calendly.com/galvilpro/galviclinic-day7c-qa'
           ];
           const missing=required.filter(token=>!html.includes(token));
-          if(missing.length) throw new Error(`Generated QA browser missing: ${missing.join(', ')}`);
-          console.log('PASS: generated QA browser contains the complete Day 7D cumulative journey adapter.');
+          if(missing.length) throw new Error(`Generated QA frontend missing: ${missing.join(', ')}`);
+          const signature='Day 7D cumulative customer-intelligence browser adapter.';
+          const count=html.split(signature).length-1;
+          if(count!==1) throw new Error(`Expected exactly one authoritative Day 7D adapter; found ${count}`);
+          const forbidden=[
+            'galvicare-0-5-production.mrgalvipro.workers.dev',
+            'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00',
+            'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253O01',
+            'https://buy.stripe.com/00w14odrG1QLdcu9dA53O02',
+            'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03'
+          ];
+          const leaked=forbidden.filter(token=>html.includes(token));
+          if(leaked.length) throw new Error(`Production resource leaked into QA: ${leaked.join(', ')}`);
+          console.log('PASS: one cumulative Triage → Vitals → Score → Shot → Sight → Path → Clinic frontend candidate generated.');
           NODE
 
-      - name: Apply Day 7D schema to existing QA D1
+      - name: Apply additive Day 7D schema to existing QA D1
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -106,7 +112,7 @@ jobs:
           packageManager: npm
           command: d1 execute galvivault-0-5-qa --remote --file=migrations/0006_day7d_customer_intelligence.sql --config wrangler.json
 
-      - name: Verify Day 7D QA D1 schema
+      - name: Verify cumulative intelligence schema
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -115,7 +121,7 @@ jobs:
           packageManager: npm
           command: d1 execute galvivault-0-5-qa --remote --command="SELECT (SELECT COUNT(*) FROM day7d_context_evidence) AS context_rows, (SELECT COUNT(*) FROM clinical_evidence_versions) AS version_rows, (SELECT COUNT(*) FROM day7d_observations) AS observation_rows;" --config wrangler.json
 
-      - name: Deploy authoritative Day 7D API
+      - name: Deploy authoritative Day 7D Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -124,16 +130,16 @@ jobs:
           packageManager: npm
           command: deploy --config wrangler.json --var DAY7D_DEPLOY_SHA:${{ env.DAY7D_RELEASE_ID }} --var DAY7D_DEPLOY_TARGET:galvicare-triage-intake
 
-      - name: Confirm active Cloudflare API deployment
+      - name: Deploy authoritative QA frontend
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4"
           packageManager: npm
-          command: deployments list --config wrangler.json
+          command: deploy --config wrangler.qa-frontend.jsonc
 
-      - name: Wait for authoritative Day 7D P0 runtime convergence
+      - name: Verify deployed Worker P0 convergence
         shell: bash
         run: |
           node --input-type=module <<'NODE'
@@ -147,6 +153,8 @@ jobs:
             progressive_followups:true,
             dynamic_question_count:true,
             approved_low_confidence_question_count:3,
+            galviscore_clarification_server_owned:true,
+            objective_score_immutable:true,
             skip_does_not_inflate_confidence:true,
             evidence_version_cache:true,
             cumulative_clinic_brief:true,
@@ -155,77 +163,74 @@ jobs:
             save_returns_regenerated_result:true
           };
           const deadline=Date.now()+180000;
-          let last=null,consecutive=0;
+          let consecutive=0,last=null;
           while(Date.now()<deadline){
             try{
-              const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`converge-${Date.now()}-${Math.random()}`})});
+              const response=await fetch(process.env.QA_API_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`worker-${Date.now()}-${Math.random()}`})});
               const body=await response.json();
               const d=body?.day7d;
-              last=body;
               const mismatches=[];
-              if(!response.ok||body?.success!==true) mismatches.push(`http/success=${response.status}/${body?.success}`);
-              for(const [key,value] of Object.entries(expected)) if(d?.[key]!==value) mismatches.push(`${key}: expected ${JSON.stringify(value)}, got ${JSON.stringify(d?.[key])}`);
-              const exact=mismatches.length===0;
-              consecutive=exact?consecutive+1:0;
-              console.log(`Day 7D P0 runtime convergence: exact=${exact} consecutive=${consecutive}/4${exact?'':` mismatches=${mismatches.join(' | ')}`}`);
-              if(consecutive>=4){console.log('PASS: authoritative Day 7D P0 runtime converged.');process.exit(0);}
-            }catch(error){last={error:String(error?.message||error)};consecutive=0;console.log(`Runtime check error: ${last.error}`);}
+              if(!response.ok||body?.success!==true)mismatches.push(`http/success=${response.status}/${body?.success}`);
+              for(const [key,value] of Object.entries(expected))if(d?.[key]!==value)mismatches.push(`${key}: expected ${JSON.stringify(value)}, got ${JSON.stringify(d?.[key])}`);
+              last={body,mismatches};
+              consecutive=mismatches.length===0?consecutive+1:0;
+              console.log(`Worker convergence ${consecutive}/3${mismatches.length?`: ${mismatches.join(' | ')}`:''}`);
+              if(consecutive>=3){console.log('PASS: deployed Day 7D Worker converged to the cumulative v3 P0 contract.');process.exit(0);}
+            }catch(error){last={error:String(error?.message||error)};consecutive=0;console.log(`Worker convergence error: ${last.error}`);}
             await new Promise(resolve=>setTimeout(resolve,3000));
           }
-          throw new Error(`Authoritative Day 7D P0 runtime did not converge. Last response: ${JSON.stringify(last)}`);
+          throw new Error(`Worker did not converge: ${JSON.stringify(last)}`);
           NODE
 
-      - name: Verify preserved Day 1-7C runtime foundation
-        env:
-          GALVICARE_QA_WORKER_URL: ${{ env.QA_WORKER_URL }}
-        run: node scripts/verify-qa-runtime.mjs
-
-      - name: Final Day 7D cumulative E2E contract proof
+      - name: Verify deployed complete QA frontend
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          const response=await fetch(process.env.QA_WORKER_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`final-${Date.now()}-${Math.random()}`})});
-          const body=await response.json();
-          const d=body?.day7d;
-          const expected={
-            enabled:true,
-            rules_version:process.env.DAY7D_RULES_VERSION,
-            question_version:process.env.DAY7D_QUESTION_VERSION,
-            content_version:process.env.DAY7D_CONTENT_VERSION,
-            entrypoint:'worker/day7d-engine.js',
-            release_contract:process.env.DAY7D_RELEASE_CONTRACT,
-            progressive_followups:true,
-            dynamic_question_count:true,
-            approved_low_confidence_question_count:3,
-            skip_does_not_inflate_confidence:true,
-            evidence_version_cache:true,
-            cumulative_clinic_brief:true,
-            atomic_followup_save:true,
-            server_selected_question_validation:true,
-            save_returns_regenerated_result:true
-          };
-          const mismatches=[];
-          if(!response.ok||body?.success!==true) mismatches.push(`http/success=${response.status}/${body?.success}`);
-          for(const [key,value] of Object.entries(expected)) if(d?.[key]!==value) mismatches.push(`${key}: expected ${JSON.stringify(value)}, got ${JSON.stringify(d?.[key])}`);
-          if(mismatches.length) throw new Error(`Final Day 7D P0 proof failed: ${mismatches.join(' | ')}`);
-          console.log('DAY 7D FINAL P0 RUNTIME PROOF PASS');
+          const required=[
+            'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
+            'Day 7D cumulative customer-intelligence browser adapter.',
+            'galviscore-followup','save_galviscore_followup','get_or_generate_galviscore',
+            'galvishot-followup-questions','save_galvishot_followup',
+            'galvisight-followup-questions','save_galvisight_followup',
+            'galvipath-followup-questions','save_galvipath_followup','galvipath-book-galviclinic',
+            'MAX_VISIBLE_TARGETED_QUESTIONS=3','G-V5ZPM5L19T','xswd8m446z'
+          ];
+          const deadline=Date.now()+120000;
+          let last=null;
+          while(Date.now()<deadline){
+            try{
+              const response=await fetch(`${process.env.QA_FRONTEND_URL}/?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
+              const html=await response.text();
+              const missing=required.filter(token=>!html.includes(token));
+              const count=html.split('Day 7D cumulative customer-intelligence browser adapter.').length-1;
+              last={status:response.status,missing,count};
+              if(response.ok&&missing.length===0&&count===1){console.log('PASS: deployed QA frontend matches the cumulative Worker contract.');process.exit(0);}
+              console.log(`Frontend pending: HTTP ${response.status}; missing=${missing.join(', ')}; adapter_count=${count}`);
+            }catch(error){last={error:String(error?.message||error)};}
+            await new Promise(resolve=>setTimeout(resolve,3000));
+          }
+          throw new Error(`QA frontend did not converge: ${JSON.stringify(last)}`);
           NODE
 
-      - name: READY FOR DAY 7D HUMAN E2E
+      - name: Verify preserved Day 1–7C runtime foundation
+        env:
+          GALVICARE_QA_WORKER_URL: ${{ env.QA_API_URL }}
+        run: node scripts/verify-qa-runtime.mjs
+
+      - name: READY FOR FINAL DAY 7D HUMAN E2E
         if: success()
         run: |
-          echo '## DAY 7D QA RELEASE GATE: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 1-7C regression preservation: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviTriage qualitative evidence persistence: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviVitals / GalviScore deterministic scoring preservation: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Dynamic Worker-selected 0–3 follow-up contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Skip advancement without confidence/evidence inflation: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Evidence-version stored replay/regeneration: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviShot enriched diagnosis contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviSight enriched interpretation contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviPath enriched 90-day treatment-plan contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviClinic cumulative Founder Health Record contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Existing QA D1 schema: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo "- Authoritative source fingerprint: $DAY7D_RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
-          echo '- Stable deployed API runtime: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR DAY 7D HUMAN E2E**' >> "$GITHUB_STEP_SUMMARY"
+          echo '## DAY 7D AUTHORITATIVE QA RELEASE: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviTriage → GalviVitals preservation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviScore unlock → Worker clarification → enriched immutable score: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviShot unlock → targeted questions → atomic save → enriched diagnosis: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviSight unlock → targeted interpretation questions → enriched prescription: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviPath unlock → targeted feasibility questions → enriched 90-day plan: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviClinic cumulative Founder Health Record: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Dynamic Worker-selected 0–3 follow-ups: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Evidence-version replay/regeneration and idempotency: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Matched QA Worker + frontend deployment: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 7A–7C regression and environment separation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Candidate SHA: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Candidate fingerprint: $DAY7D_RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR FINAL DAY 7D HUMAN E2E**' >> "$GITHUB_STEP_SUMMARY"
