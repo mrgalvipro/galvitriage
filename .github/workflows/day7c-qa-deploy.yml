@@ -1,166 +1,61 @@
-name: Day 7D Authoritative QA Release
+name: Day 7C Compatibility Gate
 
 on:
-  push:
-    branches: [qa-revamped-galvicare-0-5]
-    paths:
-      - '.github/workflows/day7c-qa-deploy.yml'
-      - 'worker/day7d-engine.js'
-      - 'day7d-browser-customer-intelligence.js'
-      - 'scripts/day7b-build-qa-frontend.mjs'
-      - 'index.html'
-      - 'wrangler.json'
-      - 'wrangler.qa-frontend.jsonc'
-      - 'qa-frontend-worker.js'
-      - 'migrations/0006_day7d_customer_intelligence.sql'
-      - 'tests/day7d-customer-intelligence.test.mjs'
-      - 'tests/day7d-customer-path-contract.test.mjs'
-      - 'package.json'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: galvicare-day7d-authoritative-qa-release
+  group: galvicare-day7c-compatibility-gate
   cancel-in-progress: true
 
-env:
-  QA_BACKEND_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev
-  QA_FRONTEND_URL: https://galvicare-0-5-qa.mrgalvipro.workers.dev
-  DAY7D_API_ENTRY: worker/day7d-engine.js
-  DAY7D_BROWSER_ENTRY: day7d-browser-customer-intelligence.js
-
 jobs:
-  release:
-    name: Validate → Build → Deploy → Verify Day 7D QA
+  compatibility:
+    name: Verify Day 7C preservation in Day 7D candidate
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
     steps:
-      - name: Checkout exact QA commit
+      - name: Checkout QA candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
+          ref: qa-revamped-galvicare-0-5
+          fetch-depth: 0
 
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Install dependencies
-        run: npm ci --ignore-scripts || npm install --ignore-scripts
+      - name: Run authoritative cumulative pre-human gate
+        run: npm run day7d:gate
 
-      - name: Verify immutable authoritative source contract
+      - name: Verify Day 7C QA integrations remain preserved
         shell: bash
         run: |
           set -euo pipefail
-          test -f "$DAY7D_API_ENTRY"
-          test -f "$DAY7D_BROWSER_ENTRY"
-          test -f scripts/day7b-build-qa-frontend.mjs
-          node --check "$DAY7D_API_ENTRY"
-          node --check "$DAY7D_BROWSER_ENTRY"
-          grep -q '"main": "worker/day7d-engine.js"' wrangler.json
-          grep -q 'save_galvishot_followup' "$DAY7D_API_ENTRY"
-          grep -q 'save_galvisight_followup' "$DAY7D_API_ENTRY"
-          grep -q 'save_galvipath_followup' "$DAY7D_API_ENTRY"
-          grep -q 'evidence_version_bumped' "$DAY7D_API_ENTRY"
-          grep -q 'MAX_VISIBLE_TARGETED_QUESTIONS=3' "$DAY7D_BROWSER_ENTRY"
-          grep -q 'slice(0,MAX_VISIBLE_TARGETED_QUESTIONS)' "$DAY7D_BROWSER_ENTRY"
-          ! grep -q 'MAX_TARGETED_QUESTIONS_PER_STAGE=1' "$DAY7D_BROWSER_ENTRY"
-          grep -q 'installAuthoritativeStageRoutes' "$DAY7D_BROWSER_ENTRY"
-          grep -q 'invokeLegacyWithResponse' "$DAY7D_BROWSER_ENTRY"
-          grep -q 'GalviShot' "$DAY7D_BROWSER_ENTRY"
-          grep -q 'GalviSight' "$DAY7D_BROWSER_ENTRY"
-          grep -q 'GalviPath' "$DAY7D_BROWSER_ENTRY"
-          git diff --exit-code
-
-      - name: Focused Day 7D behavioral tests
-        run: npm run test:day7d
-
-      - name: Full preserved Day 1-7C regression
-        run: npm test
-
-      - name: Build exactly one authoritative QA frontend
-        run: node scripts/day7b-build-qa-frontend.mjs
-
-      - name: Verify generated customer-journey contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          test -s dist-qa/index.html
-          test "$(grep -o 'Day 7D progressive customer-intelligence browser adapter' dist-qa/index.html | wc -l | tr -d ' ')" = "1"
-          grep -q 'save_galvishot_followup' dist-qa/index.html
-          grep -q 'save_galvisight_followup' dist-qa/index.html
-          grep -q 'save_galvipath_followup' dist-qa/index.html
-          grep -q 'galvisight-followup-questions' dist-qa/index.html
-          grep -q 'galvipath-followup-questions' dist-qa/index.html
-          grep -q 'evidence_version_bumped' dist-qa/index.html
-          grep -q 'MAX_VISIBLE_TARGETED_QUESTIONS=3' dist-qa/index.html
-          grep -q 'G-V5ZPM5L19T' dist-qa/index.html
-          grep -q 'xswd8m446z' dist-qa/index.html
-          ! grep -q 'G-KXJFKN7RTS' dist-qa/index.html
-          ! grep -q 'xjsdmprr4z' dist-qa/index.html
-          ! grep -q 'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00' dist-qa/index.html
-          ! grep -q 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253O01' dist-qa/index.html
-          ! grep -q 'https://buy.stripe.com/00w14odrG1QLdcu9dA53O02' dist-qa/index.html
-          ! grep -q 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03' dist-qa/index.html
-
-      - name: Apply Day 7D schema idempotently
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: d1 execute galvivault-0-5-qa --remote --file migrations/0006_day7d_customer_intelligence.sql --config wrangler.json
-
-      - name: Deploy authoritative Day 7D API
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.json
-
-      - name: Deploy authoritative QA browser
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy --config wrangler.qa-frontend.jsonc
-
-      - name: Verify deployed runtime convergence
-        shell: bash
-        run: |
-          set -euo pipefail
-          sleep 15
-          curl --fail --silent --show-error --retry 8 --retry-delay 3 "$QA_FRONTEND_URL" -o /tmp/qa-index.html
-          test "$(grep -o 'Day 7D progressive customer-intelligence browser adapter' /tmp/qa-index.html | wc -l | tr -d ' ')" = "1"
-          grep -q 'save_galvishot_followup' /tmp/qa-index.html
-          grep -q 'save_galvisight_followup' /tmp/qa-index.html
-          grep -q 'save_galvipath_followup' /tmp/qa-index.html
-          grep -q 'galvisight-followup-questions' /tmp/qa-index.html
-          grep -q 'galvipath-followup-questions' /tmp/qa-index.html
-          grep -q 'evidence_version_bumped' /tmp/qa-index.html
-          grep -q 'MAX_VISIBLE_TARGETED_QUESTIONS=3' /tmp/qa-index.html
-          grep -q 'G-V5ZPM5L19T' /tmp/qa-index.html
-          grep -q 'xswd8m446z' /tmp/qa-index.html
-          curl --fail --silent --show-error --retry 8 --retry-delay 3 "$QA_BACKEND_URL/health" -o /tmp/qa-health.json
-          cat /tmp/qa-health.json
-          node - <<'NODE'
-          const fs = require('fs');
-          const health = JSON.parse(fs.readFileSync('/tmp/qa-health.json', 'utf8'));
-          if (health.success !== true && health.status !== 'ok') throw new Error(`QA API health failed: ${JSON.stringify(health)}`);
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const html=fs.readFileSync('dist-qa/index.html','utf8');
+          const required=[
+            'G-V5ZPM5L19T',
+            'xswd8m446z',
+            'https://calendly.com/galvilpro/galviclinic-day7c-qa',
+            'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
+            'https://galvicare-triage-intake.mrgalvipro.workers.dev'
+          ];
+          const missing=required.filter(token=>!html.includes(token));
+          if(missing.length) throw new Error(`Day 7C compatibility missing: ${missing.join(', ')}`);
+          const forbidden=['G-KXJFKN7RTS','xjsdmprr4z','galvicare-0-5-production.mrgalvipro.workers.dev'];
+          const leaked=forbidden.filter(token=>html.includes(token));
+          if(leaked.length) throw new Error(`Production resource leaked into QA: ${leaked.join(', ')}`);
+          console.log('PASS: Day 7C ecosystem remains preserved and QA-isolated.');
           NODE
 
-      - name: Day 7D Human E2E readiness summary
+      - name: Compatibility summary
         run: |
-          echo '## READY FOR FINAL DAY 7D HUMAN E2E' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Source mutation from CI: DISABLED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Authoritative API: worker/day7d-engine.js' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Authoritative browser adapter: day7d-browser-customer-intelligence.js' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Follow-up behavior: Worker-selected 0–3; browser bounded to 3 visible questions' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Atomic/idempotent follow-up persistence: VERIFIED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviShot enrichment path: VERIFIED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviSight enrichment path: VERIFIED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviPath 90-day enrichment path: VERIFIED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviClinic transition contract: VERIFIED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- QA GA4/Clarity instrumentation: VERIFIED' >> "$GITHUB_STEP_SUMMARY"
+          echo '## DAY 7C COMPATIBILITY: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Full cumulative Day 7D gate: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- HubSpot/GA4/Clarity/Calendly preservation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA/Production separation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Automatic deployment owner: deploy-galvicare-qa.yml' >> "$GITHUB_STEP_SUMMARY"
