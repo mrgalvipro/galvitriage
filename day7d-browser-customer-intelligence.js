@@ -9,7 +9,7 @@
     GalviSight:{host:'galvisight-handoff',followup:'galvisight-followup',questions:'galvisight-followup-questions',submit:'submit-galvisight-followup',status:'galvisight-followup-status',error:'galvisight-error',save:'save_galvisight_followup',get:'get_or_generate_galvisight'},
     GalviPath:{host:'galvipath-result',followup:'galvipath-followup',questions:'galvipath-followup-questions',submit:'submit-galvipath-followup',status:'galvipath-followup-status',error:'galvipath-error',save:'save_galvipath_followup',get:'get_or_generate_galvipath'}
   };
-  const MAX_TARGETED_QUESTIONS_PER_STAGE=1;
+  const MAX_VISIBLE_TARGETED_QUESTIONS=3;
 
   function el(id){return document.getElementById(id);}
   function apiEndpoint(){return typeof GALVICARE_API_ENDPOINT!=='undefined'?GALVICARE_API_ENDPOINT:(typeof GALVICARE_INTAKE_ENDPOINT!=='undefined'?`${GALVICARE_INTAKE_ENDPOINT}/api`:'');}
@@ -31,13 +31,13 @@
       const anchor=product==='GalviShot'?host.querySelector('.gshot-confidence-row'):host.querySelector('[id$="result-panel"]');
       host.insertBefore(panel,anchor||host.lastChild);
     }
-    if(!el(cfg.questions)) panel.innerHTML=`<p class="eyebrow">GALVIENGINE CUSTOMER INTELLIGENCE</p><h3>One targeted answer will make your ${product} more specific to your business.</h3><div id="${cfg.questions}"></div><div class="button-row"><button id="${cfg.submit}" class="primary-btn" type="button">Save Answer & Continue</button></div><p id="${cfg.status}" class="gshot-status-note" aria-live="polite"></p>`;
+    if(!el(cfg.questions)) panel.innerHTML=`<p class="eyebrow">GALVIENGINE CUSTOMER INTELLIGENCE</p><h3>A few details will help sharpen your ${product} result.</h3><div id="${cfg.questions}"></div><div class="button-row"><button id="${cfg.submit}" class="primary-btn" type="button">Save Answers & Continue</button></div><p id="${cfg.status}" class="gshot-status-note" aria-live="polite"></p>`;
     return panel;
   }
 
   function questionsFrom(response){return response?.followup_questions||response?.followups||response?.evaluation?.followup_questions||response?.evaluation?.followups||[];}
   function renderQuestions(product,response){
-    const cfg=STAGES[product],panel=ensureStageUi(product),host=el(cfg.questions),questions=questionsFrom(response).slice(0,MAX_TARGETED_QUESTIONS_PER_STAGE);
+    const cfg=STAGES[product],panel=ensureStageUi(product),host=el(cfg.questions),questions=questionsFrom(response).slice(0,MAX_VISIBLE_TARGETED_QUESTIONS);
     if(!panel||!host) return false;
     host.innerHTML='';
     questions.forEach((q,index)=>{
@@ -57,11 +57,11 @@
     el(cfg.error)?.classList.add('hidden');
     if(product==='GalviSight'){
       el('galvisight-result-panel')?.classList.add('hidden'); el('galvisight-locked')?.classList.add('hidden');
-      const state=el('galvisight-state-message'); if(state){state.textContent='Answer the targeted question below so GalviCare can generate your enriched GalviSight prescription.';state.classList.remove('hidden');}
+      const state=el('galvisight-state-message'); if(state){state.textContent='Answer the targeted questions below so GalviCare can generate your enriched GalviSight prescription.';state.classList.remove('hidden');}
     }
     if(product==='GalviPath'){
       el('galvipath-result-panel')?.classList.add('hidden'); el('galvipath-locked')?.classList.add('hidden');
-      const state=el('galvipath-state-message'); if(state){state.textContent='Answer the targeted question below so GalviCare can generate your enriched 90-day GalviPath treatment plan.';state.classList.remove('hidden');}
+      const state=el('galvipath-state-message'); if(state){state.textContent='Answer the targeted questions below so GalviCare can generate your enriched 90-day GalviPath treatment plan.';state.classList.remove('hidden');}
     }
     renderQuestions(product,response);
     el(cfg.followup)?.scrollIntoView({behavior:'smooth',block:'start'});
@@ -90,7 +90,7 @@
   }
 
   async function saveAnswers(product){
-    const cfg=STAGES[product],fields=Array.from(document.querySelectorAll(`#${cfg.questions} textarea`)).slice(0,MAX_TARGETED_QUESTIONS_PER_STAGE),status=el(cfg.status);
+    const cfg=STAGES[product],fields=Array.from(document.querySelectorAll(`#${cfg.questions} textarea`)).slice(0,MAX_VISIBLE_TARGETED_QUESTIONS),status=el(cfg.status);
     if(!fields.length) return;
     const missing=fields.find(x=>!x.value.trim()); if(missing){missing.focus();return;}
     if(status) status.textContent='Saving your evidence and updating your Founder Health Record…';
@@ -100,14 +100,14 @@
     if(savedStatus==='validation_error'||savedStatus==='unexpected_error'||saved.success===false) throw new Error(saved.detail||saved.message||'Unable to save this evidence.');
     if(savedStatus==='needs_followup'){
       renderQuestions(product,saved.evaluation||saved);
-      if(status) status.textContent=evidence_version_bumped?'Evidence saved. Complete the single targeted question now shown.':'Answer already recorded. Restoring the current stage…';
+      if(status) status.textContent=evidence_version_bumped?'Evidence saved. Complete the remaining targeted questions now shown.':'Answers already recorded. Restoring the current stage…';
       return true;
     }
-    if(status) status.textContent=String(saved.save_status||'').toLowerCase()==='already_saved'?'Answer already saved. Restoring your enriched result…':'Evidence saved. Rendering your enriched result…';
+    if(status) status.textContent=String(saved.save_status||'').toLowerCase()==='already_saved'?'Answers already saved. Restoring your enriched result…':'Evidence saved. Rendering your enriched result…';
     const regenerated=(saved.result||saved.data)?saved:await call(cfg.get,{});
     if(String(regenerated.status||'').toLowerCase()==='needs_followup'){
       exposeFollowupStage(product,regenerated);
-      if(status) status.textContent='One targeted answer is required before GalviCare finalizes this stage.';
+      if(status) status.textContent='Targeted evidence is still required before GalviCare finalizes this stage.';
       return true;
     }
     el(cfg.followup)?.classList.add('hidden');
@@ -136,7 +136,7 @@
         if(String(response.status||'').toLowerCase()==='needs_followup'){
           exposeFollowupStage('GalviShot',response);
           const status=el(STAGES.GalviShot.status);
-          if(status) status.textContent=options?.paidReturn?'Payment verified. Answer this one targeted question to generate your enriched GalviShot diagnosis.':'Answer this one targeted question to generate your enriched GalviShot diagnosis.';
+          if(status) status.textContent=options?.paidReturn?'Payment verified. Complete the targeted questions shown to generate your enriched GalviShot diagnosis.':'Complete the targeted questions shown to generate your enriched GalviShot diagnosis.';
           return true;
         }
         return renderReadyStage('GalviShot',response);
