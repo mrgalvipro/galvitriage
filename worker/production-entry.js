@@ -1,24 +1,40 @@
 import day7aWorker from './worker.js';
 
-const PRODUCTION_ORIGIN = 'https://www.galvipro.com';
-const DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v1';
+const PRODUCTION_ORIGINS = new Set([
+  'https://www.galvipro.com',
+  'https://galvipro.com',
+  // Temporary compatibility origin while the public GalviCare experience
+  // is still embedded from GitHub Pages. Remove after Workstream 2 cutover.
+  'https://mrgalvipro.github.io'
+]);
+const PRIMARY_PRODUCTION_ORIGIN = 'https://www.galvipro.com';
+const DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v2';
 
-function productionEnv(env = {}) {
+function requestOrigin(request) {
+  return String(request.headers.get('Origin') || '').trim();
+}
+
+function isAllowedOrigin(origin) {
+  return !origin || PRODUCTION_ORIGINS.has(origin);
+}
+
+function productionEnv(env = {}, request = null) {
+  const origin = request ? requestOrigin(request) : '';
   return {
     ...env,
     ENVIRONMENT: 'production',
     APP_ENV: 'production',
-    RELEASE_BRANCH: 'qa-revamped-galvicare-0-5',
+    RELEASE_BRANCH: 'main',
     GALVIVAULT_NAME: 'galvivault-0-5-production',
-    ALLOWED_ORIGIN: PRODUCTION_ORIGIN
+    ALLOWED_ORIGIN: isAllowedOrigin(origin) && origin ? origin : PRIMARY_PRODUCTION_ORIGIN
   };
 }
 
 function corsHeaders(request) {
-  const origin = request.headers.get('Origin');
-  if (origin !== PRODUCTION_ORIGIN) return {};
+  const origin = requestOrigin(request);
+  if (!origin || !PRODUCTION_ORIGINS.has(origin)) return {};
   return {
-    'Access-Control-Allow-Origin': PRODUCTION_ORIGIN,
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400',
@@ -48,8 +64,7 @@ function json(request, body, status = 200) {
 }
 
 function forbiddenOrigin(request) {
-  const origin = request.headers.get('Origin');
-  return Boolean(origin && origin !== PRODUCTION_ORIGIN);
+  return !isAllowedOrigin(requestOrigin(request));
 }
 
 async function apiAction(request) {
@@ -64,7 +79,7 @@ async function apiAction(request) {
 }
 
 async function delegate(request, env, ctx) {
-  const response = await day7aWorker.fetch(request, productionEnv(env), ctx);
+  const response = await day7aWorker.fetch(request, productionEnv(env, request), ctx);
   const headers = new Headers(response.headers);
   headers.delete('Access-Control-Allow-Origin');
   headers.delete('Access-Control-Allow-Credentials');
@@ -101,10 +116,13 @@ export default {
         success: true,
         service: 'GalviCare 0.5 Worker',
         environment: 'production',
-        release_branch: 'qa-revamped-galvicare-0-5',
+        release_branch: 'main',
         galvivault: 'galvivault-0-5-production',
         runtime_marker: DAY7B_RUNTIME_MARKER,
         day7a_runtime_marker: 'day7a-payment-products-v1',
+        allowed_origins: Array.from(PRODUCTION_ORIGINS),
+        hubspot_enabled: env?.HUBSPOT_ENABLED === 'true',
+        hubspot_credential_present: Boolean(String(env?.HUBSPOT_PRIVATE_APP_TOKEN || '').trim()),
         db_bound: Boolean(env?.DB)
       });
     }
@@ -116,10 +134,13 @@ export default {
         success: true,
         action,
         environment: 'production',
-        release_branch: 'qa-revamped-galvicare-0-5',
+        release_branch: 'main',
         galvivault: 'galvivault-0-5-production',
         runtime_marker: DAY7B_RUNTIME_MARKER,
         day7a_runtime_marker: 'day7a-payment-products-v1',
+        allowed_origins: Array.from(PRODUCTION_ORIGINS),
+        hubspot_enabled: env?.HUBSPOT_ENABLED === 'true',
+        hubspot_credential_present: Boolean(String(env?.HUBSPOT_PRIVATE_APP_TOKEN || '').trim()),
         db_bound: Boolean(env?.DB)
       });
     }
