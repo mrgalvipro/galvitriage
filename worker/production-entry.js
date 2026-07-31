@@ -6,17 +6,15 @@ const PRODUCTION_ORIGINS = new Set([
   'https://mrgalvipro.github.io'
 ]);
 const PRIMARY_PRODUCTION_ORIGIN = 'https://www.galvipro.com';
-const DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v3';
-const HUBSPOT_ADAPTER_MARKER = 'production-hubspot-upsert-v1';
+const DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v4';
+const HUBSPOT_ADAPTER_MARKER = 'production-hubspot-upsert-v2';
 
 function requestOrigin(request) {
   return String(request.headers.get('Origin') || '').trim();
 }
-
 function isAllowedOrigin(origin) {
   return !origin || PRODUCTION_ORIGINS.has(origin);
 }
-
 function productionEnv(env = {}, request = null) {
   const origin = request ? requestOrigin(request) : '';
   return {
@@ -29,7 +27,6 @@ function productionEnv(env = {}, request = null) {
     ALLOWED_ORIGIN: isAllowedOrigin(origin) && origin ? origin : PRIMARY_PRODUCTION_ORIGIN
   };
 }
-
 function corsHeaders(request) {
   const origin = requestOrigin(request);
   if (!origin || !PRODUCTION_ORIGINS.has(origin)) return {};
@@ -41,7 +38,6 @@ function corsHeaders(request) {
     Vary: 'Origin'
   };
 }
-
 function commonHeaders(request) {
   return {
     'Cache-Control': 'no-store',
@@ -52,65 +48,34 @@ function commonHeaders(request) {
     ...corsHeaders(request)
   };
 }
-
 function json(request, body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      ...commonHeaders(request)
-    }
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...commonHeaders(request) }
   });
 }
-
 function forbiddenOrigin(request) {
   return !isAllowedOrigin(requestOrigin(request));
 }
-
 async function parseApiPayload(request) {
-  if (request.method !== 'POST') return null;
-  if (new URL(request.url).pathname !== '/api') return null;
-  try {
-    return await request.clone().json();
-  } catch {
-    return null;
-  }
+  if (request.method !== 'POST' || new URL(request.url).pathname !== '/api') return null;
+  try { return await request.clone().json(); } catch { return null; }
 }
-
 function textAt(object, path, fallback = '') {
   const value = path.split('.').reduce((current, key) => current?.[key], object);
   return String(value ?? fallback).trim();
 }
-
-function isCertificationRecord(payload) {
-  const email = textAt(payload, 'founder.email').toLowerCase();
-  const source = textAt(payload, 'session.source').toLowerCase();
-  return /(^|[+._-])test|tester|galvipro\.com/.test(email) || /test|certif/.test(source);
-}
-
-function hubspotProperties(payload, delegatedBody) {
-  const vitals = delegatedBody?.vitals || {};
-  const scores = vitals.dimension_scores || delegatedBody?.score?.dimension_scores || {};
-  const weakest = Object.entries(scores)
-    .filter(([, value]) => Number.isFinite(Number(value)))
-    .sort((a, b) => Number(a[1]) - Number(b[1]))[0];
-
-  return {
+function hubspotProperties(payload) {
+  const properties = {
     email: textAt(payload, 'founder.email'),
     firstname: textAt(payload, 'founder.first_name'),
     lastname: textAt(payload, 'founder.last_name'),
     phone: textAt(payload, 'founder.phone'),
     company: textAt(payload, 'venture.venture_name'),
-    website: textAt(payload, 'venture.website'),
-    galvicare_environment: 'production',
-    galvicare_test_record: isCertificationRecord(payload) ? 'true' : 'false',
-    galvicare_session_id: String(delegatedBody?.session_id || textAt(payload, 'session.session_id')),
-    galvicare_journey_stage: 'GalviVitals',
-    galvivitals_score: String(vitals.score ?? delegatedBody?.score?.score ?? ''),
-    galvicare_lowest_dimension: weakest ? String(weakest[0]) : ''
+    website: textAt(payload, 'venture.website')
   };
+  return Object.fromEntries(Object.entries(properties).filter(([, value]) => value !== ''));
 }
-
 async function hubspotFetch(env, path, options = {}) {
   const token = String(env?.HUBSPOT_PRIVATE_APP_TOKEN || '').trim();
   if (!token) throw new Error('HUBSPOT_PRIVATE_APP_TOKEN is missing');
@@ -133,17 +98,14 @@ async function hubspotFetch(env, path, options = {}) {
   }
   return body;
 }
-
-async function upsertHubSpotContact(env, payload, delegatedBody) {
+async function upsertHubSpotContact(env, payload) {
   if (String(env?.HUBSPOT_ENABLED || '').toLowerCase() !== 'true') {
     return { attempted: false, success: false, status: 'disabled', adapter: HUBSPOT_ADAPTER_MARKER };
   }
-
-  const properties = hubspotProperties(payload, delegatedBody);
+  const properties = hubspotProperties(payload);
   if (!properties.email) {
     return { attempted: false, success: false, status: 'missing_email', adapter: HUBSPOT_ADAPTER_MARKER };
   }
-
   const search = await hubspotFetch(env, '/crm/v3/objects/contacts/search', {
     method: 'POST',
     body: JSON.stringify({
@@ -152,35 +114,30 @@ async function upsertHubSpotContact(env, payload, delegatedBody) {
       limit: 1
     })
   });
-
-  let contact;
   if (Array.isArray(search.results) && search.results.length > 0) {
     const contactId = search.results[0].id;
-    contact = await hubspotFetch(env, `/crm/v3/objects/contacts/${encodeURIComponent(contactId)}`, {
+    const contact = await hubspotFetch(env, `/crm/v3/objects/contacts/${encodeURIComponent(contactId)}`, {
       method: 'PATCH',
       body: JSON.stringify({ properties })
     });
     return { attempted: true, success: true, status: 'updated', contact_id: contact.id, adapter: HUBSPOT_ADAPTER_MARKER };
   }
-
-  contact = await hubspotFetch(env, '/crm/v3/objects/contacts', {
+  const contact = await hubspotFetch(env, '/crm/v3/objects/contacts', {
     method: 'POST',
     body: JSON.stringify({ properties })
   });
   return { attempted: true, success: true, status: 'created', contact_id: contact.id, adapter: HUBSPOT_ADAPTER_MARKER };
 }
-
 async function delegate(request, env, ctx, payload = null) {
   const response = await day7aWorker.fetch(request, productionEnv(env, request), ctx);
   let responseBody = null;
   const contentType = String(response.headers.get('Content-Type') || '');
-
   if (payload?.action === 'submit_triage' && response.ok && contentType.includes('application/json')) {
     try {
       responseBody = await response.clone().json();
       let hubspot;
       try {
-        hubspot = await upsertHubSpotContact(productionEnv(env, request), payload, responseBody);
+        hubspot = await upsertHubSpotContact(productionEnv(env, request), payload);
       } catch (error) {
         console.error('Production HubSpot synchronization failed', error?.body || error);
         hubspot = {
@@ -198,7 +155,6 @@ async function delegate(request, env, ctx, payload = null) {
       console.error('Unable to enrich submit_triage response', error);
     }
   }
-
   const headers = new Headers(response.headers);
   headers.delete('Access-Control-Allow-Origin');
   headers.delete('Access-Control-Allow-Credentials');
@@ -206,25 +162,20 @@ async function delegate(request, env, ctx, payload = null) {
   headers.delete('Access-Control-Allow-Methods');
   headers.delete('Access-Control-Max-Age');
   for (const [key, value] of Object.entries(commonHeaders(request))) headers.set(key, value);
-
   return new Response(responseBody ? JSON.stringify(responseBody) : response.body, {
     status: response.status,
     statusText: response.statusText,
     headers
   });
 }
-
 export default {
   async fetch(request, env, ctx) {
     const pathname = new URL(request.url).pathname;
-
     if (request.method === 'OPTIONS') {
       if (forbiddenOrigin(request)) return json(request, { success: false, status: 'forbidden_origin' }, 403);
       return new Response(null, { status: 204, headers: commonHeaders(request) });
     }
-
     if (forbiddenOrigin(request)) return json(request, { success: false, status: 'forbidden_origin' }, 403);
-
     if (request.method === 'GET' && (pathname === '/' || pathname === '/health')) {
       return json(request, {
         success: true,
@@ -241,10 +192,8 @@ export default {
         db_bound: Boolean(env?.DB)
       });
     }
-
     const payload = await parseApiPayload(request);
     const action = String(payload?.action || '').trim();
-
     if (action === 'health_check') {
       return json(request, {
         success: true,
@@ -261,11 +210,9 @@ export default {
         db_bound: Boolean(env?.DB)
       });
     }
-
     if (action === 'get_fixture_result' || action === 'grant_test_override') {
       return json(request, { success: false, action, status: 'not_found', message: 'QA-only capability is unavailable in production.' }, 404);
     }
-
     return delegate(request, env, ctx, payload);
   }
 };
