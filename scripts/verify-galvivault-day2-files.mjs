@@ -28,6 +28,17 @@ for (const preservedScript of ['stabilization:gate', 'day7b:gate', 'day7d:gate',
     throw new Error(`The existing GalviCare/GalviVault script contract is missing: ${preservedScript}`);
   }
 }
+for (const forbiddenSharedScript of [
+  'test:galvivault:day2',
+  'test:galvivault:day2:regression',
+  'verify:galvivault:day2',
+  'smoke:galvivault:day2:qa',
+  'deploy:galvivault:day2:qa'
+]) {
+  if (pkg.scripts?.[forbiddenSharedScript]) {
+    throw new Error(`GalviVault Day 2 must not mutate the shared GalviCare package contract: ${forbiddenSharedScript}`);
+  }
+}
 
 const day1 = JSON.parse(fs.readFileSync('wrangler.json', 'utf8'));
 const day2 = JSON.parse(fs.readFileSync('wrangler.day2.json', 'utf8'));
@@ -57,4 +68,4 @@ for (const alias of [
   if (fs.existsSync(alias)) throw new Error(`Temporary Day 2 alias remains: ${alias}`);
 }
 
-console.log('PASS: canonical Day 2 files, QA Worker/D1 authority, Production isolation, immutable QA workflow, and the existing GalviCare package contract are valid.');
+console.log('PASS: canonical Day 2 files, QA Worker/D1 authority, Production isolation, immutable QA workflow, and the untouched GalviCare package contract are valid.');
