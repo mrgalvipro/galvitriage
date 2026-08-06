@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 
 const qaWorker = readFileSync(new URL('../worker/worker.js', import.meta.url), 'utf8');
 const prodEntry = readFileSync(new URL('../worker/production-entry.js', import.meta.url), 'utf8');
-const qaWrangler = readFileSync(new URL('../wrangler.json', import.meta.url), 'utf8');
+const day7dWrangler = readFileSync(new URL('../wrangler.day7d.json', import.meta.url), 'utf8');
+const day1Wrangler = readFileSync(new URL('../wrangler.json', import.meta.url), 'utf8');
 const prodWrangler = readFileSync(new URL('../wrangler.production.jsonc', import.meta.url), 'utf8');
 
 const PROD_D1_ID = '2fc954b7-00ca-405b-8313-f91e706845a2';
@@ -36,13 +37,21 @@ test('Production has a separate security boundary around the approved Day 7D run
   expectExcludes(prodEntry, ["import day7aWorker from './worker.js'"]);
 });
 
-test('QA and Production Worker services are distinct', () => {
-  expectIncludes(qaWrangler, ['"name": "galvicare-triage-intake"']);
+test('Day 1, Day 7D and Production Worker services are distinct', () => {
+  expectIncludes(day1Wrangler, [
+    '"name": "galvivault-p0-day1-qa"',
+    '"main": "worker/day1.js"'
+  ]);
+  expectIncludes(day7dWrangler, [
+    '"name": "galvicare-triage-intake"',
+    '"main": "worker/day7d-engine.js"'
+  ]);
   expectIncludes(prodWrangler, ['"name": "galvicare-0-5-production"']);
 });
 
 test('QA and Production D1 targets are physically distinct', () => {
-  expectIncludes(qaWrangler, ['"database_name": "galvivault-0-5-qa"', QA_D1_ID]);
+  expectIncludes(day1Wrangler, ['"database_name": "galvivault-0-5-qa"', QA_D1_ID]);
+  expectIncludes(day7dWrangler, ['"database_name": "galvivault-0-5-qa"', QA_D1_ID]);
   expectIncludes(prodWrangler, ['"database_name": "galvivault-0-5-production"', PROD_D1_ID]);
   expectExcludes(prodWrangler, [QA_D1_ID, 'galvivault-0-5-qa']);
 });
