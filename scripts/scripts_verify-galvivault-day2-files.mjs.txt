@@ -1,0 +1,60 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
+const required = [
+  'package.json',
+  'wrangler.json',
+  'wrangler.day2.json',
+  'worker/day1.js',
+  'worker/day2.js',
+  'migrations/day1/0001_canonical_business_medical_record.sql',
+  'migrations/day1/0002_day2_identity_continuity.sql',
+  'tests/day1-foundation.test.mjs',
+  'tests/galvivault-day2-identity-continuity.test.mjs',
+  'scripts/galvivault-day2-e2e.mjs',
+  '.github/workflows/day2-qa-identity.yml'
+];
+
+const missing = required.filter((file) => !fs.existsSync(path.resolve(file)));
+if (missing.length) {
+  console.error(`Missing required GalviVault Day 2 files:\n${missing.join('\n')}`);
+  process.exit(1);
+}
+
+const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+for (const script of [
+  'test:day1',
+  'test:galvivault:day2',
+  'test:galvivault:day2:regression',
+  'verify:galvivault:day2',
+  'smoke:galvivault:day2:qa',
+  'deploy:galvivault:day2:qa'
+]) {
+  if (!pkg.scripts?.[script]) {
+    console.error(`Missing package script: ${script}`);
+    process.exit(1);
+  }
+}
+
+const day1 = JSON.parse(fs.readFileSync('wrangler.json', 'utf8'));
+const day2 = JSON.parse(fs.readFileSync('wrangler.day2.json', 'utf8'));
+const production = fs.readFileSync('wrangler.production.jsonc', 'utf8');
+
+if (day1.main !== 'worker/day1.js') throw new Error('wrangler.json no longer preserves worker/day1.js.');
+if (day2.main !== 'worker/day2.js') throw new Error('wrangler.day2.json must target worker/day2.js.');
+if (day2.name !== day1.name) throw new Error('Day 2 must extend the existing isolated GalviVault QA Worker.');
+if (day2.vars?.ENVIRONMENT !== 'qa') throw new Error('Day 2 environment must be qa.');
+if (day2.vars?.MIN_SCHEMA_VERSION !== '0002') throw new Error('Day 2 minimum schema must be 0002.');
+if (day2.d1_databases?.[0]?.binding !== 'DB') throw new Error('Day 2 DB binding must be DB.');
+if (day2.d1_databases?.[0]?.database_name !== 'galvivault-0-5-qa') throw new Error('Day 2 must target the existing QA D1.');
+if (day2.d1_databases?.[0]?.migrations_dir !== 'migrations/day1') throw new Error('Day 2 must preserve the existing migration directory.');
+if (!production.includes('worker/production-entry.js')) throw new Error('Production entry is not preserved.');
+if (production.includes('worker/day2.js')) throw new Error('Production configuration must not reference worker/day2.js.');
+if (production.includes('galvivault-0-5-qa')) throw new Error('Production configuration must not reference the QA D1.');
+
+const forbiddenNames = ['.dev.vars', '.env', 'wrangler.toml.bak'];
+for (const name of forbiddenNames) {
+  if (fs.existsSync(name)) throw new Error(`Forbidden local/secret artifact is present: ${name}`);
+}
+
+console.log('PASS: GalviVault Day 2 critical-path files, scripts, QA entry, D1 target, and Production isolation are valid.');
