@@ -4,9 +4,21 @@ on:
   pull_request:
     branches:
       - qa-revamped-galvicare-0-5
+    paths-ignore:
+      - "worker/day1.js"
+      - "migrations/day1/**"
+      - "tests/day1-foundation.test.mjs"
+      - "wrangler.json"
+      - ".github/workflows/day1-qa-foundation.yml"
   push:
     branches:
       - qa-revamped-galvicare-0-5
+    paths-ignore:
+      - "worker/day1.js"
+      - "migrations/day1/**"
+      - "tests/day1-foundation.test.mjs"
+      - "wrangler.json"
+      - ".github/workflows/day1-qa-foundation.yml"
 
 permissions:
   contents: read
@@ -29,7 +41,7 @@ jobs:
         run: npm install --ignore-scripts
 
       - name: Run Worker syntax and QA tests
-        # Authoritative gate: test the committed QA source directly; never mutate source here.
+        # GalviCare regression gate. GalviVault Day 1 has an independent authoritative workflow.
         run: npm run stabilization:gate
 
       - name: Reject committed secret files
