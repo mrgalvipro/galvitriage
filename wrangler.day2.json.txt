@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "galvivault-p0-day1-qa",
+  "main": "worker/day2.js",
+  "compatibility_date": "2026-07-23",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "vars": {
+    "ENVIRONMENT": "qa",
+    "FIXTURE_MODE": "true",
+    "API_VERSION": "v1",
+    "MIN_SCHEMA_VERSION": "0002",
+    "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,http://localhost:8787,http://127.0.0.1:8787"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "galvivault-0-5-qa",
+      "database_id": "cdf9042b-ab09-498a-ac66-010b6cce47d4",
+      "migrations_dir": "migrations/day1"
+    }
+  ]
+}
