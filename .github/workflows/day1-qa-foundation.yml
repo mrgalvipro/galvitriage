@@ -25,6 +25,8 @@ concurrency:
 env:
   DAY1_BASE_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
   DAY1_ALLOWED_ORIGIN: https://galvipro.com
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
 jobs:
   day1-foundation:
@@ -57,9 +59,11 @@ jobs:
           if(day1.name!=='galvivault-p0-day1-qa'||day1.main!=='worker/day1.js') throw new Error('Day 1 target is invalid.');
           if(day7d.name!=='galvicare-triage-intake'||day7d.main!=='worker/day7d-engine.js') throw new Error('Day 7D target is invalid.');
           if(!production.includes('worker/production-entry.js')||production.includes('worker/day1.js')) throw new Error('Production entry separation failed.');
+          if(production.includes('galvivault-0-5-qa')||production.includes('cdf9042b-ab09-498a-ac66-010b6cce47d4')) throw new Error('Production config contains QA D1 authority.');
           const day1Db=day1.d1_databases?.find(item=>item.binding==='DB');
           const day7dDb=day7d.d1_databases?.find(item=>item.binding==='DB');
           if(day1Db?.database_name!=='galvivault-0-5-qa'||day7dDb?.database_name!=='galvivault-0-5-qa') throw new Error('QA D1 target mismatch.');
+          if(day1Db?.migrations_dir!=='migrations/day1') throw new Error('Day 1 migration directory mismatch.');
           console.log('PASS: Day 1, Day 7D, and Production runtime entries are distinct.');
           NODE
 
@@ -69,37 +73,93 @@ jobs:
       - name: Run Day 1 blocking suite
         run: npm run test:day1
 
-      - name: Apply additive Day 1 schema to QA D1
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4"
-          packageManager: npm
-          command: d1 execute galvivault-0-5-qa --remote --file=migrations/day1/0001_canonical_business_medical_record.sql --config wrangler.json
+      - name: Apply collision-safe additive Day 1 schema to QA D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 d1 execute galvivault-0-5-qa \
+            --remote \
+            --file=migrations/day1/0001_canonical_business_medical_record.sql \
+            --config wrangler.json
 
-      - name: Verify QA D1 schema ledger and foundation tables
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4"
-          packageManager: npm
-          command: d1 execute galvivault-0-5-qa --remote --command="SELECT migration_id,name,environment FROM schema_migrations WHERE migration_id='0001'; SELECT COUNT(*) AS required_tables FROM sqlite_master WHERE type='table' AND name IN ('founders','ventures','business_medical_records','assessment_sessions','journey_events','audit_log','idempotency_keys');" --config wrangler.json
+      - name: Verify QA D1 migration ledger and foundation tables
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 d1 execute galvivault-0-5-qa \
+            --remote \
+            --command="SELECT migration_id,name,environment FROM gv1_schema_migrations WHERE migration_id='0001'; SELECT COUNT(*) AS required_tables FROM sqlite_master WHERE type='table' AND name IN ('gv1_founders','gv1_ventures','gv1_business_medical_records','gv1_assessment_sessions','gv1_journey_events','gv1_audit_log','gv1_idempotency_keys');" \
+            --config wrangler.json \
+            --json > /tmp/day1-schema.json
+          cat /tmp/day1-schema.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const payload=JSON.parse(fs.readFileSync('/tmp/day1-schema.json','utf8'));
+          const objects=[];
+          const walk=(value)=>{
+            if(Array.isArray(value)) for(const item of value) walk(item);
+            else if(value&&typeof value==='object'){
+              objects.push(value);
+              for(const item of Object.values(value)) walk(item);
+            }
+          };
+          walk(payload);
+          const migration=objects.find(item=>item.migration_id==='0001');
+          const count=objects.find(item=>Object.hasOwn(item,'required_tables'));
+          if(!migration||migration.environment!=='qa') throw new Error('Migration 0001 ledger evidence is missing.');
+          if(Number(count?.required_tables)!==7) throw new Error(`Expected 7 required Day 1 tables; found ${count?.required_tables ?? 'none'}.`);
+          console.log('PASS: migration 0001 and all seven runtime-critical gv1_ tables exist.');
+          NODE
 
       - name: Deploy isolated Day 1 QA Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4"
-          packageManager: npm
-          command: deploy --config wrangler.json
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 deploy --config wrangler.json
 
-      - name: Run deployed Day 1 smoke
+      - name: Run deployed Day 1 API smoke
         env:
           DAY1_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
         run: npm run qa:smoke
+
+      - name: Verify remote Human E2E readiness evidence
+        shell: bash
+        env:
+          DAY1_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          SESSION_ID="ses_day1_e2e_${DAY1_RUN_SUFFIX}"
+          EVENT_KEY="day1:${SESSION_ID}:triage_opened:001"
+          SESSION_KEY="day1-session-${DAY1_RUN_SUFFIX}"
+          EVENT_IDEMPOTENCY_KEY="day1-event-${DAY1_RUN_SUFFIX}"
+          SQL="SELECT COUNT(*) AS session_count FROM gv1_assessment_sessions WHERE session_id='${SESSION_ID}'; SELECT COUNT(*) AS event_count FROM gv1_journey_events WHERE event_key='${EVENT_KEY}'; SELECT COUNT(*) AS session_receipt_count FROM gv1_idempotency_keys WHERE scope='session:create' AND idempotency_key='${SESSION_KEY}'; SELECT COUNT(*) AS event_receipt_count FROM gv1_idempotency_keys WHERE scope='journey-event:create' AND idempotency_key='${EVENT_IDEMPOTENCY_KEY}'; SELECT COUNT(*) AS session_audit_count FROM gv1_audit_log WHERE entity_type='assessment_session' AND entity_id='${SESSION_ID}'; SELECT COUNT(*) AS event_audit_count FROM gv1_audit_log WHERE entity_type='journey_event' AND entity_id='${EVENT_KEY}'; SELECT COUNT(*) AS duplicate_sessions FROM (SELECT session_id FROM gv1_assessment_sessions GROUP BY session_id HAVING COUNT(*)>1); SELECT COUNT(*) AS duplicate_event_keys FROM (SELECT event_key FROM gv1_journey_events GROUP BY event_key HAVING COUNT(*)>1); SELECT COUNT(*) AS orphan_sessions FROM gv1_assessment_sessions s LEFT JOIN gv1_business_medical_records b ON b.bmr_id=s.bmr_id LEFT JOIN gv1_founders f ON f.founder_id=s.founder_id LEFT JOIN gv1_ventures v ON v.venture_id=s.venture_id WHERE b.bmr_id IS NULL OR f.founder_id IS NULL OR v.venture_id IS NULL;"
+          npx --yes wrangler@4 d1 execute galvivault-0-5-qa \
+            --remote \
+            --command="$SQL" \
+            --config wrangler.json \
+            --json > /tmp/day1-evidence.json
+          cat /tmp/day1-evidence.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const payload=JSON.parse(fs.readFileSync('/tmp/day1-evidence.json','utf8'));
+          const objects=[];
+          const walk=(value)=>{
+            if(Array.isArray(value)) for(const item of value) walk(item);
+            else if(value&&typeof value==='object'){
+              objects.push(value);
+              for(const item of Object.values(value)) walk(item);
+            }
+          };
+          walk(payload);
+          const value=(key)=>objects.find(item=>Object.hasOwn(item,key))?.[key];
+          for(const key of ['session_count','event_count','session_receipt_count','event_receipt_count','session_audit_count','event_audit_count']){
+            if(Number(value(key))!==1) throw new Error(`${key} must equal 1; found ${value(key) ?? 'none'}.`);
+          }
+          for(const key of ['duplicate_sessions','duplicate_event_keys','orphan_sessions']){
+            if(Number(value(key))!==0) throw new Error(`${key} must equal 0; found ${value(key) ?? 'none'}.`);
+          }
+          console.log('PASS: remote Day 1 session, journey, receipt, audit, duplicate, and orphan evidence is clean.');
+          NODE
 
       - name: Capture Human E2E readiness summary
         if: success()
@@ -109,8 +169,11 @@ jobs:
           echo '- Candidate SHA: ${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
           echo '- QA Worker: galvivault-p0-day1-qa' >> "$GITHUB_STEP_SUMMARY"
           echo '- QA D1: galvivault-0-5-qa' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Collision-safe schema namespace: gv1_' >> "$GITHUB_STEP_SUMMARY"
           echo '- Schema migration 0001: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 1 blocking tests: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Deployed API smoke: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Production branch/runtime changed: NO' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Remote D1 evidence assertions: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Existing Day 7D QA target changed: NO' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production branch/runtime/database changed: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '**READY FOR DAY 1 HUMAN E2E H1.1–H1.7**' >> "$GITHUB_STEP_SUMMARY"
