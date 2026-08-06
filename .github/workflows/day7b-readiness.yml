@@ -6,10 +6,18 @@ on:
       - qa-revamped-galvicare-0-5
     paths-ignore:
       - "worker/day1.js"
+      - "worker/day2.js"
       - "migrations/day1/**"
       - "tests/day1-foundation.test.mjs"
+      - "tests/galvivault-day2-identity-continuity.test.mjs"
+      - "scripts/galvivault-day2-e2e.mjs"
+      - "scripts/verify-galvivault-day2-files.mjs"
       - "wrangler.json"
+      - "wrangler.day2.json"
       - ".github/workflows/day1-qa-foundation.yml"
+      - ".github/workflows/day2-qa-identity-continuity.yml"
+      - "release-evidence/day1/**"
+      - "release-evidence/day2/**"
   workflow_dispatch:
 
 permissions:
