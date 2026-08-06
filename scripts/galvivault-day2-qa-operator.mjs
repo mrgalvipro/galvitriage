@@ -5,7 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 
 const BRANCH = 'qa-revamped-galvicare-0-5';
-const BASELINE = '63bcb2a2f0a6829915a30c6c4a78106f96cedf7a';
+const SOURCE_GUARD_SHA = 'ae41b41892de2e9b88b4e81d5e521c535719bb15';
+const DAY1_ROLLBACK_SHA = '63bcb2a2f0a6829915a30c6c4a78106f96cedf7a';
 const WORKER = 'galvivault-p0-day1-qa';
 const DB = 'galvivault-0-5-qa';
 const ORIGIN = process.env.DAY2_ALLOWED_ORIGIN || 'https://galvipro.com';
@@ -63,8 +64,9 @@ async function main() {
   if (git('branch', '--show-current') !== BRANCH) die(`Run from ${BRANCH}.`);
   if (git('status', '--porcelain')) die('Working tree must be clean.');
   const candidate = git('rev-parse', 'HEAD');
-  run('git', ['cat-file', '-e', `${BASELINE}^{commit}`]);
-  run('git', ['merge-base', '--is-ancestor', BASELINE, candidate]);
+  run('git', ['cat-file', '-e', `${SOURCE_GUARD_SHA}^{commit}`]);
+  run('git', ['cat-file', '-e', `${DAY1_ROLLBACK_SHA}^{commit}`]);
+  run('git', ['merge-base', '--is-ancestor', SOURCE_GUARD_SHA, candidate]);
 
   const protectedFiles = new Set([
     'package.json', '.github/workflows/day1-qa-foundation.yml', '.github/workflows/day7b-readiness.yml',
@@ -73,16 +75,16 @@ async function main() {
     'wrangler.day7d.json', 'wrangler.qa-frontend.jsonc', 'index.html', 'galvitriage-cat.html',
     'day7c-browser-observability.js', 'day7d-browser-customer-intelligence.js'
   ]);
-  const changed = git('diff', '--name-only', `${BASELINE}..${candidate}`).split(/\r?\n/).filter(Boolean);
+  const changed = git('diff', '--name-only', `${SOURCE_GUARD_SHA}..${candidate}`).split(/\r?\n/).filter(Boolean);
   fs.writeFileSync(path.join(OUT, 'changed-files.txt'), `${changed.join('\n')}\n`);
   const violations = changed.filter((file) => protectedFiles.has(file));
-  if (violations.length) die(`Protected GalviCare/Production files changed: ${violations.join(', ')}`);
+  if (violations.length) die(`Protected GalviCare/Production files changed after the approved Day 2 source guard: ${violations.join(', ')}`);
 
   const config = JSON.parse(fs.readFileSync('wrangler.day2.json', 'utf8'));
   const binding = config.d1_databases?.find((item) => item.binding === 'DB');
   if (config.name !== WORKER || config.main !== 'worker/day2.js' || config.vars?.ENVIRONMENT !== 'qa' || config.vars?.MIN_SCHEMA_VERSION !== '0002' || binding?.database_name !== DB) die('Day 2 QA configuration is not authoritative.');
 
-  writeJson(path.join(OUT, 'baseline.json'), { branch: BRANCH, candidate_sha: candidate, worker: WORKER, d1: DB, origin: ORIGIN, started_at: new Date().toISOString() });
+  writeJson(path.join(OUT, 'baseline.json'), { branch: BRANCH, source_guard_sha: SOURCE_GUARD_SHA, day1_rollback_sha: DAY1_ROLLBACK_SHA, candidate_sha: candidate, worker: WORKER, d1: DB, origin: ORIGIN, started_at: new Date().toISOString() });
   writeJson(path.join(OUT, 'source-hashes.json'), {
     'worker/day2.js': hash('worker/day2.js'),
     'wrangler.day2.json': hash('wrangler.day2.json'),
@@ -165,8 +167,8 @@ async function main() {
 
   fs.mkdirSync(FINAL, { recursive: true });
   fs.cpSync(OUT, FINAL, { recursive: true });
-  writeJson(path.join(FINAL, 'deployment-metadata.json'), { day: 2, branch: BRANCH, candidate_commit: candidate, qa_worker: WORKER, qa_worker_url: baseUrl, qa_d1: DB, migration: '0002', automated_h2_1_through_h2_9: 'pass', human_h2_10: 'pending' });
-  fs.writeFileSync(path.join(FINAL, 'rollback.md'), `# Day 2 Rollback\n\nApplication rollback commit: ${BASELINE}\n\nCommand: \`npx --yes wrangler@4 deploy --config wrangler.json\`\n\nMigration 0002 is additive and must not be destructively reversed.\n`);
+  writeJson(path.join(FINAL, 'deployment-metadata.json'), { day: 2, branch: BRANCH, source_guard_sha: SOURCE_GUARD_SHA, day1_rollback_sha: DAY1_ROLLBACK_SHA, candidate_commit: candidate, qa_worker: WORKER, qa_worker_url: baseUrl, qa_d1: DB, migration: '0002', automated_h2_1_through_h2_9: 'pass', human_h2_10: 'pending' });
+  fs.writeFileSync(path.join(FINAL, 'rollback.md'), `# Day 2 Rollback\n\nApplication rollback commit: ${DAY1_ROLLBACK_SHA}\n\nCommand: \`npx --yes wrangler@4 deploy --config wrangler.json\`\n\nMigration 0002 is additive and must not be destructively reversed.\n`);
   fs.writeFileSync(path.join(FINAL, 'defect-register.md'), '# Day 2 Defect Register\n\nAutomated blocking defects after this run: none.\nRemaining gate: H2.10 Human Production regression evidence.\n');
   fs.writeFileSync(path.join(FINAL, 'h2-10-human-evidence.md'), '# H2.10 Production Regression\n\n- [ ] Production GalviCare renders in Incognito.\n- [ ] Network traffic does not invoke the GalviVault QA Worker.\n- [ ] Production does not use `galvivault-0-5-qa`.\n- [ ] QA fixtures are unavailable in Production.\n- [ ] Production Worker deployment/version evidence captured.\n- [ ] QA Worker deployment/version evidence captured.\n');
 
