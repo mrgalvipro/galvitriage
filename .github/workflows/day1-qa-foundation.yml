@@ -1,0 +1,116 @@
+name: GalviVault Day 1 QA Foundation
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - "worker/day1.js"
+      - "migrations/day1/**"
+      - "tests/day1-foundation.test.mjs"
+      - "package.json"
+      - "wrangler.json"
+      - "wrangler.day7d.json"
+      - "wrangler.production.jsonc"
+      - ".github/workflows/day1-qa-foundation.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvivault-day1-qa
+  cancel-in-progress: true
+
+env:
+  DAY1_BASE_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
+  DAY1_ALLOWED_ORIGIN: https://galvipro.com
+
+jobs:
+  day1-foundation:
+    name: Build, migrate, deploy, and prove Day 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout exact QA candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Assert mandated branch and runtime separation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const day1=JSON.parse(fs.readFileSync('wrangler.json','utf8'));
+          const day7d=JSON.parse(fs.readFileSync('wrangler.day7d.json','utf8'));
+          const production=fs.readFileSync('wrangler.production.jsonc','utf8');
+          if(day1.name!=='galvivault-p0-day1-qa'||day1.main!=='worker/day1.js') throw new Error('Day 1 target is invalid.');
+          if(day7d.name!=='galvicare-triage-intake'||day7d.main!=='worker/day7d-engine.js') throw new Error('Day 7D target is invalid.');
+          if(!production.includes('worker/production-entry.js')||production.includes('worker/day1.js')) throw new Error('Production entry separation failed.');
+          const day1Db=day1.d1_databases?.find(item=>item.binding==='DB');
+          const day7dDb=day7d.d1_databases?.find(item=>item.binding==='DB');
+          if(day1Db?.database_name!=='galvivault-0-5-qa'||day7dDb?.database_name!=='galvivault-0-5-qa') throw new Error('QA D1 target mismatch.');
+          console.log('PASS: Day 1, Day 7D, and Production runtime entries are distinct.');
+          NODE
+
+      - name: Install existing dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Run Day 1 blocking suite
+        run: npm run test:day1
+
+      - name: Apply additive Day 1 schema to QA D1
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          packageManager: npm
+          command: d1 execute galvivault-0-5-qa --remote --file=migrations/day1/0001_canonical_business_medical_record.sql --config wrangler.json
+
+      - name: Verify QA D1 schema ledger and foundation tables
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          packageManager: npm
+          command: d1 execute galvivault-0-5-qa --remote --command="SELECT migration_id,name,environment FROM schema_migrations WHERE migration_id='0001'; SELECT COUNT(*) AS required_tables FROM sqlite_master WHERE type='table' AND name IN ('founders','ventures','business_medical_records','assessment_sessions','journey_events','audit_log','idempotency_keys');" --config wrangler.json
+
+      - name: Deploy isolated Day 1 QA Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4"
+          packageManager: npm
+          command: deploy --config wrangler.json
+
+      - name: Run deployed Day 1 smoke
+        env:
+          DAY1_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: npm run qa:smoke
+
+      - name: Capture Human E2E readiness summary
+        if: success()
+        run: |
+          echo '## GALVIVAULT DAY 1 AUTOMATED QA: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Branch: qa-revamped-galvicare-0-5' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Candidate SHA: ${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA Worker: galvivault-p0-day1-qa' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA D1: galvivault-0-5-qa' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Schema migration 0001: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 1 blocking tests: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Deployed API smoke: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production branch/runtime changed: NO' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR DAY 1 HUMAN E2E H1.1–H1.7**' >> "$GITHUB_STEP_SUMMARY"
