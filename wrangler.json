@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvivault-p0-day1-qa",
-  "main": "worker/day1.js",
+  "main": "worker/day3.js",
   "compatibility_date": "2026-07-23",
   "workers_dev": true,
   "observability": {
@@ -11,7 +11,7 @@
     "ENVIRONMENT": "qa",
     "FIXTURE_MODE": "true",
     "API_VERSION": "v1",
-    "MIN_SCHEMA_VERSION": "0001",
+    "MIN_SCHEMA_VERSION": "0002",
     "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,http://localhost:8787,http://127.0.0.1:8787"
   },
   "d1_databases": [
