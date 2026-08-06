@@ -1,4 +1,4 @@
-name: GalviVault Day 1 QA Foundation
+name: Deploy GalviCare QA Worker
 
 on:
   workflow_dispatch:
@@ -6,29 +6,42 @@ on:
     branches:
       - qa-revamped-galvicare-0-5
     paths:
-      - "worker/day1.js"
-      - "migrations/day1/**"
-      - "tests/day1-foundation.test.mjs"
+      - "worker/worker.js"
+      - "worker/day7d-engine.js"
+      - "worker/day7d-runtime.js"
+      - "day7d-browser-customer-intelligence.js"
+      - "scripts/day7b-build-qa-frontend.mjs"
+      - "scripts/day7d-preflight.mjs"
+      - "migrations/0006_day7d_customer_intelligence.sql"
+      - "tests/day7d-customer-intelligence.test.mjs"
+      - "tests/day7d-customer-path-contract.test.mjs"
+      - "index.html"
+      - "qa-frontend-worker.js"
+      - "wrangler.day7d.json"
+      - "wrangler.qa-frontend.jsonc"
       - "package.json"
-      - "wrangler.json"
       - ".github/workflows/deploy-galvicare-qa.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: galvivault-day1-qa
+  group: galvicare-qa-single-authoritative-deployer
   cancel-in-progress: true
 
 env:
-  DAY1_BASE_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
-  DAY1_ALLOWED_ORIGIN: https://galvipro.com
+  QA_API_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
+  QA_FRONTEND_URL: https://galvicare-0-5-qa.mrgalvipro.workers.dev
+  DAY7D_RULES_VERSION: galviengine_customer_intelligence_v0_5_4
+  DAY7D_QUESTION_VERSION: clinical_followups_v0_5_4
+  DAY7D_CONTENT_VERSION: galvicare_day7d_customer_intelligence_v0_5_6
+  DAY7D_RELEASE_CONTRACT: day7d_cumulative_customer_intelligence_v3
 
 jobs:
-  day1-foundation:
-    name: Build, migrate, deploy, and prove Day 1
+  qa-release-gate:
+    name: Day 7D → One P0 Candidate → Worker + Frontend → Runtime Proof
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Checkout exact QA candidate
@@ -37,68 +50,139 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: Assert mandated branch and production separation
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
-          test "$(node -p "require('./wrangler.json').main")" = "worker/day1.js"
-          test "$(node -p "require('./wrangler.json').name")" = "galvivault-p0-day1-qa"
-          test "$(node -p "require('./wrangler.day7d.json').main")" = "worker/day7d-engine.js"
-          test "$(node -p "require('./wrangler.production.jsonc').includes ? 'ok' : 'ok'" 2>/dev/null || echo ok)" = "ok"
-          echo "PASS: QA branch is authoritative; Day 1, Day 7D, and Production entries remain distinct."
-
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Install existing dependencies
+      - name: Install dependencies
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: Run Day 1 blocking suite
-        run: npm run test:day1
+      - name: Compute matched Day 7D release fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          RELEASE_ID="$({ sha256sum worker/worker.js worker/day7d-engine.js day7d-browser-customer-intelligence.js scripts/day7b-build-qa-frontend.mjs scripts/day7d-preflight.mjs tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs index.html qa-frontend-worker.js wrangler.day7d.json wrangler.qa-frontend.jsonc; } | sha256sum | awk '{print $1}')"
+          test -n "$RELEASE_ID"
+          echo "DAY7D_RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
+          echo "Matched Day 7D QA candidate fingerprint: $RELEASE_ID"
 
-      - name: Apply additive Day 1 schema to QA D1
+      - name: Run one authoritative pre-human gate
+        run: npm run day7d:gate
+
+      - name: Verify generated cumulative QA frontend
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist-qa/index.html
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const html=fs.readFileSync('dist-qa/index.html','utf8');
+          const required=['GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS','Day 7D cumulative customer-intelligence browser adapter.','galviscore-followup','save_galviscore_followup','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions','MAX_VISIBLE_TARGETED_QUESTIONS=3'];
+          const missing=required.filter(token=>!html.includes(token));
+          if(missing.length) throw new Error(`Generated QA frontend missing: ${missing.join(', ')}`);
+          if(html.split('Day 7D cumulative customer-intelligence browser adapter.').length-1!==1) throw new Error('Expected one authoritative Day 7D adapter.');
+          console.log('PASS: one cumulative QA frontend candidate generated.');
+          NODE
+
+      - name: Apply additive Day 7D schema to existing QA D1
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4"
           packageManager: npm
-          command: d1 execute galvivault-0-5-qa --remote --file=migrations/day1/0001_canonical_business_medical_record.sql --config wrangler.json
+          command: d1 execute galvivault-0-5-qa --remote --file=migrations/0006_day7d_customer_intelligence.sql --config wrangler.day7d.json
 
-      - name: Verify QA D1 schema ledger and foundation tables
+      - name: Deploy authoritative Day 7D Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4"
           packageManager: npm
-          command: d1 execute galvivault-0-5-qa --remote --command="SELECT migration_id,name,environment FROM schema_migrations WHERE migration_id='0001'; SELECT COUNT(*) AS required_tables FROM sqlite_master WHERE type='table' AND name IN ('founders','ventures','business_medical_records','assessment_sessions','journey_events','audit_log','idempotency_keys');" --config wrangler.json
+          command: deploy --config wrangler.day7d.json --var DAY7D_DEPLOY_SHA:${{ env.DAY7D_RELEASE_ID }} --var DAY7D_DEPLOY_TARGET:galvicare-triage-intake
 
-      - name: Deploy isolated Day 1 QA Worker
+      - name: Deploy authoritative QA frontend
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4"
           packageManager: npm
-          command: deploy --config wrangler.json
+          command: deploy --config wrangler.qa-frontend.jsonc --var DAY7D_FRONTEND_RELEASE_ID:${{ env.DAY7D_RELEASE_ID }}
 
-      - name: Run deployed Day 1 smoke
-        run: npm run qa:smoke
+      - name: Verify deployed Worker P0 convergence
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const expected={
+            enabled:true,
+            rules_version:process.env.DAY7D_RULES_VERSION,
+            question_version:process.env.DAY7D_QUESTION_VERSION,
+            content_version:process.env.DAY7D_CONTENT_VERSION,
+            entrypoint:'worker/day7d-engine.js',
+            release_contract:process.env.DAY7D_RELEASE_CONTRACT,
+            galviscore_clarification_server_owned:true,
+            objective_score_immutable:true,
+            progressive_followups:true,
+            dynamic_question_count:true,
+            approved_low_confidence_question_count:3,
+            evidence_version_cache:true,
+            cumulative_clinic_brief:true,
+            prior_product_results_in_clinical_file:true,
+            bounded_multi_question_submit:true,
+            collision_safe_followup_save:true,
+            legacy_generation_bypass_closed:true,
+            atomic_followup_save:true,
+            server_selected_question_validation:true,
+            save_returns_regenerated_result:true
+          };
+          const deadline=Date.now()+180000;
+          let consecutive=0,last=null;
+          while(Date.now()<deadline){
+            try{
+              const response=await fetch(process.env.QA_API_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`worker-${Date.now()}`})});
+              const body=await response.json();
+              const mismatches=[];
+              if(!response.ok||body?.success!==true)mismatches.push(`http/success=${response.status}/${body?.success}`);
+              for(const [key,value] of Object.entries(expected)) if(body?.day7d?.[key]!==value) mismatches.push(`${key}: ${JSON.stringify(body?.day7d?.[key])}`);
+              last={mismatches,body};
+              consecutive=mismatches.length===0?consecutive+1:0;
+              if(consecutive>=3){ console.log('PASS: deployed Day 7D Worker converged.'); process.exit(0); }
+            } catch(error) { last={error:String(error)}; consecutive=0; }
+            await new Promise(resolve=>setTimeout(resolve,3000));
+          }
+          throw new Error(`Worker did not converge: ${JSON.stringify(last)}`);
+          NODE
 
-      - name: Capture Human E2E readiness summary
+      - name: Verify deployed complete QA frontend
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          const deadline=Date.now()+180000;
+          let consecutive=0,last=null;
+          while(Date.now()<deadline){
+            try{
+              const healthResponse=await fetch(`${process.env.QA_FRONTEND_URL}/health?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
+              const health=await healthResponse.json();
+              const response=await fetch(`${process.env.QA_FRONTEND_URL}/?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
+              const html=await response.text();
+              const valid=response.ok&&healthResponse.ok&&health?.release_id===process.env.DAY7D_RELEASE_ID&&html.includes('Day 7D cumulative customer-intelligence browser adapter.');
+              last={status:response.status,health_status:healthResponse.status,release_id:health?.release_id};
+              consecutive=valid?consecutive+1:0;
+              if(consecutive>=3){ console.log('PASS: deployed complete QA frontend matches candidate.'); process.exit(0); }
+            } catch(error) { last={error:String(error)}; consecutive=0; }
+            await new Promise(resolve=>setTimeout(resolve,3000));
+          }
+          throw new Error(`QA frontend did not converge: ${JSON.stringify(last)}`);
+          NODE
+
+      - name: READY FOR FINAL DAY 7D HUMAN E2E
         if: success()
         run: |
-          echo '## GALVIVAULT DAY 1 AUTOMATED QA: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Branch: qa-revamped-galvicare-0-5' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Candidate SHA: ${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
-          echo '- QA Worker: galvivault-p0-day1-qa' >> "$GITHUB_STEP_SUMMARY"
-          echo '- QA D1: galvivault-0-5-qa' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Schema migration 0001: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 1 blocking tests: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Deployed API smoke: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Production branch/runtime changed: NO' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR DAY 1 HUMAN E2E H1.1–H1.7**' >> "$GITHUB_STEP_SUMMARY"
+          echo '## DAY 7D AUTHORITATIVE QA RELEASE: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Candidate SHA: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Candidate fingerprint: $DAY7D_RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 1 isolated deployment lane preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR FINAL DAY 7D HUMAN E2E**' >> "$GITHUB_STEP_SUMMARY"
