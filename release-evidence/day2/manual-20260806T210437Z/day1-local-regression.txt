@@ -1,0 +1,22 @@
+✔ required Day 1 files exist at exact canonical paths (1.3208ms)
+✔ package and Wrangler configuration are QA-only and executable (1.9257ms)
+✔ Production protection keeps Day 1 out of the Production entry and database (0.8676ms)
+✔ migration is additive, namespaced, repeatable, and complete (3.7988ms)
+✔ migration coexists with incompatible legacy GalviCare table names and data (2.5438ms)
+✔ health is canonical, QA-only, and does not expose database identity (25.6812ms)
+✔ readiness and schema version agree with the namespaced migration ledger (13.5238ms)
+✔ CORS grants only exact approved origins (5.2154ms)
+✔ missing database binding fails closed with safe JSON (2.9161ms)
+✔ session create, replay, get, audit, and actual idempotency key persist correctly (13.3837ms)
+✔ journey event create, replay, and mismatch are idempotent (5.6672ms)
+✔ fixture is deterministic in QA and unavailable under Production policy (8.6654ms)
+✔ invalid route, payload, and unknown session return safe canonical errors (3.2952ms)
+✔ OPTIONS returns no body and approved CORS metadata (2.414ms)
+ℹ tests 14
+ℹ suites 0
+ℹ pass 14
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 173.5078

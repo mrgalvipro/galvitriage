@@ -1,0 +1,847 @@
+{
+  "day": 2,
+  "run_suffix": "manual-20260806t210437z",
+  "base_url": "https://galvivault-p0-day1-qa.mrgalvipro.workers.dev",
+  "origin": "https://galvipro.com",
+  "started_at": "2026-08-06T21:05:14.747Z",
+  "steps": [
+    {
+      "step": "PRECONDITION_DAY2_READINESS",
+      "timestamp": "2026-08-06T21:05:14.899Z",
+      "method": "GET",
+      "path": "/api/v1/day2/readiness",
+      "status": 200,
+      "correlation_id": "corr_d2_manual-20260806t210437z_precondition_day2_readiness",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_precondition_day2_readiness",
+        "data": {
+          "service": "galvivault-p0-day2",
+          "ready": true,
+          "migration": {
+            "migration_id": "0002",
+            "name": "day2_identity_continuity",
+            "environment": "qa",
+            "applied_at": "2026-08-06 17:44:18"
+          },
+          "current_schema_version": "0002",
+          "required_schema_version": "0002",
+          "required_index_count": 3,
+          "present_index_count": 3,
+          "normalized_email_column": true,
+          "response_json_column": true
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": null,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H2.1_NEW_IDENTITY",
+      "timestamp": "2026-08-06T21:05:15.037Z",
+      "method": "POST",
+      "path": "/api/v1/sessions",
+      "status": 201,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_1_new_identity",
+      "environment": "qa",
+      "request": {
+        "client_session_key": "d2-session-manual-20260806t210437z-01",
+        "source": "galvicare",
+        "current_stage": "GalviTriage",
+        "founder": {
+          "email": "founder.day2.manual-20260806t210437z@example.test",
+          "first_name": "Day",
+          "last_name": "Two",
+          "consent_status": "approved"
+        },
+        "venture": {
+          "venture_name": "Day 2 Canonical Venture manual-20260806t210437z",
+          "stage": "ideation",
+          "industry": "business-services",
+          "role_code": "founder",
+          "is_primary": true
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_1_new_identity",
+        "data": {
+          "identity": {
+            "founder": {
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "first_name": "Day",
+              "last_name": "Two",
+              "email": "founder.day2.manual-20260806t210437z@example.test",
+              "normalized_email": "founder.day2.manual-20260806t210437z@example.test",
+              "phone": null,
+              "consent_status": "approved",
+              "status": "active",
+              "record_version": 1,
+              "profile_json": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "venture": {
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "venture_name": "Day 2 Canonical Venture manual-20260806t210437z",
+              "stage": "ideation",
+              "website": null,
+              "industry": "business-services",
+              "revenue_range": null,
+              "profile_json": null,
+              "status": "active",
+              "record_version": 1,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "founder_venture_role": {
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "role_code": "founder",
+              "is_primary": 1,
+              "status": "active",
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "business_medical_record": {
+              "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "status": "active",
+              "record_version": 1,
+              "current_session_id": "ses_ab58ae790d7442bda6644019d2d29f8f",
+              "opened_at": "2026-08-06T21:05:12.697Z",
+              "closed_at": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "session": {
+              "session_id": "ses_ab58ae790d7442bda6644019d2d29f8f",
+              "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "client_session_key": "d2-session-manual-20260806t210437z-01",
+              "source": "galvicare",
+              "current_stage": "GalviTriage",
+              "status": "active",
+              "started_at": "2026-08-06T21:05:12.697Z",
+              "completed_at": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            }
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 1,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H2.2_EXACT_RETRY",
+      "timestamp": "2026-08-06T21:05:15.107Z",
+      "method": "POST",
+      "path": "/api/v1/sessions",
+      "status": 200,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_2_exact_retry",
+      "environment": "qa",
+      "request": {
+        "client_session_key": "d2-session-manual-20260806t210437z-01",
+        "source": "galvicare",
+        "current_stage": "GalviTriage",
+        "founder": {
+          "email": "founder.day2.manual-20260806t210437z@example.test",
+          "first_name": "Day",
+          "last_name": "Two",
+          "consent_status": "approved"
+        },
+        "venture": {
+          "venture_name": "Day 2 Canonical Venture manual-20260806t210437z",
+          "stage": "ideation",
+          "industry": "business-services",
+          "role_code": "founder",
+          "is_primary": true
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "replayed",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_2_exact_retry",
+        "data": {
+          "identity": {
+            "founder": {
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "first_name": "Day",
+              "last_name": "Two",
+              "email": "founder.day2.manual-20260806t210437z@example.test",
+              "normalized_email": "founder.day2.manual-20260806t210437z@example.test",
+              "phone": null,
+              "consent_status": "approved",
+              "status": "active",
+              "record_version": 1,
+              "profile_json": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "venture": {
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "venture_name": "Day 2 Canonical Venture manual-20260806t210437z",
+              "stage": "ideation",
+              "website": null,
+              "industry": "business-services",
+              "revenue_range": null,
+              "profile_json": null,
+              "status": "active",
+              "record_version": 1,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "founder_venture_role": {
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "role_code": "founder",
+              "is_primary": 1,
+              "status": "active",
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "business_medical_record": {
+              "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "status": "active",
+              "record_version": 1,
+              "current_session_id": "ses_ab58ae790d7442bda6644019d2d29f8f",
+              "opened_at": "2026-08-06T21:05:12.697Z",
+              "closed_at": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "session": {
+              "session_id": "ses_ab58ae790d7442bda6644019d2d29f8f",
+              "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "client_session_key": "d2-session-manual-20260806t210437z-01",
+              "source": "galvicare",
+              "current_stage": "GalviTriage",
+              "status": "active",
+              "started_at": "2026-08-06T21:05:12.697Z",
+              "completed_at": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            }
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 1,
+          "idempotent_replay": true
+        }
+      }
+    },
+    {
+      "step": "H2.3_REFRESH_RETRIEVAL",
+      "timestamp": "2026-08-06T21:05:15.170Z",
+      "method": "GET",
+      "path": "/api/v1/sessions/ses_ab58ae790d7442bda6644019d2d29f8f",
+      "status": 200,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_3_refresh_retrieval",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_3_refresh_retrieval",
+        "data": {
+          "identity": {
+            "founder": {
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "first_name": "Day",
+              "last_name": "Two",
+              "email": "founder.day2.manual-20260806t210437z@example.test",
+              "normalized_email": "founder.day2.manual-20260806t210437z@example.test",
+              "phone": null,
+              "consent_status": "approved",
+              "status": "active",
+              "record_version": 1,
+              "profile_json": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "venture": {
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "venture_name": "Day 2 Canonical Venture manual-20260806t210437z",
+              "stage": "ideation",
+              "website": null,
+              "industry": "business-services",
+              "revenue_range": null,
+              "profile_json": null,
+              "status": "active",
+              "record_version": 1,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "founder_venture_role": {
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "role_code": "founder",
+              "is_primary": 1,
+              "status": "active",
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "business_medical_record": {
+              "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "status": "active",
+              "record_version": 1,
+              "current_session_id": "ses_ab58ae790d7442bda6644019d2d29f8f",
+              "opened_at": "2026-08-06T21:05:12.697Z",
+              "closed_at": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "session": {
+              "session_id": "ses_ab58ae790d7442bda6644019d2d29f8f",
+              "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "client_session_key": "d2-session-manual-20260806t210437z-01",
+              "source": "galvicare",
+              "current_stage": "GalviTriage",
+              "status": "active",
+              "started_at": "2026-08-06T21:05:12.697Z",
+              "completed_at": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            }
+          },
+          "session": {
+            "session_id": "ses_ab58ae790d7442bda6644019d2d29f8f",
+            "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+            "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+            "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+            "client_session_key": "d2-session-manual-20260806t210437z-01",
+            "source": "galvicare",
+            "current_stage": "GalviTriage",
+            "status": "active",
+            "started_at": "2026-08-06T21:05:12.697Z",
+            "completed_at": null,
+            "created_at": "2026-08-06T21:05:12.697Z",
+            "updated_at": "2026-08-06T21:05:12.697Z"
+          },
+          "founder": {
+            "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+            "first_name": "Day",
+            "last_name": "Two",
+            "email": "founder.day2.manual-20260806t210437z@example.test",
+            "normalized_email": "founder.day2.manual-20260806t210437z@example.test",
+            "phone": null,
+            "consent_status": "approved",
+            "status": "active",
+            "record_version": 1,
+            "profile_json": null,
+            "created_at": "2026-08-06T21:05:12.697Z",
+            "updated_at": "2026-08-06T21:05:12.697Z"
+          },
+          "venture": {
+            "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+            "venture_name": "Day 2 Canonical Venture manual-20260806t210437z",
+            "stage": "ideation",
+            "website": null,
+            "industry": "business-services",
+            "revenue_range": null,
+            "profile_json": null,
+            "status": "active",
+            "record_version": 1,
+            "created_at": "2026-08-06T21:05:12.697Z",
+            "updated_at": "2026-08-06T21:05:12.697Z"
+          },
+          "business_medical_record": {
+            "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+            "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+            "status": "active",
+            "record_version": 1,
+            "current_session_id": "ses_ab58ae790d7442bda6644019d2d29f8f",
+            "opened_at": "2026-08-06T21:05:12.697Z",
+            "closed_at": null,
+            "created_at": "2026-08-06T21:05:12.697Z",
+            "updated_at": "2026-08-06T21:05:12.697Z"
+          },
+          "founder_venture_role": {
+            "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+            "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+            "role_code": "founder",
+            "is_primary": 1,
+            "status": "active",
+            "created_at": "2026-08-06T21:05:12.697Z",
+            "updated_at": "2026-08-06T21:05:12.697Z"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 1,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H2.4_NEW_SESSION",
+      "timestamp": "2026-08-06T21:05:15.303Z",
+      "method": "POST",
+      "path": "/api/v1/sessions",
+      "status": 201,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_4_new_session",
+      "environment": "qa",
+      "request": {
+        "client_session_key": "d2-session-manual-20260806t210437z-02",
+        "source": "galvicare",
+        "current_stage": "GalviTriage",
+        "founder": {
+          "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+          "email": "founder.day2.manual-20260806t210437z@example.test"
+        },
+        "venture": {
+          "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+          "role_code": "founder"
+        },
+        "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec"
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_4_new_session",
+        "data": {
+          "identity": {
+            "founder": {
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "first_name": "Day",
+              "last_name": "Two",
+              "email": "founder.day2.manual-20260806t210437z@example.test",
+              "normalized_email": "founder.day2.manual-20260806t210437z@example.test",
+              "phone": null,
+              "consent_status": "approved",
+              "status": "active",
+              "record_version": 1,
+              "profile_json": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "venture": {
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "venture_name": "Day 2 Canonical Venture manual-20260806t210437z",
+              "stage": "ideation",
+              "website": null,
+              "industry": "business-services",
+              "revenue_range": null,
+              "profile_json": null,
+              "status": "active",
+              "record_version": 1,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "founder_venture_role": {
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "role_code": "founder",
+              "is_primary": 1,
+              "status": "active",
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "business_medical_record": {
+              "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "status": "active",
+              "record_version": 2,
+              "current_session_id": "ses_df7ca71c31e249b5a36553d5d088bab1",
+              "opened_at": "2026-08-06T21:05:12.697Z",
+              "closed_at": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.972Z"
+            },
+            "session": {
+              "session_id": "ses_df7ca71c31e249b5a36553d5d088bab1",
+              "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+              "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "client_session_key": "d2-session-manual-20260806t210437z-02",
+              "source": "galvicare",
+              "current_stage": "GalviTriage",
+              "status": "active",
+              "started_at": "2026-08-06T21:05:12.972Z",
+              "completed_at": null,
+              "created_at": "2026-08-06T21:05:12.972Z",
+              "updated_at": "2026-08-06T21:05:12.972Z"
+            }
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 2,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H2.5_PROFILE_CORRECTION",
+      "timestamp": "2026-08-06T21:05:15.397Z",
+      "method": "PATCH",
+      "path": "/api/v1/ventures/ven_8661a4fac59f4118bc8e02e83076c517",
+      "status": 200,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_5_profile_correction",
+      "environment": "qa",
+      "request": {
+        "expected_version": 1,
+        "venture_name": "Day 2 Canonical Venture Corrected manual-20260806t210437z",
+        "stage": "validation",
+        "source": "operator"
+      },
+      "response": {
+        "success": true,
+        "status": "changed",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_5_profile_correction",
+        "data": {
+          "venture": {
+            "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+            "venture_name": "Day 2 Canonical Venture Corrected manual-20260806t210437z",
+            "stage": "validation",
+            "website": null,
+            "industry": "business-services",
+            "revenue_range": null,
+            "profile_json": null,
+            "status": "active",
+            "record_version": 2,
+            "created_at": "2026-08-06T21:05:12.697Z",
+            "updated_at": "2026-08-06T21:05:13.102Z"
+          },
+          "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+          "changed_fields": [
+            "venture_name",
+            "stage"
+          ]
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 2,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H2.6_STALE_VERSION",
+      "timestamp": "2026-08-06T21:05:15.453Z",
+      "method": "PATCH",
+      "path": "/api/v1/ventures/ven_8661a4fac59f4118bc8e02e83076c517",
+      "status": 409,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_6_stale_version",
+      "environment": "qa",
+      "request": {
+        "expected_version": 1,
+        "stage": "growth",
+        "source": "operator"
+      },
+      "response": {
+        "success": false,
+        "status": "conflict",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_6_stale_version",
+        "error": {
+          "code": "GV_VERSION_CONFLICT",
+          "message": "The Venture changed before this update was applied.",
+          "retryable": false,
+          "fields": [
+            {
+              "field": "expected_version",
+              "issue": "stale"
+            }
+          ]
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002"
+        }
+      }
+    },
+    {
+      "step": "H2.7_SECOND_VENTURE",
+      "timestamp": "2026-08-06T21:05:15.643Z",
+      "method": "POST",
+      "path": "/api/v1/sessions",
+      "status": 201,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_7_second_venture",
+      "environment": "qa",
+      "request": {
+        "client_session_key": "d2-session-manual-20260806t210437z-03",
+        "source": "galvicare",
+        "current_stage": "GalviTriage",
+        "founder": {
+          "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+          "email": "FOUNDER.DAY2.MANUAL-20260806T210437Z@EXAMPLE.TEST"
+        },
+        "venture": {
+          "venture_name": "Day 2 Second Venture manual-20260806t210437z",
+          "stage": "ideation",
+          "role_code": "founder",
+          "is_primary": true
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_7_second_venture",
+        "data": {
+          "identity": {
+            "founder": {
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "first_name": "Day",
+              "last_name": "Two",
+              "email": "founder.day2.manual-20260806t210437z@example.test",
+              "normalized_email": "founder.day2.manual-20260806t210437z@example.test",
+              "phone": null,
+              "consent_status": "approved",
+              "status": "active",
+              "record_version": 1,
+              "profile_json": null,
+              "created_at": "2026-08-06T21:05:12.697Z",
+              "updated_at": "2026-08-06T21:05:12.697Z"
+            },
+            "venture": {
+              "venture_id": "ven_16980af1ef144873ab1dca3d1ba08469",
+              "venture_name": "Day 2 Second Venture manual-20260806t210437z",
+              "stage": "ideation",
+              "website": null,
+              "industry": null,
+              "revenue_range": null,
+              "profile_json": null,
+              "status": "active",
+              "record_version": 1,
+              "created_at": "2026-08-06T21:05:13.296Z",
+              "updated_at": "2026-08-06T21:05:13.296Z"
+            },
+            "founder_venture_role": {
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "venture_id": "ven_16980af1ef144873ab1dca3d1ba08469",
+              "role_code": "founder",
+              "is_primary": 1,
+              "status": "active",
+              "created_at": "2026-08-06T21:05:13.296Z",
+              "updated_at": "2026-08-06T21:05:13.296Z"
+            },
+            "business_medical_record": {
+              "bmr_id": "bmr_98563040c91b48b9b99595f237ba5bf4",
+              "venture_id": "ven_16980af1ef144873ab1dca3d1ba08469",
+              "status": "active",
+              "record_version": 1,
+              "current_session_id": "ses_c008b5e5587b4dd6957b1fc79eed5d5f",
+              "opened_at": "2026-08-06T21:05:13.296Z",
+              "closed_at": null,
+              "created_at": "2026-08-06T21:05:13.296Z",
+              "updated_at": "2026-08-06T21:05:13.296Z"
+            },
+            "session": {
+              "session_id": "ses_c008b5e5587b4dd6957b1fc79eed5d5f",
+              "bmr_id": "bmr_98563040c91b48b9b99595f237ba5bf4",
+              "venture_id": "ven_16980af1ef144873ab1dca3d1ba08469",
+              "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+              "client_session_key": "d2-session-manual-20260806t210437z-03",
+              "source": "galvicare",
+              "current_stage": "GalviTriage",
+              "status": "active",
+              "started_at": "2026-08-06T21:05:13.296Z",
+              "completed_at": null,
+              "created_at": "2026-08-06T21:05:13.296Z",
+              "updated_at": "2026-08-06T21:05:13.296Z"
+            }
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 1,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H2.8_PRIVILEGE_INJECTION",
+      "timestamp": "2026-08-06T21:05:15.677Z",
+      "method": "POST",
+      "path": "/api/v1/ventures/ven_8661a4fac59f4118bc8e02e83076c517/founder-roles",
+      "status": 403,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_8_privilege_injection",
+      "environment": "qa",
+      "request": {
+        "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+        "role_code": "admin",
+        "is_primary": true
+      },
+      "response": {
+        "success": false,
+        "status": "invalid_request",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_8_privilege_injection",
+        "error": {
+          "code": "GV_FORBIDDEN",
+          "message": "The requested Founder-Venture role is not permitted.",
+          "retryable": false,
+          "fields": [
+            {
+              "field": "role_code",
+              "issue": "privileged_or_unsupported"
+            }
+          ]
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002"
+        }
+      }
+    },
+    {
+      "step": "H2.8_CROSS_SCOPE",
+      "timestamp": "2026-08-06T21:05:15.788Z",
+      "method": "POST",
+      "path": "/api/v1/sessions",
+      "status": 409,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_8_cross_scope",
+      "environment": "qa",
+      "request": {
+        "client_session_key": "d2-session-manual-20260806t210437z-scope",
+        "source": "galvicare",
+        "founder": {
+          "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+          "email": "founder.day2.manual-20260806t210437z@example.test"
+        },
+        "venture": {
+          "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+          "role_code": "founder"
+        },
+        "bmr_id": "bmr_98563040c91b48b9b99595f237ba5bf4"
+      },
+      "response": {
+        "success": false,
+        "status": "conflict",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_8_cross_scope",
+        "error": {
+          "code": "GV_SCOPE_MISMATCH",
+          "message": "The supplied BMR does not belong to the requested Venture.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002"
+        }
+      }
+    },
+    {
+      "step": "H2.9_KEY_INITIAL",
+      "timestamp": "2026-08-06T21:05:15.865Z",
+      "method": "POST",
+      "path": "/api/v1/founders",
+      "status": 201,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_9_key_initial",
+      "environment": "qa",
+      "request": {
+        "email": "key.one.manual-20260806t210437z@example.test",
+        "source": "galvicare"
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_9_key_initial",
+        "data": {
+          "founder": {
+            "founder_id": "fdr_e36ca78ca9714e7fbebf9a5eb179df34",
+            "first_name": null,
+            "last_name": null,
+            "email": "key.one.manual-20260806t210437z@example.test",
+            "normalized_email": "key.one.manual-20260806t210437z@example.test",
+            "phone": null,
+            "consent_status": "approved",
+            "status": "active",
+            "record_version": 1,
+            "profile_json": null,
+            "created_at": "2026-08-06T21:05:13.574Z",
+            "updated_at": "2026-08-06T21:05:13.574Z"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 1,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H2.9_KEY_REUSE",
+      "timestamp": "2026-08-06T21:05:15.890Z",
+      "method": "POST",
+      "path": "/api/v1/founders",
+      "status": 409,
+      "correlation_id": "corr_d2_manual-20260806t210437z_h2_9_key_reuse",
+      "environment": "qa",
+      "request": {
+        "email": "key.two.manual-20260806t210437z@example.test",
+        "source": "galvicare"
+      },
+      "response": {
+        "success": false,
+        "status": "conflict",
+        "environment": "qa",
+        "correlation_id": "corr_d2_manual-20260806t210437z_h2_9_key_reuse",
+        "error": {
+          "code": "GV_IDEMPOTENCY_KEY_REUSE",
+          "message": "The Idempotency-Key was already used for a different request.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002"
+        }
+      }
+    }
+  ],
+  "canonical_ids": {
+    "first": {
+      "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+      "venture_id": "ven_8661a4fac59f4118bc8e02e83076c517",
+      "bmr_id": "bmr_1ae80be57fee4df58ad66fe5079890ec",
+      "session_id": "ses_ab58ae790d7442bda6644019d2d29f8f"
+    },
+    "second_session": {
+      "session_id": "ses_df7ca71c31e249b5a36553d5d088bab1"
+    },
+    "second_venture": {
+      "founder_id": "fdr_a20e0e0ccb3846839dabfa2f9cacdd93",
+      "venture_id": "ven_16980af1ef144873ab1dca3d1ba08469",
+      "bmr_id": "bmr_98563040c91b48b9b99595f237ba5bf4",
+      "session_id": "ses_c008b5e5587b4dd6957b1fc79eed5d5f"
+    }
+  },
+  "h2_1_through_h2_9": "PASS",
+  "h2_10_production_regression": "HUMAN_EVIDENCE_REQUIRED",
+  "completed_at": "2026-08-06T21:05:15.890Z"
+}

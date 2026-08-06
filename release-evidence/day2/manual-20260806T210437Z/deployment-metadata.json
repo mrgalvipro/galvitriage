@@ -1,0 +1,13 @@
+{
+  "day": 2,
+  "branch": "qa-revamped-galvicare-0-5",
+  "source_guard_sha": "ae41b41892de2e9b88b4e81d5e521c535719bb15",
+  "day1_rollback_sha": "63bcb2a2f0a6829915a30c6c4a78106f96cedf7a",
+  "candidate_commit": "ac514d37c37421e471656c08685b3785d83fd5b6",
+  "qa_worker": "galvivault-p0-day1-qa",
+  "qa_worker_url": "https://galvivault-p0-day1-qa.mrgalvipro.workers.dev",
+  "qa_d1": "galvivault-0-5-qa",
+  "migration": "0002",
+  "automated_h2_1_through_h2_9": "pass",
+  "human_h2_10": "pending"
+}

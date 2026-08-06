@@ -1,0 +1,17 @@
+✔ Day 7A Worker remains the QA/build source without product-logic rewrite (1.2311ms)
+✔ Production has a separate security boundary around the approved Day 7D runtime (0.1247ms)
+✔ Day 1, Day 7D and Production Worker services are distinct (0.085ms)
+✔ QA and Production D1 targets are physically distinct (0.0747ms)
+✔ Production runtime is explicitly production and customer-origin only (0.075ms)
+✔ QA-only fixture and override capabilities are denied by Production boundary (0.0594ms)
+✔ Production health fingerprint identifies RUN lane, Production GalviVault, DB binding, Stripe mode and Day 7D runtime (0.0653ms)
+✔ Production payment return is fail-closed and requires Stripe LIVE paid authority (0.0567ms)
+✔ Production config contains no QA-only D1 or test-payment authority (0.0975ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 74.5927

@@ -1,0 +1,18 @@
+✔ Day 2 migration is additive and enforces identity continuity constraints (7.1836ms)
+✔ Day 2 readiness proves migration 0002 and required constraints (24.046ms)
+✔ new identity, exact replay, and refresh retrieval preserve one canonical identity set (16.8397ms)
+✔ email case and whitespace variation resolve the same Founder (6.8043ms)
+✔ new session reuses Founder, Venture, and BMR while changing only session_id (8.0647ms)
+✔ same Founder can create a second Venture with its own BMR and Session (6.5636ms)
+✔ Venture update is versioned, no-op safe, and stale-version safe (7.7441ms)
+✔ idempotency-key reuse, privilege injection, and cross-scope mismatch produce no mutation (9.4335ms)
+✔ one BMR per Venture is enforced independently of idempotency key (6.7405ms)
+✔ Day 2 CORS and missing DB failures remain safe JSON (9.2907ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 181.0507

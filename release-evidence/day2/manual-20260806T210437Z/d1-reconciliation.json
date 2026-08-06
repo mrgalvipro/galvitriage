@@ -1,0 +1,352 @@
+[
+  {
+    "results": [
+      {
+        "founder_count": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1927
+      },
+      "duration": 0.1927,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "normalized_email_count": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1319
+      },
+      "duration": 0.1319,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 2,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "venture_count": 2
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1554
+      },
+      "duration": 0.1554,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 3,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "first_bmr_count": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1213
+      },
+      "duration": 0.1213,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "second_bmr_count": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1653
+      },
+      "duration": 0.1653,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "first_session_count": 2
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.2535
+      },
+      "duration": 0.2535,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 4,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "second_session_count": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1803
+      },
+      "duration": 0.1803,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "venture_update_audit_count": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1078
+      },
+      "duration": 0.1078,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 3,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "cross_scope_session_count": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1366
+      },
+      "duration": 0.1366,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 0,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "key_reuse_receipt_count": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1176
+      },
+      "duration": 0.1176,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 18,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "orphan_roles": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.2035
+      },
+      "duration": 0.2035,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 24,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "orphan_bmrs": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1961
+      },
+      "duration": 0.1961,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 16,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "mismatched_sessions": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1178
+      },
+      "duration": 0.1178,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 20,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "duplicate_founder_emails": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1978
+      },
+      "duration": 0.1978,
+      "changes": 0,
+      "last_row_id": 18,
+      "changed_db": false,
+      "size_after": 2310144,
+      "rows_read": 6,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]

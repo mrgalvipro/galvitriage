@@ -1,0 +1,86 @@
+[
+  {
+    "results": [
+      {
+        "migration_id": "0001",
+        "name": "canonical_business_medical_record_v1",
+        "environment": "qa",
+        "checksum": "gv1-0001-namespaced-additive"
+      },
+      {
+        "migration_id": "0002",
+        "name": "day2_identity_continuity",
+        "environment": "qa",
+        "checksum": "galvivault-day2-identity-v1"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.487
+      },
+      "duration": 0.487,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 2281472,
+      "rows_read": 4,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "day2_column_count": 7
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.3182
+      },
+      "duration": 0.3182,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 2281472,
+      "rows_read": 32,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "day2_index_count": 8
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1811
+      },
+      "duration": 0.1811,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 2281472,
+      "rows_read": 200,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
