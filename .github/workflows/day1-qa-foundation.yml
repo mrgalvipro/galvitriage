@@ -144,15 +144,7 @@ jobs:
               "${DAY1_BASE_URL}/health?candidate=${GITHUB_SHA}&attempt=${attempt}" || true)"
             CONTENT_TYPE="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{print $0}' /tmp/day1-health-headers | tail -n 1 | tr -d '\r' || true)"
             if [ "$STATUS" = "200" ] && echo "$CONTENT_TYPE" | grep -qi 'application/json'; then
-              if node --input-type=module <<'NODE'
-              import fs from 'node:fs';
-              const payload=JSON.parse(fs.readFileSync('/tmp/day1-health-body','utf8'));
-              if(payload?.success!==true) process.exit(1);
-              if(payload?.environment!=='qa') process.exit(1);
-              if(payload?.data?.service!=='galvivault-p0') process.exit(1);
-              if(payload?.data?.schema_namespace!=='gv1_') process.exit(1);
-              NODE
-              then
+              if node --input-type=module -e "import fs from 'node:fs'; const payload=JSON.parse(fs.readFileSync('/tmp/day1-health-body','utf8')); if(payload?.success!==true||payload?.environment!=='qa'||payload?.data?.service!=='galvivault-p0'||payload?.data?.schema_namespace!=='gv1_') process.exit(1);"; then
                 echo "PASS: Day 1 JSON runtime converged on attempt ${attempt}."
                 exit 0
               fi
