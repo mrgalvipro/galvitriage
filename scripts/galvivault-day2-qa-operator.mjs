@@ -78,7 +78,7 @@ async function runDay1CompatibilityRegression(baseUrl, outputFile) {
 
   const health = await request('/health');
   if (health.response.status !== 200) die('Day 1 health regression failed.');
-  if (health.payload?.data?.schema_namespace !== 'gv1') die('Day 1 schema namespace changed.');
+  if (health.payload?.data?.schema_namespace !== 'gv1_') die('Day 1 schema namespace changed.');
 
   const ready = await request('/ready');
   if (ready.response.status !== 200 || ready.payload?.data?.ready !== true) die('Day 1 readiness regression failed.');
