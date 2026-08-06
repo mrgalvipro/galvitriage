@@ -18,11 +18,15 @@ fs.mkdirSync(OUT, { recursive: true });
 
 function die(message) { throw new Error(message); }
 function run(command, args = [], options = {}) {
-  const result = spawnSync(command, args, {
+  const isWindowsScript = process.platform === 'win32' && /\.(cmd|bat)$/i.test(command);
+  const executable = isWindowsScript ? (process.env.ComSpec || 'cmd.exe') : command;
+  const executableArgs = isWindowsScript ? ['/d', '/s', '/c', command, ...args] : args;
+  const result = spawnSync(executable, executableArgs, {
     cwd: process.cwd(),
     env: { ...process.env, ...(options.env || {}) },
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
+    windowsHide: true,
     stdio: options.inherit ? 'inherit' : ['ignore', 'pipe', 'pipe']
   });
   if (result.error) throw result.error;
