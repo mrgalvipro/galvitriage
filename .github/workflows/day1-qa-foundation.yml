@@ -11,8 +11,6 @@ on:
       - "tests/day1-foundation.test.mjs"
       - "package.json"
       - "wrangler.json"
-      - "wrangler.day7d.json"
-      - "wrangler.production.jsonc"
       - ".github/workflows/day1-qa-foundation.yml"
 
 permissions:
@@ -23,7 +21,6 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DAY1_BASE_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
   DAY1_ALLOWED_ORIGIN: https://galvipro.com
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -73,6 +70,16 @@ jobs:
       - name: Run Day 1 blocking suite
         run: npm run test:day1
 
+      - name: Prove preserved Day 7D and Production boundaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/day7d-engine.js
+          node --check worker/production-entry.js
+          node --test tests/day7b-environment-isolation.test.mjs
+          node scripts/day7d-preflight.mjs
+          echo 'PASS: Existing Day 7D QA and Production boundaries remain valid.'
+
       - name: Apply collision-safe additive Day 1 schema to QA D1
         shell: bash
         run: |
@@ -111,11 +118,54 @@ jobs:
           console.log('PASS: migration 0001 and all seven runtime-critical gv1_ tables exist.');
           NODE
 
-      - name: Deploy isolated Day 1 QA Worker
+      - name: Deploy isolated Day 1 QA Worker and capture actual URL
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4 deploy --config wrangler.json
+          npx --yes wrangler@4 deploy --config wrangler.json 2>&1 | tee /tmp/day1-deploy.log
+          DAY1_BASE_URL="$(grep -Eo 'https://[[:alnum:].-]+\.workers\.dev' /tmp/day1-deploy.log | tail -n 1 || true)"
+          if [ -z "$DAY1_BASE_URL" ]; then
+            echo 'FAIL: Wrangler deployment completed without emitting a workers.dev URL.'
+            cat /tmp/day1-deploy.log
+            exit 1
+          fi
+          echo "DAY1_BASE_URL=$DAY1_BASE_URL" >> "$GITHUB_ENV"
+          echo "Authoritative Day 1 deployment URL: $DAY1_BASE_URL"
+
+      - name: Wait for deployed JSON runtime convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            STATUS="$(curl --silent --show-error --location \
+              --output /tmp/day1-health-body \
+              --dump-header /tmp/day1-health-headers \
+              --write-out '%{http_code}' \
+              "${DAY1_BASE_URL}/health?candidate=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            CONTENT_TYPE="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{print $0}' /tmp/day1-health-headers | tail -n 1 | tr -d '\r' || true)"
+            if [ "$STATUS" = "200" ] && echo "$CONTENT_TYPE" | grep -qi 'application/json'; then
+              if node --input-type=module <<'NODE'
+              import fs from 'node:fs';
+              const payload=JSON.parse(fs.readFileSync('/tmp/day1-health-body','utf8'));
+              if(payload?.success!==true) process.exit(1);
+              if(payload?.environment!=='qa') process.exit(1);
+              if(payload?.data?.service!=='galvivault-p0') process.exit(1);
+              if(payload?.data?.schema_namespace!=='gv1_') process.exit(1);
+              NODE
+              then
+                echo "PASS: Day 1 JSON runtime converged on attempt ${attempt}."
+                exit 0
+              fi
+            fi
+            echo "Waiting for Day 1 runtime convergence: attempt=${attempt}, status=${STATUS}, content_type=${CONTENT_TYPE:-missing}"
+            sleep 3
+          done
+          echo 'FAIL: Day 1 endpoint never converged to the expected JSON health contract.'
+          echo 'Final response headers:'
+          cat /tmp/day1-health-headers || true
+          echo 'Final response body preview:'
+          head -c 1000 /tmp/day1-health-body || true
+          exit 1
 
       - name: Run deployed Day 1 API smoke
         env:
@@ -167,11 +217,13 @@ jobs:
           echo '## GALVIVAULT DAY 1 AUTOMATED QA: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Branch: qa-revamped-galvicare-0-5' >> "$GITHUB_STEP_SUMMARY"
           echo '- Candidate SHA: ${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
-          echo '- QA Worker: galvivault-p0-day1-qa' >> "$GITHUB_STEP_SUMMARY"
+          echo "- QA Worker URL: $DAY1_BASE_URL" >> "$GITHUB_STEP_SUMMARY"
           echo '- QA D1: galvivault-0-5-qa' >> "$GITHUB_STEP_SUMMARY"
           echo '- Collision-safe schema namespace: gv1_' >> "$GITHUB_STEP_SUMMARY"
           echo '- Schema migration 0001: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 1 blocking tests: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 7D and Production source boundaries: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Deployment URL discovery and JSON convergence: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Deployed API smoke: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Remote D1 evidence assertions: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing Day 7D QA target changed: NO' >> "$GITHUB_STEP_SUMMARY"
