@@ -10,7 +10,7 @@ const requiredFiles=[
   'worker/worker.js','worker/day7d-engine.js','day7d-browser-customer-intelligence.js','index.html',
   'scripts/day7b-build-qa-frontend.mjs','migrations/0006_day7d_customer_intelligence.sql',
   'tests/day7d-customer-intelligence.test.mjs','tests/day7d-customer-path-contract.test.mjs',
-  'wrangler.json','wrangler.qa-frontend.jsonc','qa-frontend-worker.js'
+  'wrangler.day7d.json','wrangler.qa-frontend.jsonc','qa-frontend-worker.js'
 ];
 const failures=[];
 for(const path of requiredFiles) if(!fs.existsSync(path)) failures.push(`missing required Day 7D file: ${path}`);
@@ -19,16 +19,19 @@ const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
 for(const script of ['test:day7d','stabilization:gate','day7c:gate','day7d:gate']) if(!pkg.scripts?.[script]) failures.push(`package.json is missing ${script}`);
 if(!pkg.scripts?.['test:day7d']?.includes('day7d-customer-path-contract.test.mjs')) failures.push('Day 7D release test must include the cumulative customer-path contract');
 
-const wrangler=JSON.parse(fs.readFileSync('wrangler.json','utf8'));
+const wrangler=JSON.parse(fs.readFileSync('wrangler.day7d.json','utf8'));
 if(wrangler.name!=='galvicare-triage-intake') failures.push(`API Worker name mismatch: ${wrangler.name}`);
-if(wrangler.main!=='worker/day7d-engine.js') failures.push(`wrangler.json main must be worker/day7d-engine.js, got ${wrangler.main}`);
+if(wrangler.main!=='worker/day7d-engine.js') failures.push(`wrangler.day7d.json main must be worker/day7d-engine.js, got ${wrangler.main}`);
 const db=(wrangler.d1_databases||[]).find(x=>x.binding==='DB');
-if(!db) failures.push('wrangler.json must expose existing QA D1 as binding DB');
+if(!db) failures.push('wrangler.day7d.json must expose existing QA D1 as binding DB');
 else {
   if(db.database_name!=='galvivault-0-5-qa') failures.push(`DB database_name mismatch: ${db.database_name}`);
   if(db.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') failures.push(`DB database_id mismatch: ${db.database_id}`);
 }
-if(wrangler.vars?.ENVIRONMENT!=='qa'||wrangler.vars?.APP_ENV!=='qa') failures.push('wrangler QA environment vars must both equal qa');
+if(wrangler.vars?.ENVIRONMENT!=='qa'||wrangler.vars?.APP_ENV!=='qa') failures.push('wrangler Day 7D QA environment vars must both equal qa');
+
+const day1=JSON.parse(fs.readFileSync('wrangler.json','utf8'));
+if(day1.name!=='galvivault-p0-day1-qa'||day1.main!=='worker/day1.js') failures.push('wrangler.json must remain the isolated Day 1 QA target');
 
 const frontend=JSON.parse(fs.readFileSync('wrangler.qa-frontend.jsonc','utf8'));
 if(frontend.name!=='galvicare-0-5-qa') failures.push(`QA frontend Worker name mismatch: ${frontend.name}`);
@@ -74,5 +77,5 @@ console.log(JSON.stringify({
   galviscore_clarification_server_owned:true,objective_score_immutable:true,progressive_followups:true,dynamic_question_count:true,approved_low_confidence_question_count:3,
   prior_product_results_in_clinical_file:true,bounded_multi_question_submit:true,collision_safe_followup_save:true,legacy_generation_bypass_closed:true,
   atomic_followup_save:true,server_selected_question_validation:true,save_returns_regenerated_result:true,evidence_versioned_results:true,
-  matched_worker_and_frontend_release:true,day7c_compatibility_only:true,production_untouched:true
+  matched_worker_and_frontend_release:true,day1_isolated:true,day7c_compatibility_only:true,production_untouched:true
 },null,2));
