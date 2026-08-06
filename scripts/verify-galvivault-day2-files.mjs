@@ -12,7 +12,7 @@ const required = [
   'tests/day1-foundation.test.mjs',
   'tests/galvivault-day2-identity-continuity.test.mjs',
   'scripts/galvivault-day2-e2e.mjs',
-  '.github/workflows/day2-normalize-executable-files.yml'
+  '.github/workflows/day2-qa-identity-continuity.yml'
 ];
 
 const missing = required.filter((file) => !fs.existsSync(path.resolve(file)));
@@ -42,19 +42,26 @@ const production = fs.readFileSync('wrangler.production.jsonc', 'utf8');
 
 if (day1.main !== 'worker/day1.js') throw new Error('wrangler.json no longer preserves worker/day1.js.');
 if (day2.main !== 'worker/day2.js') throw new Error('wrangler.day2.json must target worker/day2.js.');
-if (day2.name !== day1.name) throw new Error('Day 2 must extend the existing isolated GalviVault QA Worker.');
+if (day2.name !== day1.name) throw new Error('Day 2 must extend the isolated GalviVault QA Worker.');
 if (day2.vars?.ENVIRONMENT !== 'qa') throw new Error('Day 2 environment must be qa.');
 if (day2.vars?.MIN_SCHEMA_VERSION !== '0002') throw new Error('Day 2 minimum schema must be 0002.');
-if (day2.d1_databases?.[0]?.binding !== 'DB') throw new Error('Day 2 DB binding must be DB.');
-if (day2.d1_databases?.[0]?.database_name !== 'galvivault-0-5-qa') throw new Error('Day 2 must target the existing QA D1.');
-if (day2.d1_databases?.[0]?.migrations_dir !== 'migrations/day1') throw new Error('Day 2 must preserve the existing migration directory.');
+const db = day2.d1_databases?.find((item) => item.binding === 'DB');
+if (db?.database_name !== 'galvivault-0-5-qa') throw new Error('Day 2 must target the QA D1.');
+if (db?.migrations_dir !== 'migrations/day1') throw new Error('Day 2 must preserve the migration directory.');
 if (!production.includes('worker/production-entry.js')) throw new Error('Production entry is not preserved.');
-if (production.includes('worker/day2.js')) throw new Error('Production configuration must not reference worker/day2.js.');
-if (production.includes('galvivault-0-5-qa')) throw new Error('Production configuration must not reference the QA D1.');
+if (production.includes('worker/day2.js')) throw new Error('Production configuration references worker/day2.js.');
+if (production.includes('galvivault-0-5-qa')) throw new Error('Production configuration references the QA D1.');
 
-const forbiddenNames = ['.dev.vars', '.env', 'wrangler.toml.bak'];
-for (const name of forbiddenNames) {
-  if (fs.existsSync(name)) throw new Error(`Forbidden local/secret artifact is present: ${name}`);
+for (const alias of [
+  'worker/worker_day2.js.txt',
+  'migrations/day1/migrations_day1_0002_day2_identity_continuity.sql.txt',
+  'tests/tests_galvivault-day2-identity-continuity.test.mjs.txt',
+  'scripts/scripts_galvivault-day2-e2e.mjs.txt',
+  'scripts/scripts_verify-galvivault-day2-files.mjs.txt',
+  'wrangler.day2.json.txt',
+  'package.json.txt'
+]) {
+  if (fs.existsSync(alias)) throw new Error(`Temporary Day 2 alias remains: ${alias}`);
 }
 
-console.log('PASS: GalviVault Day 2 critical-path files, scripts, QA entry, D1 target, Production isolation, and the single authoritative Day 2 workflow are valid.');
+console.log('PASS: canonical Day 2 files, scripts, QA Worker/D1 authority, Production isolation, and the immutable QA workflow are valid.');

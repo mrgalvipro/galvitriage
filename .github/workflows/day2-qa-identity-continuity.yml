@@ -1,0 +1,231 @@
+name: "GalviVault Day 2 QA Identity Continuity"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - ".github/workflows/day2-qa-identity-continuity.yml"
+      - "worker/day2.js"
+      - "migrations/day1/0002_day2_identity_continuity.sql"
+      - "tests/galvivault-day2-identity-continuity.test.mjs"
+      - "scripts/galvivault-day2-e2e.mjs"
+      - "scripts/verify-galvivault-day2-files.mjs"
+      - "wrangler.day2.json"
+      - "package.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: galvivault-day2-qa-identity-continuity
+  cancel-in-progress: true
+
+env:
+  GH_PUSH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DAY2_ALLOWED_ORIGIN: https://galvipro.com
+  NPM_CONFIG_FETCH_RETRIES: "4"
+  NPM_CONFIG_FETCH_RETRY_MINTIMEOUT: "2000"
+  NPM_CONFIG_FETCH_RETRY_MAXTIMEOUT: "15000"
+
+jobs:
+  prove-day2:
+    name: Validate, migrate, deploy, and prove Day 2
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout the exact immutable QA candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$GITHUB_WORKSPACE"
+          rm -rf .git
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add origin "https://x-access-token:${GH_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --no-tags --depth=2 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          echo "DAY2_CANDIDATE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
+          echo "DAY2_BASE_SHA=$(git rev-parse HEAD^)" >> "$GITHUB_ENV"
+
+      - name: Resolve the preinstalled Node 22 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          NODE_BIN="$(find /opt/hostedtoolcache/node -type f -path '*/x64/bin/node' 2>/dev/null | grep '/22\.' | sort -V | tail -n 1 || true)"
+          [ -n "$NODE_BIN" ] || NODE_BIN="$(command -v node)"
+          VERSION="$($NODE_BIN --version)"
+          echo "Using $NODE_BIN ($VERSION)"
+          case "$VERSION" in v22.*|v23.*|v24.*) ;; *) echo "Node 22+ is required."; exit 1 ;; esac
+          echo "NODE_BIN=$NODE_BIN" >> "$GITHUB_ENV"
+
+      - name: Validate canonical files and targeted local blocking gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$NODE_BIN" --check worker/day2.js
+          "$NODE_BIN" --check tests/galvivault-day2-identity-continuity.test.mjs
+          "$NODE_BIN" --check scripts/galvivault-day2-e2e.mjs
+          "$NODE_BIN" --check scripts/verify-galvivault-day2-files.mjs
+          "$NODE_BIN" -e "JSON.parse(require('fs').readFileSync('package.json','utf8')); JSON.parse(require('fs').readFileSync('wrangler.day2.json','utf8'));"
+          "$NODE_BIN" scripts/verify-galvivault-day2-files.mjs
+          "$NODE_BIN" --test tests/day1-foundation.test.mjs
+          "$NODE_BIN" --test tests/galvivault-day2-identity-continuity.test.mjs
+          "$NODE_BIN" --check worker/production-entry.js
+          "$NODE_BIN" --test tests/day7b-environment-isolation.test.mjs
+
+      - name: Prove protected Production files were not changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          CHANGED="$(git diff --name-only "$DAY2_BASE_SHA..$DAY2_CANDIDATE_SHA")"
+          printf '%s\n' "$CHANGED"
+          if printf '%s\n' "$CHANGED" | grep -Eq '^(worker/production-entry\.js|wrangler\.production\.jsonc|qa-frontend-worker\.js|wrangler\.day7d\.json|wrangler\.qa-frontend\.jsonc|index\.html|galvitriage-cat\.html|day7c-browser-observability\.js|day7d-browser-customer-intelligence\.js)$'; then
+            echo "Protected Production or GalviCare runtime file changed."
+            exit 1
+          fi
+
+      - name: Resolve Wrangler with bounded retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wrangler-retry <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            if npx --yes wrangler@4 "$@"; then exit 0; fi
+            [ "$attempt" = "4" ] && exit 1
+            sleep $((attempt * 5))
+          done
+          SH
+          chmod +x /tmp/wrangler-retry
+          /tmp/wrangler-retry --version
+
+      - name: Preflight real QA identity data and migration state
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/day2-evidence
+          SQL="SELECT COUNT(*) AS duplicate_email_groups FROM (SELECT lower(trim(email)) AS normalized FROM gv1_founders WHERE email IS NOT NULL AND trim(email)<>'' GROUP BY lower(trim(email)) HAVING COUNT(*)>1); SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS duplicate_primary_ventures FROM (SELECT venture_id FROM gv1_founder_venture_roles WHERE is_primary=1 AND status='active' GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS ledger_count FROM gv1_schema_migrations WHERE migration_id='0002'; SELECT COUNT(*) AS day2_column_count FROM (SELECT name FROM pragma_table_info('gv1_founders') WHERE name IN ('normalized_email','profile_json') UNION ALL SELECT name FROM pragma_table_info('gv1_ventures') WHERE name IN ('website','industry','revenue_range','profile_json') UNION ALL SELECT name FROM pragma_table_info('gv1_idempotency_keys') WHERE name='response_json'); SELECT COUNT(*) AS day2_index_count FROM sqlite_master WHERE type='index' AND name IN ('ux_gv1_founders_normalized_email','ux_gv1_bmr_one_per_venture','ux_gv1_roles_one_active_primary','ix_gv1_founders_normalized_email','ix_gv1_roles_founder_status','ix_gv1_roles_venture_status','ix_gv1_bmr_venture_status','ix_gv1_sessions_founder_venture');"
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="$SQL" --config wrangler.day2.json --json > /tmp/day2-evidence/migration-preflight.json
+          cat /tmp/day2-evidence/migration-preflight.json
+          "$NODE_BIN" --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('/tmp/day2-evidence/migration-preflight.json','utf8')); const o=[]; const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){o.push(v);Object.values(v).forEach(walk)}}; walk(p); const n=k=>Number(o.find(x=>Object.hasOwn(x,k))?.[k]??-1); for(const k of ['duplicate_email_groups','duplicate_bmr_ventures','duplicate_primary_ventures']) if(n(k)!==0) throw new Error(k+' must equal 0'); const l=n('ledger_count'),c=n('day2_column_count'),i=n('day2_index_count'); if(!((l===0&&c===0&&i===0)||(l===0&&c===7&&i===8)||(l===1&&c===7&&i===8))) throw new Error('Partial or contradictory migration state');"
+
+      - name: Apply or reconcile migration 0002
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r LEDGER COLUMNS INDEXES < <("$NODE_BIN" --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('/tmp/day2-evidence/migration-preflight.json','utf8')); const o=[]; const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){o.push(v);Object.values(v).forEach(walk)}}; walk(p); const v=k=>o.find(x=>Object.hasOwn(x,k))?.[k]??''; console.log(v('ledger_count'),v('day2_column_count'),v('day2_index_count')); ")
+          if [ "$LEDGER" = "0" ] && [ "$COLUMNS" = "0" ] && [ "$INDEXES" = "0" ]; then
+            /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --file=migrations/day1/0002_day2_identity_continuity.sql --config wrangler.day2.json
+          elif [ "$LEDGER" = "0" ] && [ "$COLUMNS" = "7" ] && [ "$INDEXES" = "8" ]; then
+            /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="INSERT OR IGNORE INTO gv1_schema_migrations (migration_id,name,environment,checksum,applied_at) VALUES ('0002','day2_identity_continuity','qa','galvivault-day2-identity-v1',CURRENT_TIMESTAMP);" --config wrangler.day2.json
+          else
+            echo "Migration 0002 already complete."
+          fi
+
+      - name: Verify remote schema 0002 and all constraints
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0001','0002') ORDER BY migration_id; SELECT COUNT(*) AS day2_column_count FROM (SELECT name FROM pragma_table_info('gv1_founders') WHERE name IN ('normalized_email','profile_json') UNION ALL SELECT name FROM pragma_table_info('gv1_ventures') WHERE name IN ('website','industry','revenue_range','profile_json') UNION ALL SELECT name FROM pragma_table_info('gv1_idempotency_keys') WHERE name='response_json'); SELECT COUNT(*) AS day2_index_count FROM sqlite_master WHERE type='index' AND name IN ('ux_gv1_founders_normalized_email','ux_gv1_bmr_one_per_venture','ux_gv1_roles_one_active_primary','ix_gv1_founders_normalized_email','ix_gv1_roles_founder_status','ix_gv1_roles_venture_status','ix_gv1_bmr_venture_status','ix_gv1_sessions_founder_venture');"
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="$SQL" --config wrangler.day2.json --json > /tmp/day2-evidence/schema-verification.json
+          cat /tmp/day2-evidence/schema-verification.json
+          "$NODE_BIN" --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('/tmp/day2-evidence/schema-verification.json','utf8')); const o=[]; const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){o.push(v);Object.values(v).forEach(walk)}}; walk(p); const n=k=>Number(o.find(x=>Object.hasOwn(x,k))?.[k]??-1); if(!o.find(x=>x.migration_id==='0001')||!o.find(x=>x.migration_id==='0002')||n('day2_column_count')!==7||n('day2_index_count')!==8) throw new Error('Day 2 schema verification failed');"
+
+      - name: Deploy the exact candidate to the isolated QA Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/wrangler-retry deploy --config wrangler.day2.json 2>&1 | tee /tmp/day2-evidence/deploy.log
+          DAY2_BASE_URL="$(grep -Eo 'https://[[:alnum:].-]+\.workers\.dev' /tmp/day2-evidence/deploy.log | tail -n 1 || true)"
+          test -n "$DAY2_BASE_URL" || { cat /tmp/day2-evidence/deploy.log; exit 1; }
+          echo "DAY2_BASE_URL=$DAY2_BASE_URL" >> "$GITHUB_ENV"
+          printf '%s\n' "candidate_sha=$DAY2_CANDIDATE_SHA" "qa_worker_url=$DAY2_BASE_URL" > /tmp/day2-evidence/deployment-identity.txt
+
+      - name: Prove runtime convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            STATUS="$(curl --silent --show-error --location --output /tmp/day2-ready-body --dump-header /tmp/day2-ready-headers --write-out '%{http_code}' -H "Origin: ${DAY2_ALLOWED_ORIGIN}" "${DAY2_BASE_URL}/api/v1/day2/readiness?candidate=${DAY2_CANDIDATE_SHA}&attempt=${attempt}" || true)"
+            if [ "$STATUS" = "200" ] && "$NODE_BIN" --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('/tmp/day2-ready-body','utf8')); if(p?.success!==true||p?.environment!=='qa'||p?.data?.ready!==true||p?.data?.current_schema_version!=='0002') process.exit(1);"; then
+              grep -qi '^x-galvivault-environment: qa' /tmp/day2-ready-headers
+              cp /tmp/day2-ready-body /tmp/day2-evidence/runtime-readiness.json
+              cp /tmp/day2-ready-headers /tmp/day2-evidence/runtime-readiness.headers.txt
+              exit 0
+            fi
+            sleep 3
+          done
+          cat /tmp/day2-ready-headers || true
+          head -c 2000 /tmp/day2-ready-body || true
+          exit 1
+
+      - name: Run deployed Day 1 regression and H2.1 through H2.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          DAY1_REMOTE_SMOKE=1 DAY1_BASE_URL="$DAY2_BASE_URL" DAY1_ALLOWED_ORIGIN="$DAY2_ALLOWED_ORIGIN" DAY1_RUN_SUFFIX="day2-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" "$NODE_BIN" --test tests/day1-foundation.test.mjs | tee /tmp/day2-evidence/day1-remote-regression.txt
+          DAY2_BASE_URL="$DAY2_BASE_URL" DAY2_ALLOWED_ORIGIN="$DAY2_ALLOWED_ORIGIN" DAY2_RUN_SUFFIX="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" DAY2_EVIDENCE_PATH=/tmp/day2-evidence/h2-1-through-h2-9.json "$NODE_BIN" scripts/galvivault-day2-e2e.mjs
+
+      - name: Reconcile exact Founder Venture BMR Session and negative-test state in D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL="$(EVIDENCE=/tmp/day2-evidence/h2-1-through-h2-9.json "$NODE_BIN" --input-type=module -e "import fs from 'node:fs'; const e=JSON.parse(fs.readFileSync(process.env.EVIDENCE,'utf8')); const q=s=>String(s).replaceAll(\"'\",\"''\"); const f=e.canonical_ids.first,s=e.canonical_ids.second_session,v=e.canonical_ids.second_venture,x=q(e.run_suffix); process.stdout.write(\`SELECT COUNT(*) AS founder_count FROM gv1_founders WHERE founder_id='\${q(f.founder_id)}'; SELECT COUNT(*) AS normalized_email_count FROM gv1_founders WHERE normalized_email='founder.day2.\${x}@example.test'; SELECT COUNT(DISTINCT venture_id) AS venture_count FROM gv1_founder_venture_roles WHERE founder_id='\${q(f.founder_id)}' AND status='active'; SELECT COUNT(*) AS first_bmr_count FROM gv1_business_medical_records WHERE bmr_id='\${q(f.bmr_id)}' AND venture_id='\${q(f.venture_id)}'; SELECT COUNT(*) AS second_bmr_count FROM gv1_business_medical_records WHERE bmr_id='\${q(v.bmr_id)}' AND venture_id='\${q(v.venture_id)}'; SELECT COUNT(*) AS first_session_count FROM gv1_assessment_sessions WHERE session_id IN ('\${q(f.session_id)}','\${q(s.session_id)}') AND founder_id='\${q(f.founder_id)}' AND venture_id='\${q(f.venture_id)}' AND bmr_id='\${q(f.bmr_id)}'; SELECT COUNT(*) AS second_session_count FROM gv1_assessment_sessions WHERE session_id='\${q(v.session_id)}' AND founder_id='\${q(f.founder_id)}' AND venture_id='\${q(v.venture_id)}' AND bmr_id='\${q(v.bmr_id)}'; SELECT COUNT(*) AS venture_update_audit_count FROM gv1_audit_log WHERE entity_type='venture' AND entity_id='\${q(f.venture_id)}' AND operation='update'; SELECT COUNT(*) AS cross_scope_session_count FROM gv1_assessment_sessions WHERE client_session_key='d2-session-\${x}-scope'; SELECT COUNT(*) AS key_reuse_receipt_count FROM gv1_idempotency_keys WHERE idempotency_key='d2-key-reuse-\${x}'; SELECT COUNT(*) AS orphan_roles FROM gv1_founder_venture_roles r LEFT JOIN gv1_founders f ON f.founder_id=r.founder_id LEFT JOIN gv1_ventures v ON v.venture_id=r.venture_id WHERE f.founder_id IS NULL OR v.venture_id IS NULL; SELECT COUNT(*) AS orphan_bmrs FROM gv1_business_medical_records b LEFT JOIN gv1_ventures v ON v.venture_id=b.venture_id WHERE v.venture_id IS NULL; SELECT COUNT(*) AS mismatched_sessions FROM gv1_assessment_sessions s LEFT JOIN gv1_business_medical_records b ON b.bmr_id=s.bmr_id WHERE b.bmr_id IS NULL OR b.venture_id<>s.venture_id; SELECT COUNT(*) AS duplicate_founder_emails FROM (SELECT normalized_email FROM gv1_founders WHERE normalized_email IS NOT NULL GROUP BY normalized_email HAVING COUNT(*)>1);\`); ")"
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="$SQL" --config wrangler.day2.json --json > /tmp/day2-evidence/d1-reconciliation.json
+          cat /tmp/day2-evidence/d1-reconciliation.json
+          "$NODE_BIN" --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('/tmp/day2-evidence/d1-reconciliation.json','utf8')); const o=[]; const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){o.push(v);Object.values(v).forEach(walk)}}; walk(p); const n=k=>Number(o.find(x=>Object.hasOwn(x,k))?.[k]??-1); for(const k of ['founder_count','normalized_email_count','first_bmr_count','second_bmr_count','second_session_count','venture_update_audit_count','key_reuse_receipt_count']) if(n(k)!==1) throw new Error(k+' must equal 1'); if(n('venture_count')!==2||n('first_session_count')!==2) throw new Error('Expected two Ventures and two first-Venture Sessions'); for(const k of ['cross_scope_session_count','orphan_roles','orphan_bmrs','mismatched_sessions','duplicate_founder_emails']) if(n(k)!==0) throw new Error(k+' must equal 0');"
+
+      - name: Run non-destructive automated Production protection check
+        shell: bash
+        run: |
+          set -euo pipefail
+          STATUS="$(curl --silent --show-error --location --output /tmp/day2-evidence/production-home.html --write-out '%{http_code}' https://galvipro.com/)"
+          test "$STATUS" = "200"
+          if grep -Eqi 'galvivault-p0-day1-qa|galvivault-0-5-qa|worker/day2\.js|cdf9042b-ab09-498a-ac66-010b6cce47d4' /tmp/day2-evidence/production-home.html; then
+            echo "Production page exposes a QA authority reference."
+            exit 1
+          fi
+
+      - name: Persist success evidence in a separate evidence-only commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUN_DIR="release-evidence/day2/run-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          mkdir -p "$RUN_DIR"
+          cp -R /tmp/day2-evidence/. "$RUN_DIR/"
+          printf '%s\n' "candidate_sha=$DAY2_CANDIDATE_SHA" "qa_worker_url=$DAY2_BASE_URL" "schema=0002" "day1_regression=PASS" "h2_1_through_h2_9=PASS" "d1_reconciliation=PASS" "h2_10=HUMAN_EVIDENCE_REQUIRED" > "$RUN_DIR/candidate.txt"
+          cat > "$RUN_DIR/h2-10-human-evidence.md" <<'EOF'
+          # H2.10 Production Regression
+          - [ ] Production GalviCare renders in Incognito.
+          - [ ] Network traffic does not invoke the GalviVault QA Worker.
+          - [ ] Production does not use galvivault-0-5-qa.
+          - [ ] QA fixtures are unavailable in Production.
+          - [ ] Production and QA Worker deployment/version screenshots captured.
+          EOF
+          git switch -C qa-revamped-galvicare-0-5
+          git add "$RUN_DIR"
+          git commit -m "GalviVault Day 2: persist run ${GITHUB_RUN_ID} evidence [skip ci]"
+          git push origin HEAD:qa-revamped-galvicare-0-5
+
+      - name: Publish the remaining Human gate
+        shell: bash
+        run: |
+          {
+            echo '## GALVIVAULT DAY 2 AUTOMATED + REMOTE E2E: PASS'
+            echo "- Candidate SHA: ${DAY2_CANDIDATE_SHA}"
+            echo "- QA Worker URL: ${DAY2_BASE_URL}"
+            echo '- Migration 0002: PASS'
+            echo '- Day 1 regression through Day 2 Worker: PASS'
+            echo '- H2.1-H2.9: PASS'
+            echo '- Exact D1 reconciliation: PASS'
+            echo '- Automated Production protection: PASS'
+            echo '- Remaining gate: H2.10 Human browser and Cloudflare deployment evidence.'
+          } >> "$GITHUB_STEP_SUMMARY"
