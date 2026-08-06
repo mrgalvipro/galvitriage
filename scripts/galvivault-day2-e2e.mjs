@@ -3,7 +3,7 @@ import path from 'node:path';
 
 const base = String(process.env.DAY2_BASE_URL || '').replace(/\/$/, '');
 const origin = process.env.DAY2_ALLOWED_ORIGIN || 'https://galvipro.com';
-const suffix = String(process.env.DAY2_RUN_SUFFIX || Date.now()).replace(/[^A-Za-z0-9._-]/g, '_');
+const suffix = String(process.env.DAY2_RUN_SUFFIX || Date.now()).replace(/[^A-Za-z0-9._-]/g, '_').toLowerCase();
 const evidencePath = process.env.DAY2_EVIDENCE_PATH || `release-evidence/day2/e2e-${suffix}.json`;
 
 if (!base) {
