@@ -63,6 +63,128 @@ async function d1(sql, file) {
   return JSON.parse(raw);
 }
 
+async function runDay1CompatibilityRegression(baseUrl, outputFile) {
+  const unique = `day2_${STAMP}`.replace(/[^A-Za-z0-9._-]/g, '_');
+  const request = async (pathname, options = {}) => {
+    const headers = new Headers(options.headers || {});
+    headers.set('Origin', ORIGIN);
+    headers.set('X-Correlation-Id', `corr_day2_day1_${Date.now()}_${Math.random().toString(16).slice(2)}`);
+    const response = await fetch(`${baseUrl}${pathname}`, { ...options, headers });
+    const payload = response.status === 204 ? null : await response.json();
+    if (response.headers.get('x-galvivault-environment') !== 'qa') die(`${pathname} did not return the QA environment header.`);
+    if (!response.headers.get('x-correlation-id')) die(`${pathname} did not return a correlation ID.`);
+    return { response, payload };
+  };
+
+  const health = await request('/health');
+  if (health.response.status !== 200) die('Day 1 health regression failed.');
+  if (health.payload?.data?.schema_namespace !== 'gv1') die('Day 1 schema namespace changed.');
+
+  const ready = await request('/ready');
+  if (ready.response.status !== 200 || ready.payload?.data?.ready !== true) die('Day 1 readiness regression failed.');
+  if (ready.payload?.data?.present_table_count !== ready.payload?.data?.required_table_count) die('Day 1 readiness table count changed.');
+
+  const schema = await request('/api/v1/schema-version');
+  if (schema.response.status !== 200 || schema.payload?.data?.compatible !== true) die('Day 1 schema compatibility regression failed.');
+  if (schema.payload?.data?.current_schema_version !== '0002') die(`Day 2 Worker must report schema 0002; received ${schema.payload?.data?.current_schema_version}.`);
+
+  const session = {
+    session_id: `ses_day1_${unique}`,
+    founder_id: `fdr_day1_${unique}`,
+    venture_id: `ven_day1_${unique}`,
+    bmr_id: `bmr_day1_${unique}`,
+    source: 'galvicare',
+    current_stage: 'GalviTriage',
+    founder: {
+      first_name: 'Day 1',
+      last_name: 'Compatibility',
+      email: `day1.${unique}@example.invalid`
+    },
+    venture_name: `Day 1 Compatibility Venture ${unique}`
+  };
+  const sessionKey = `day1-session-${unique}`;
+
+  const created = await request('/api/v1/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': sessionKey },
+    body: JSON.stringify(session)
+  });
+  if (created.response.status !== 201 || created.payload?.data?.session?.session_id !== session.session_id) die('Day 1 Session creation regression failed.');
+
+  const replay = await request('/api/v1/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': sessionKey },
+    body: JSON.stringify(session)
+  });
+  if (replay.response.status !== 200 || replay.payload?.meta?.idempotent_replay !== true) die('Day 1 exact replay regression failed.');
+
+  const mismatch = await request('/api/v1/sessions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': sessionKey },
+    body: JSON.stringify({ ...session, venture_name: 'Changed Venture' })
+  });
+  if (mismatch.response.status !== 409 || mismatch.payload?.error?.code !== 'GV_IDEMPOTENCY_REUSE_MISMATCH') die('Day 1 idempotency-conflict regression failed.');
+
+  const fetched = await request(`/api/v1/sessions/${session.session_id}`);
+  if (fetched.response.status !== 200 || fetched.payload?.data?.session?.session_id !== session.session_id || fetched.payload?.data?.business_medical_record?.bmr_id !== session.bmr_id) die('Day 1 Session retrieval regression failed.');
+
+  const eventKey = `day1:${session.session_id}:triage_opened:001`;
+  const eventBody = {
+    event_key: eventKey,
+    session_id: session.session_id,
+    event_name: 'triage_opened',
+    product: 'GalviTriage',
+    current_stage: 'GalviTriage',
+    metadata: { fixture: true, source: 'day2-day1-compatibility' }
+  };
+  const eventIdempotencyKey = `day1-event-${unique}`;
+
+  const event = await request('/api/v1/journey-events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': eventIdempotencyKey },
+    body: JSON.stringify(eventBody)
+  });
+  if (event.response.status !== 201) die('Day 1 journey-event creation regression failed.');
+
+  const eventReplay = await request('/api/v1/journey-events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': eventIdempotencyKey },
+    body: JSON.stringify(eventBody)
+  });
+  if (eventReplay.response.status !== 200 || eventReplay.payload?.meta?.idempotent_replay !== true) die('Day 1 journey-event replay regression failed.');
+
+  const eventMismatch = await request('/api/v1/journey-events', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Idempotency-Key': eventIdempotencyKey },
+    body: JSON.stringify({ ...eventBody, event_name: 'changed' })
+  });
+  if (eventMismatch.response.status !== 409 || eventMismatch.payload?.error?.code !== 'GV_IDEMPOTENCY_REUSE_MISMATCH') die('Day 1 journey-event conflict regression failed.');
+
+  const fixtureA = await request('/api/v1/fixtures/results', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  });
+  const fixtureB = await request('/api/v1/fixtures/results', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}'
+  });
+  if (fixtureA.response.status !== 200 || fixtureB.response.status !== 200) die('Day 1 deterministic fixture regression failed.');
+  if (JSON.stringify(fixtureA.payload?.data?.fixture) !== JSON.stringify(fixtureB.payload?.data?.fixture)) die('Day 1 deterministic fixture changed between calls.');
+
+  writeJson(outputFile, {
+    status: 'pass',
+    expected_schema_version: '0002',
+    health_status: health.response.status,
+    readiness_status: ready.response.status,
+    schema_status: schema.response.status,
+    session_id: session.session_id,
+    founder_id: session.founder_id,
+    venture_id: session.venture_id,
+    bmr_id: session.bmr_id,
+    session_idempotency_key: sessionKey,
+    event_key: eventKey,
+    event_idempotency_key: eventIdempotencyKey
+  });
+}
+
 async function main() {
   if (Number(process.versions.node.split('.')[0]) < 22) die(`Node 22+ required; current ${process.version}.`);
   if (git('branch', '--show-current') !== BRANCH) die(`Run from ${BRANCH}.`);
@@ -150,7 +272,7 @@ async function main() {
   await new Promise((resolve) => setTimeout(resolve, 10000));
   if (!(await ready('second'))) die('Second readiness proof failed.');
 
-  run(process.execPath, ['--test', 'tests/day1-foundation.test.mjs'], { env: { DAY1_REMOTE_SMOKE: '1', DAY1_BASE_URL: baseUrl, DAY1_ALLOWED_ORIGIN: ORIGIN, DAY1_RUN_SUFFIX: `day2-${STAMP}` }, file: path.join(OUT, 'day1-remote-regression.txt') });
+  await runDay1CompatibilityRegression(baseUrl, path.join(OUT, 'day1-remote-regression.json'));
   const h2File = path.join(OUT, 'h2-1-through-h2-9.json');
   run(process.execPath, ['scripts/galvivault-day2-e2e.mjs'], { env: { DAY2_BASE_URL: baseUrl, DAY2_ALLOWED_ORIGIN: ORIGIN, DAY2_RUN_SUFFIX: `manual-${STAMP}`, DAY2_EVIDENCE_PATH: h2File }, file: path.join(OUT, 'h2-1-through-h2-9.log') });
 
