@@ -1,0 +1,105 @@
+name: "GalviVault Day 2 Normalize Executable Files"
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - ".github/workflows/day2-normalize-executable-files.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: galvivault-day2-normalize-executable-files
+  cancel-in-progress: false
+
+jobs:
+  normalize:
+    name: Normalize and commit Day 2 executable files
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout approved QA branch
+        uses: actions/checkout@v4
+        with:
+          ref: qa-revamped-galvicare-0-5
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Normalize uploaded files to exact executable paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/workflows/github_workflows_day2-qa-identity.yml.txt .github/workflows/day2-qa-identity.yml
+          cp worker/worker_day2.js.txt worker/day2.js
+          cp migrations/day1/migrations_day1_0002_day2_identity_continuity.sql.txt migrations/day1/0002_day2_identity_continuity.sql
+          cp tests/tests_galvivault-day2-identity-continuity.test.mjs.txt tests/galvivault-day2-identity-continuity.test.mjs
+          cp scripts/scripts_galvivault-day2-e2e.mjs.txt scripts/galvivault-day2-e2e.mjs
+          cp scripts/scripts_verify-galvivault-day2-files.mjs.txt scripts/verify-galvivault-day2-files.mjs
+          cp wrangler.day2.json.txt wrangler.day2.json
+          cp package.json.txt package.json
+
+      - name: Validate executable files
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/day2.js
+          node --check tests/galvivault-day2-identity-continuity.test.mjs
+          node --check scripts/galvivault-day2-e2e.mjs
+          node --check scripts/verify-galvivault-day2-files.mjs
+          node -e "JSON.parse(require('fs').readFileSync('package.json','utf8')); JSON.parse(require('fs').readFileSync('wrangler.day2.json','utf8'));"
+          grep -q '^name: GalviVault Day 2 QA Identity Continuity$' .github/workflows/day2-qa-identity.yml
+          grep -q '^  workflow_dispatch:' .github/workflows/day2-qa-identity.yml
+
+      - name: Install and run local critical-path gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts || npm install --ignore-scripts
+          npm run verify:galvivault:day2
+          npm run test:day1
+          npm run test:galvivault:day2
+
+      - name: Commit corrected executable paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f \
+            .github/workflows/github_workflows_day2-qa-identity.yml.txt \
+            worker/worker_day2.js.txt \
+            migrations/day1/migrations_day1_0002_day2_identity_continuity.sql.txt \
+            tests/tests_galvivault-day2-identity-continuity.test.mjs.txt \
+            scripts/scripts_galvivault-day2-e2e.mjs.txt \
+            scripts/scripts_verify-galvivault-day2-files.mjs.txt \
+            wrangler.day2.json.txt \
+            package.json.txt \
+            .github/workflows/day2-normalize-upload-paths.yml
+          git add \
+            .github/workflows/day2-qa-identity.yml \
+            worker/day2.js \
+            migrations/day1/0002_day2_identity_continuity.sql \
+            tests/galvivault-day2-identity-continuity.test.mjs \
+            scripts/galvivault-day2-e2e.mjs \
+            scripts/verify-galvivault-day2-files.mjs \
+            wrangler.day2.json \
+            package.json
+          git diff --cached --check
+          git commit -m "GalviVault Day 2: normalize executable critical-path files"
+          git push origin HEAD:qa-revamped-galvicare-0-5
+
+      - name: Publish next action
+        run: |
+          echo '## DAY 2 FILE NORMALIZATION: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Exact executable paths created.' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Incorrect .txt aliases removed.' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 1 and GalviVault Day 2 local tests passed.' >> "$GITHUB_STEP_SUMMARY"
+          echo '**NEXT: select GalviVault Day 2 QA Identity Continuity and click Run workflow.**' >> "$GITHUB_STEP_SUMMARY"
