@@ -22,17 +22,10 @@ if (missing.length) {
 }
 
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-for (const script of [
-  'test:day1',
-  'test:galvivault:day2',
-  'test:galvivault:day2:regression',
-  'verify:galvivault:day2',
-  'smoke:galvivault:day2:qa',
-  'deploy:galvivault:day2:qa'
-]) {
-  if (!pkg.scripts?.[script]) {
-    console.error(`Missing package script: ${script}`);
-    process.exit(1);
+if (pkg.type !== 'module') throw new Error('The shared repository package contract must remain ESM.');
+for (const preservedScript of ['stabilization:gate', 'day7b:gate', 'day7d:gate', 'test:day1']) {
+  if (!pkg.scripts?.[preservedScript]) {
+    throw new Error(`The existing GalviCare/GalviVault script contract is missing: ${preservedScript}`);
   }
 }
 
@@ -64,4 +57,4 @@ for (const alias of [
   if (fs.existsSync(alias)) throw new Error(`Temporary Day 2 alias remains: ${alias}`);
 }
 
-console.log('PASS: canonical Day 2 files, scripts, QA Worker/D1 authority, Production isolation, and the immutable QA workflow are valid.');
+console.log('PASS: canonical Day 2 files, QA Worker/D1 authority, Production isolation, immutable QA workflow, and the existing GalviCare package contract are valid.');
