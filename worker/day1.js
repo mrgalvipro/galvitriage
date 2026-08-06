@@ -1,15 +1,19 @@
 const SERVICE = 'galvivault-p0';
 const API_VERSION = 'v1';
 const REQUIRED_SCHEMA = '0001';
+const TABLE_PREFIX = 'gv1_';
+
 const FIXTURE = Object.freeze({
   fixture_id: 'galvivault-day1-fixture-v1',
-  founder_id: 'fdr_day1_fixture_001',
-  venture_id: 'ven_day1_fixture_001',
-  bmr_id: 'bmr_day1_fixture_001',
-  session_id: 'ses_day1_fixture_001',
-  venture_name: 'Day 1 Synthetic Venture',
+  deterministic: true,
   source: 'galvicare',
-  current_stage: 'GalviTriage'
+  current_stage: 'GalviTriage',
+  result: {
+    status: 'foundation_ready',
+    schema_version: REQUIRED_SCHEMA,
+    record_version: 1,
+    evidence_version: 1
+  }
 });
 
 class GVError extends Error {
@@ -24,57 +28,80 @@ class GVError extends Error {
 }
 
 const now = () => new Date().toISOString();
-const text = (value) => String(value ?? '').trim();
-const bool = (value) => String(value ?? '').toLowerCase() === 'true';
-const id = (prefix) => `${prefix}_${crypto.randomUUID().replaceAll('-', '')}`;
-const safeId = (value) => /^[A-Za-z0-9:_-]{3,128}$/.test(text(value));
-const correlationId = (request) => {
-  const supplied = text(request.headers.get('X-Correlation-Id'));
-  return safeId(supplied) ? supplied : id('corr');
-};
+const clean = (value) => String(value ?? '').trim();
+const enabled = (value) => clean(value).toLowerCase() === 'true';
+const newId = (prefix) => `${prefix}_${crypto.randomUUID().replaceAll('-', '')}`;
+const SAFE_ID = /^[A-Za-z0-9:._-]{3,160}$/;
+const safeId = (value) => SAFE_ID.test(clean(value));
 
 function canonicalize(value) {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (value && typeof value === 'object') {
-    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalize(value[key])]));
+    return Object.fromEntries(
+      Object.keys(value).sort().map((key) => [key, canonicalize(value[key])])
+    );
   }
   return value;
 }
 
 async function fingerprint(scope, value) {
-  const payload = new TextEncoder().encode(`${scope}:${JSON.stringify(canonicalize(value))}`);
-  const digest = await crypto.subtle.digest('SHA-256', payload);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+  const encoded = new TextEncoder().encode(`${scope}:${JSON.stringify(canonicalize(value))}`);
+  const digest = await crypto.subtle.digest('SHA-256', encoded);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 function runtime(env) {
   return {
-    environment: text(env?.ENVIRONMENT || 'unknown').toLowerCase(),
-    fixtureMode: bool(env?.FIXTURE_MODE),
-    apiVersion: text(env?.API_VERSION || API_VERSION),
-    minimumSchema: text(env?.MIN_SCHEMA_VERSION || REQUIRED_SCHEMA),
-    allowedOrigins: text(env?.ALLOWED_ORIGINS).split(',').map((item) => item.trim()).filter(Boolean),
+    environment: clean(env?.ENVIRONMENT || 'unknown').toLowerCase(),
+    fixtureMode: enabled(env?.FIXTURE_MODE),
+    apiVersion: clean(env?.API_VERSION || API_VERSION),
+    minimumSchema: clean(env?.MIN_SCHEMA_VERSION || REQUIRED_SCHEMA),
+    allowedOrigins: clean(env?.ALLOWED_ORIGINS)
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
     db: env?.DB
   };
 }
 
-function assertQaRuntime(config) {
+function correlationId(request) {
+  const supplied = clean(request.headers.get('X-Correlation-Id'));
+  return safeId(supplied) ? supplied : newId('corr');
+}
+
+function requireQa(config) {
   if (!['qa', 'local'].includes(config.environment)) {
-    throw new GVError('GV_ENV_MISCONFIGURED', 'The Day 1 Worker is restricted to QA or local execution.', 503, undefined, false);
-  }
-  if (!config.db || typeof config.db.prepare !== 'function') {
-    throw new GVError('GV_DB_UNAVAILABLE', 'The GalviVault database binding is unavailable.', 503, undefined, true);
+    throw new GVError(
+      'GV_ENV_MISCONFIGURED',
+      'The GalviVault Day 1 Worker is restricted to QA or local execution.',
+      503
+    );
   }
 }
 
-function allowedOrigin(request, config) {
-  const origin = text(request.headers.get('Origin'));
+function requireDb(config) {
+  requireQa(config);
+  if (!config.db || typeof config.db.prepare !== 'function') {
+    throw new GVError(
+      'GV_DB_UNAVAILABLE',
+      'The GalviVault database binding is unavailable.',
+      503,
+      undefined,
+      true
+    );
+  }
+}
+
+function originState(request, config) {
+  const origin = clean(request.headers.get('Origin'));
   if (!origin) return { origin: null, allowed: true };
   return { origin, allowed: config.allowedOrigins.includes(origin) };
 }
 
-function responseHeaders(config, corr, originState, extra = {}) {
-  const headers = new Headers({
+function headers(config, corr, origin, extra = {}) {
+  const output = new Headers({
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'X-GalviVault-Environment': config.environment,
@@ -83,16 +110,16 @@ function responseHeaders(config, corr, originState, extra = {}) {
     'Vary': 'Origin',
     ...extra
   });
-  if (originState?.origin && originState.allowed) {
-    headers.set('Access-Control-Allow-Origin', originState.origin);
-    headers.set('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key, X-Correlation-Id');
-    headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    headers.set('Access-Control-Max-Age', '600');
+  if (origin?.origin && origin.allowed) {
+    output.set('Access-Control-Allow-Origin', origin.origin);
+    output.set('Access-Control-Allow-Headers', 'Content-Type, Idempotency-Key, X-Correlation-Id');
+    output.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    output.set('Access-Control-Max-Age', '600');
   }
-  return headers;
+  return output;
 }
 
-function success(config, corr, originState, data, status = 200, state = 'ok', meta = {}) {
+function ok(config, corr, origin, data, status = 200, state = 'ok', meta = {}) {
   return new Response(JSON.stringify({
     success: true,
     status: state,
@@ -106,15 +133,25 @@ function success(config, corr, originState, data, status = 200, state = 'ok', me
       idempotent_replay: Boolean(meta.idempotent_replay),
       ...meta
     }
-  }), { status, headers: responseHeaders(config, corr, originState) });
+  }), { status, headers: headers(config, corr, origin) });
 }
 
-function failure(config, corr, originState, error) {
-  const known = error instanceof GVError;
-  const safe = known ? error : new GVError('GV_INTERNAL', 'An unexpected error occurred.', 500, undefined, true);
+function fail(config, corr, origin, error) {
+  const safe = error instanceof GVError
+    ? error
+    : new GVError('GV_INTERNAL', 'An unexpected error occurred.', 500, undefined, true);
+  const state = safe.status === 404
+    ? 'not_found'
+    : safe.status === 409
+      ? 'conflict'
+      : safe.status === 503
+        ? 'unavailable'
+        : safe.status >= 500
+          ? 'internal_error'
+          : 'invalid_request';
   return new Response(JSON.stringify({
     success: false,
-    status: safe.status === 404 ? 'not_found' : safe.status === 409 ? 'conflict' : safe.status === 503 ? 'unavailable' : safe.status >= 500 ? 'internal_error' : 'invalid_request',
+    status: state,
     environment: config.environment,
     correlation_id: corr,
     error: {
@@ -123,28 +160,36 @@ function failure(config, corr, originState, error) {
       retryable: Boolean(safe.retryable),
       ...(safe.details ? { details: safe.details } : {})
     },
-    meta: { api_version: config.apiVersion || API_VERSION, schema_version: REQUIRED_SCHEMA }
-  }), { status: safe.status, headers: responseHeaders(config, corr, originState) });
+    meta: {
+      api_version: config.apiVersion || API_VERSION,
+      schema_version: REQUIRED_SCHEMA
+    }
+  }), { status: safe.status, headers: headers(config, corr, origin) });
 }
 
-async function parseJson(request) {
-  if (!text(request.headers.get('Content-Type')).toLowerCase().startsWith('application/json')) {
+async function jsonBody(request) {
+  if (!clean(request.headers.get('Content-Type')).toLowerCase().startsWith('application/json')) {
     throw new GVError('GV_REQ_CONTENT_TYPE', 'Content-Type must be application/json.', 415);
   }
-  let body;
   try {
-    body = await request.json();
+    const parsed = await request.json();
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('object required');
+    return parsed;
   } catch {
-    throw new GVError('GV_REQ_BODY_INVALID', 'The request body must be valid JSON.', 400);
-  }
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
     throw new GVError('GV_REQ_BODY_INVALID', 'The request body must be a JSON object.', 400);
   }
-  return body;
+}
+
+function idempotencyKey(request) {
+  const key = clean(request.headers.get('Idempotency-Key'));
+  if (!key || !SAFE_ID.test(key)) {
+    throw new GVError('GV_IDEMPOTENCY_REQUIRED', 'A valid Idempotency-Key header is required.', 400);
+  }
+  return key;
 }
 
 function requireFields(body, fields) {
-  const missing = fields.filter((field) => !text(body[field]));
+  const missing = fields.filter((field) => !clean(body[field]));
   if (missing.length) {
     throw new GVError('GV_REQ_SCHEMA', 'Required fields are missing.', 422, {
       fields: missing.map((field) => ({ field, issue: 'required' }))
@@ -152,298 +197,417 @@ function requireFields(body, fields) {
   }
 }
 
-function requireIdempotencyHeader(request) {
-  const key = text(request.headers.get('Idempotency-Key'));
-  if (!key || !/^[A-Za-z0-9:._-]{1,128}$/.test(key)) {
-    throw new GVError('GV_IDEMPOTENCY_REQUIRED', 'A valid Idempotency-Key header is required.', 400);
+function requireSyntheticId(field, value, prefix) {
+  const normalized = clean(value);
+  if (!safeId(normalized) || !normalized.startsWith(prefix)) {
+    throw new GVError('GV_REQ_SCHEMA', `${field} must use the approved Day 1 synthetic prefix.`, 422, {
+      fields: [{ field, issue: `must_start_with_${prefix}` }]
+    });
   }
-  return key;
+  return normalized;
 }
 
 const first = async (db, sql, ...params) => db.prepare(sql).bind(...params).first();
 const all = async (db, sql, ...params) => db.prepare(sql).bind(...params).all();
-const run = async (db, sql, ...params) => db.prepare(sql).bind(...params).run();
 
 async function schemaState(config) {
-  assertQaRuntime(config);
+  requireDb(config);
   try {
     await first(config.db, 'SELECT 1 AS ok');
-    const row = await first(config.db, 'SELECT migration_id, name, environment, applied_at FROM schema_migrations ORDER BY migration_id DESC LIMIT 1');
-    const current = text(row?.migration_id);
+    const row = await first(
+      config.db,
+      `SELECT migration_id, name, environment, applied_at
+       FROM gv1_schema_migrations
+       ORDER BY migration_id DESC
+       LIMIT 1`
+    );
+    const current = clean(row?.migration_id);
+    const requiredTables = [
+      'gv1_founders',
+      'gv1_ventures',
+      'gv1_business_medical_records',
+      'gv1_assessment_sessions',
+      'gv1_journey_events',
+      'gv1_audit_log',
+      'gv1_idempotency_keys'
+    ];
+    const placeholders = requiredTables.map(() => '?').join(',');
+    const tableResult = await all(
+      config.db,
+      `SELECT name FROM sqlite_master WHERE type='table' AND name IN (${placeholders})`,
+      ...requiredTables
+    );
+    const tableCount = Array.isArray(tableResult?.results) ? tableResult.results.length : 0;
+    const compatible = Boolean(
+      current &&
+      current.localeCompare(config.minimumSchema, undefined, { numeric: true }) >= 0 &&
+      tableCount === requiredTables.length
+    );
     return {
-      ready: Boolean(current && current.localeCompare(config.minimumSchema, undefined, { numeric: true }) >= 0),
+      ready: compatible,
       current,
       required: config.minimumSchema,
-      migration: row || null
+      migration: row || null,
+      required_table_count: requiredTables.length,
+      present_table_count: tableCount
     };
-  } catch {
-    throw new GVError('GV_DB_UNAVAILABLE', 'The GalviVault database or migration ledger is unavailable.', 503, undefined, true);
+  } catch (error) {
+    if (error instanceof GVError) throw error;
+    throw new GVError(
+      'GV_DB_UNAVAILABLE',
+      'The GalviVault database or Day 1 migration ledger is unavailable.',
+      503,
+      undefined,
+      true
+    );
   }
 }
 
-async function handleHealth(config, corr, originState) {
-  return success(config, corr, originState, {
+async function health(config, corr, origin) {
+  requireQa(config);
+  return ok(config, corr, origin, {
     service: SERVICE,
     timestamp: now(),
     environment: config.environment,
     database_bound: Boolean(config.db),
     fixture_mode: config.fixtureMode,
     api_version: config.apiVersion || API_VERSION,
-    required_schema_version: config.minimumSchema
+    required_schema_version: config.minimumSchema,
+    schema_namespace: TABLE_PREFIX
   });
 }
 
-async function handleReady(config, corr, originState) {
+async function ready(config, corr, origin) {
   const state = await schemaState(config);
   if (!state.ready) {
     throw new GVError('GV_DB_SCHEMA_OUTDATED', 'The GalviVault schema does not meet the Day 1 minimum.', 503, {
       current_schema_version: state.current || null,
-      required_schema_version: state.required
+      required_schema_version: state.required,
+      required_table_count: state.required_table_count,
+      present_table_count: state.present_table_count
     });
   }
-  return success(config, corr, originState, {
+  return ok(config, corr, origin, {
     service: SERVICE,
     ready: true,
     database: true,
     current_schema_version: state.current,
-    required_schema_version: state.required
+    required_schema_version: state.required,
+    required_table_count: state.required_table_count,
+    present_table_count: state.present_table_count
   }, 200, 'ok', { schema_version: state.current });
 }
 
-async function handleSchemaVersion(config, corr, originState) {
+async function schemaVersion(config, corr, origin) {
   const state = await schemaState(config);
-  return success(config, corr, originState, {
-    current_schema_version: state.current || null,
+  if (!state.ready) {
+    throw new GVError('GV_DB_SCHEMA_OUTDATED', 'The GalviVault schema does not meet the Day 1 minimum.', 503, {
+      current_schema_version: state.current || null,
+      required_schema_version: state.required,
+      required_table_count: state.required_table_count,
+      present_table_count: state.present_table_count
+    });
+  }
+  return ok(config, corr, origin, {
+    current_schema_version: state.current,
     required_schema_version: state.required,
-    compatible: state.ready,
-    migration: state.migration
-  }, state.ready ? 200 : 503, state.ready ? 'ok' : 'unavailable', { schema_version: state.current || REQUIRED_SCHEMA });
+    compatible: true,
+    migration: state.migration,
+    schema_namespace: TABLE_PREFIX
+  }, 200, 'ok', { schema_version: state.current });
 }
 
-function validateFixtureSession(body) {
+function validateSessionBody(body) {
   requireFields(body, ['session_id', 'founder_id', 'venture_id', 'bmr_id', 'source', 'current_stage']);
-  for (const field of ['session_id', 'founder_id', 'venture_id', 'bmr_id']) {
-    if (!safeId(body[field])) throw new GVError('GV_REQ_SCHEMA', `${field} is invalid.`, 422, { fields: [{ field, issue: 'invalid' }] });
+  const session_id = requireSyntheticId('session_id', body.session_id, 'ses_day1_');
+  const founder_id = requireSyntheticId('founder_id', body.founder_id, 'fdr_day1_');
+  const venture_id = requireSyntheticId('venture_id', body.venture_id, 'ven_day1_');
+  const bmr_id = requireSyntheticId('bmr_id', body.bmr_id, 'bmr_day1_');
+  const source = clean(body.source);
+  const current_stage = clean(body.current_stage);
+  if (source !== 'galvicare' || current_stage !== 'GalviTriage') {
+    throw new GVError('GV_REQ_SCHEMA', 'The Day 1 synthetic source or stage is invalid.', 422);
   }
-  const required = {
-    founder_id: FIXTURE.founder_id,
-    venture_id: FIXTURE.venture_id,
-    bmr_id: FIXTURE.bmr_id
+  return {
+    session_id,
+    founder_id,
+    venture_id,
+    bmr_id,
+    source,
+    current_stage,
+    founder: {
+      first_name: clean(body.founder?.first_name || 'Day 1'),
+      last_name: clean(body.founder?.last_name || 'Fixture'),
+      email: clean(body.founder?.email || '') || null
+    },
+    venture_name: clean(body.venture_name || 'Day 1 Synthetic Venture')
   };
-  for (const [field, expected] of Object.entries(required)) {
-    if (text(body[field]) !== expected) {
-      throw new GVError('GV_REQ_SCHEMA', 'Day 1 accepts only the approved synthetic fixture context.', 422, { fields: [{ field, issue: 'fixture_context_required' }] });
-    }
-  }
-  if (text(body.source) !== FIXTURE.source || text(body.current_stage) !== FIXTURE.current_stage) {
-    throw new GVError('GV_REQ_SCHEMA', 'The Day 1 fixture source or stage is invalid.', 422);
-  }
 }
 
 async function loadSession(db, sessionId) {
-  return first(db, `SELECT session_id, bmr_id, venture_id, founder_id, client_session_key, source,
-    current_stage, status, started_at, completed_at, created_at, updated_at
-    FROM assessment_sessions WHERE session_id = ?`, sessionId);
+  return first(db, `SELECT session_id, bmr_id, venture_id, founder_id, client_session_key,
+      source, current_stage, status, started_at, completed_at, created_at, updated_at
+    FROM gv1_assessment_sessions
+    WHERE session_id = ?`, sessionId);
 }
 
-async function handleCreateSession(request, config, corr, originState) {
-  assertQaRuntime(config);
+async function loadReceipt(db, scope, key) {
+  return first(db, `SELECT scope, idempotency_key, request_fingerprint, response_status,
+      response_entity_type, response_entity_id, created_at
+    FROM gv1_idempotency_keys
+    WHERE scope = ? AND idempotency_key = ?`, scope, key);
+}
+
+function receiptStatement(db, { scope, key, requestFingerprint, status, entityType, entityId, timestamp }) {
+  return db.prepare(`INSERT INTO gv1_idempotency_keys
+      (idempotency_id, scope, idempotency_key, request_fingerprint, response_status,
+       response_entity_type, response_entity_id, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+    .bind(newId('idem'), scope, key, requestFingerprint, status, entityType, entityId, timestamp);
+}
+
+async function createSession(request, config, corr, origin) {
+  requireDb(config);
   if (!config.fixtureMode) throw new GVError('GV_FIXTURE_DISABLED', 'The Day 1 fixture context is disabled.', 404);
-  requireIdempotencyHeader(request);
-  const body = await parseJson(request);
-  validateFixtureSession(body);
-  const sessionId = text(body.session_id);
+  const key = idempotencyKey(request);
+  const body = validateSessionBody(await jsonBody(request));
   const requestFingerprint = await fingerprint('session:create', body);
-  const existingReceipt = await first(config.db, 'SELECT request_fingerprint FROM idempotency_keys WHERE scope = ? AND idempotency_key = ?', 'session:create', sessionId);
-  if (existingReceipt && existingReceipt.request_fingerprint !== requestFingerprint) {
-    throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH', 'The session business key was reused with a different request.', 409);
+  const receipt = await loadReceipt(config.db, 'session:create', key);
+
+  if (receipt) {
+    if (receipt.request_fingerprint !== requestFingerprint) {
+      throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH', 'The idempotency key was reused with a different session request.', 409);
+    }
+    const replay = await loadSession(config.db, receipt.response_entity_id);
+    if (!replay) throw new GVError('GV_INTERNAL', 'The idempotency receipt references an unavailable session.', 500, undefined, true);
+    return ok(config, corr, origin, { session: replay }, 200, 'replayed', {
+      record_version: 1,
+      idempotent_replay: true
+    });
   }
-  const existing = await loadSession(config.db, sessionId);
+
+  const existing = await loadSession(config.db, body.session_id);
   if (existing) {
-    if ([existing.bmr_id, existing.venture_id, existing.founder_id, existing.source].join('|') !== [body.bmr_id, body.venture_id, body.founder_id, body.source].join('|')) {
-      throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH', 'The existing session does not match the requested context.', 409);
+    const same = [existing.bmr_id, existing.venture_id, existing.founder_id, existing.source, existing.current_stage].join('|') ===
+      [body.bmr_id, body.venture_id, body.founder_id, body.source, body.current_stage].join('|');
+    if (!same) {
+      throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH', 'The existing session does not match the requested synthetic context.', 409);
     }
-    if (!existingReceipt) {
-      await run(config.db, `INSERT INTO idempotency_keys
-        (idempotency_id, scope, idempotency_key, request_fingerprint, response_status, response_entity_type, response_entity_id, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`, id('idem'), 'session:create', sessionId, requestFingerprint, 200, 'assessment_session', sessionId, now());
-    }
-    return success(config, corr, originState, { session: existing }, 200, 'resumed', { record_version: 1, idempotent_replay: true });
+    await receiptStatement(config.db, {
+      scope: 'session:create', key, requestFingerprint, status: 200,
+      entityType: 'assessment_session', entityId: body.session_id, timestamp: now()
+    }).run();
+    return ok(config, corr, origin, { session: existing }, 200, 'resumed', {
+      record_version: 1,
+      idempotent_replay: true
+    });
   }
 
   const timestamp = now();
+  const sessionCreatedFingerprint = await fingerprint('journey-event:create', {
+    event_key: `day1:${body.session_id}:session_created`,
+    session_id: body.session_id,
+    event_name: 'session_created',
+    product: 'GalviTriage',
+    current_stage: body.current_stage,
+    metadata: { fixture: true, source: 'day1-worker' }
+  });
+
   const statements = [
-    config.db.prepare(`INSERT OR IGNORE INTO founders
-      (founder_id, first_name, last_name, consent_status, status, record_version, created_at, updated_at)
-      VALUES (?, ?, ?, 'approved', 'active', 1, ?, ?)`).bind(body.founder_id, 'Day 1', 'Fixture', timestamp, timestamp),
-    config.db.prepare(`INSERT OR IGNORE INTO ventures
+    config.db.prepare(`INSERT INTO gv1_founders
+      (founder_id, first_name, last_name, email, consent_status, status, record_version, created_at, updated_at)
+      VALUES (?, ?, ?, ?, 'approved', 'active', 1, ?, ?)`)
+      .bind(body.founder_id, body.founder.first_name, body.founder.last_name, body.founder.email, timestamp, timestamp),
+    config.db.prepare(`INSERT INTO gv1_ventures
       (venture_id, venture_name, stage, status, record_version, created_at, updated_at)
-      VALUES (?, ?, 'fixture', 'active', 1, ?, ?)`).bind(body.venture_id, FIXTURE.venture_name, timestamp, timestamp),
-    config.db.prepare(`INSERT OR IGNORE INTO founder_venture_roles
+      VALUES (?, ?, 'fixture', 'active', 1, ?, ?)`)
+      .bind(body.venture_id, body.venture_name, timestamp, timestamp),
+    config.db.prepare(`INSERT INTO gv1_founder_venture_roles
       (founder_id, venture_id, role_code, is_primary, status, created_at, updated_at)
-      VALUES (?, ?, 'founder', 1, 'active', ?, ?)`).bind(body.founder_id, body.venture_id, timestamp, timestamp),
-    config.db.prepare(`INSERT OR IGNORE INTO business_medical_records
+      VALUES (?, ?, 'founder', 1, 'active', ?, ?)`)
+      .bind(body.founder_id, body.venture_id, timestamp, timestamp),
+    config.db.prepare(`INSERT INTO gv1_business_medical_records
       (bmr_id, venture_id, status, record_version, current_session_id, opened_at, created_at, updated_at)
-      VALUES (?, ?, 'assessment_in_progress', 1, ?, ?, ?, ?)`).bind(body.bmr_id, body.venture_id, sessionId, timestamp, timestamp, timestamp),
-    config.db.prepare(`INSERT INTO assessment_sessions
-      (session_id, bmr_id, venture_id, founder_id, client_session_key, source, current_stage, status, started_at, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`).bind(sessionId, body.bmr_id, body.venture_id, body.founder_id, sessionId, body.source, body.current_stage, timestamp, timestamp, timestamp),
-    config.db.prepare('UPDATE business_medical_records SET current_session_id = ?, status = ?, updated_at = ? WHERE bmr_id = ?').bind(sessionId, 'assessment_in_progress', timestamp, body.bmr_id),
-    config.db.prepare(`INSERT INTO journey_events
-      (journey_event_id, event_key, bmr_id, session_id, event_name, product, current_stage, occurred_at, actor_type, metadata_json, correlation_id, environment, created_at)
-      VALUES (?, ?, ?, ?, 'session_created', 'GalviTriage', ?, ?, 'service', ?, ?, ?, ?)`).bind(id('jev'), `day1:${sessionId}:session_created`, body.bmr_id, sessionId, body.current_stage, timestamp, JSON.stringify({ fixture: true, source: 'day1-worker' }), corr, config.environment, timestamp),
-    config.db.prepare(`INSERT INTO audit_log
-      (audit_id, entity_type, entity_id, operation, prior_version, new_version, actor_type, source, reason_code, safe_change_json, correlation_id, environment, occurred_at, created_at)
-      VALUES (?, 'assessment_session', ?, 'create', NULL, 1, 'service', 'day1-worker', 'DAY1_SESSION_CREATE', ?, ?, ?, ?, ?)`).bind(id('aud'), sessionId, JSON.stringify({ fixture: true, stage: body.current_stage }), corr, config.environment, timestamp, timestamp),
-    config.db.prepare(`INSERT INTO idempotency_keys
-      (idempotency_id, scope, idempotency_key, request_fingerprint, response_status, response_entity_type, response_entity_id, created_at)
-      VALUES (?, 'session:create', ?, ?, 201, 'assessment_session', ?, ?)`).bind(id('idem'), sessionId, requestFingerprint, sessionId, timestamp)
+      VALUES (?, ?, 'assessment_in_progress', 1, ?, ?, ?, ?)`)
+      .bind(body.bmr_id, body.venture_id, body.session_id, timestamp, timestamp, timestamp),
+    config.db.prepare(`INSERT INTO gv1_assessment_sessions
+      (session_id, bmr_id, venture_id, founder_id, client_session_key, source,
+       current_stage, status, started_at, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)`)
+      .bind(body.session_id, body.bmr_id, body.venture_id, body.founder_id, body.session_id,
+        body.source, body.current_stage, timestamp, timestamp, timestamp),
+    config.db.prepare(`INSERT INTO gv1_journey_events
+      (journey_event_id, event_key, bmr_id, session_id, event_name, product,
+       current_stage, occurred_at, actor_type, metadata_json, request_fingerprint,
+       correlation_id, environment, created_at)
+      VALUES (?, ?, ?, ?, 'session_created', 'GalviTriage', ?, ?, 'service', ?, ?, ?, ?, ?)`)
+      .bind(newId('jev'), `day1:${body.session_id}:session_created`, body.bmr_id, body.session_id,
+        body.current_stage, timestamp, JSON.stringify({ fixture: true, source: 'day1-worker' }),
+        sessionCreatedFingerprint, corr, config.environment, timestamp),
+    config.db.prepare(`INSERT INTO gv1_audit_log
+      (audit_id, entity_type, entity_id, operation, prior_version, new_version, actor_type,
+       source, reason_code, safe_change_json, correlation_id, environment, occurred_at, created_at)
+      VALUES (?, 'assessment_session', ?, 'create', NULL, 1, 'service', 'day1-worker',
+       'DAY1_SESSION_CREATE', ?, ?, ?, ?, ?)`)
+      .bind(newId('aud'), body.session_id, JSON.stringify({ fixture: true, stage: body.current_stage }),
+        corr, config.environment, timestamp, timestamp),
+    receiptStatement(config.db, {
+      scope: 'session:create', key, requestFingerprint, status: 201,
+      entityType: 'assessment_session', entityId: body.session_id, timestamp
+    })
   ];
+
   await config.db.batch(statements);
-  const created = await loadSession(config.db, sessionId);
-  return success(config, corr, originState, { session: created }, 201, 'created', { record_version: 1, idempotent_replay: false });
+  const created = await loadSession(config.db, body.session_id);
+  return ok(config, corr, origin, { session: created }, 201, 'created', { record_version: 1 });
 }
 
-async function handleGetSession(sessionId, config, corr, originState) {
-  assertQaRuntime(config);
-  if (!safeId(sessionId)) throw new GVError('GV_REQ_SCHEMA', 'session_id is invalid.', 422);
+async function getSession(config, corr, origin, sessionId) {
+  requireDb(config);
+  if (!safeId(sessionId)) throw new GVError('GV_REQ_SCHEMA', 'The session ID is invalid.', 422);
   const session = await loadSession(config.db, sessionId);
-  if (!session) throw new GVError('GV_NOT_FOUND', 'The requested session was not found.', 404);
-  return success(config, corr, originState, { session }, 200, 'ok', { record_version: 1 });
-}
-
-function validateEvent(body) {
-  requireFields(body, ['event_key', 'session_id', 'event_name']);
-  if (!safeId(body.session_id) || !/^[A-Za-z0-9:._-]{3,180}$/.test(text(body.event_key))) {
-    throw new GVError('GV_REQ_SCHEMA', 'The event key or session ID is invalid.', 422);
-  }
-  if (body.metadata !== undefined && (!body.metadata || typeof body.metadata !== 'object' || Array.isArray(body.metadata))) {
-    throw new GVError('GV_REQ_SCHEMA', 'metadata must be a JSON object.', 422);
-  }
-  if (JSON.stringify(body.metadata || {}).length > 4096) {
-    throw new GVError('GV_REQ_SCHEMA', 'metadata exceeds the Day 1 size limit.', 422);
-  }
-}
-
-async function handleJourneyEvent(request, config, corr, originState) {
-  assertQaRuntime(config);
-  requireIdempotencyHeader(request);
-  const body = await parseJson(request);
-  validateEvent(body);
-  const session = await loadSession(config.db, text(body.session_id));
-  if (!session) throw new GVError('GV_NOT_FOUND', 'The referenced session was not found.', 404);
-
-  const eventKey = text(body.event_key);
-  const requestFingerprint = await fingerprint('journey_event:create', body);
-  const receipt = await first(config.db, 'SELECT request_fingerprint FROM idempotency_keys WHERE scope = ? AND idempotency_key = ?', 'journey_event:create', eventKey);
-  if (receipt && receipt.request_fingerprint !== requestFingerprint) {
-    throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH', 'The event key was reused with a different request.', 409);
-  }
-  const existing = await first(config.db, 'SELECT * FROM journey_events WHERE event_key = ?', eventKey);
-  if (existing) {
-    if (!receipt) {
-      throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH', 'The event key already exists without a matching receipt.', 409);
-    }
-    return success(config, corr, originState, { journey_event: existing }, 200, 'no_change', { idempotent_replay: true });
-  }
-
-  const timestamp = now();
-  const eventId = id('jev');
-  const statements = [
-    config.db.prepare(`INSERT INTO journey_events
-      (journey_event_id, event_key, bmr_id, session_id, event_name, product, current_stage, occurred_at, actor_type, metadata_json, correlation_id, environment, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'service', ?, ?, ?, ?)`).bind(eventId, eventKey, session.bmr_id, session.session_id, text(body.event_name), text(body.product) || null, text(body.current_stage) || session.current_stage, text(body.occurred_at) || timestamp, JSON.stringify(body.metadata || {}), corr, config.environment, timestamp),
-    config.db.prepare(`INSERT INTO audit_log
-      (audit_id, entity_type, entity_id, operation, actor_type, source, reason_code, safe_change_json, correlation_id, environment, occurred_at, created_at)
-      VALUES (?, 'journey_event', ?, 'append', 'service', 'day1-worker', 'DAY1_EVENT_APPEND', ?, ?, ?, ?, ?)`).bind(id('aud'), eventId, JSON.stringify({ event_key: eventKey, event_name: text(body.event_name) }), corr, config.environment, timestamp, timestamp),
-    config.db.prepare(`INSERT INTO idempotency_keys
-      (idempotency_id, scope, idempotency_key, request_fingerprint, response_status, response_entity_type, response_entity_id, created_at)
-      VALUES (?, 'journey_event:create', ?, ?, 201, 'journey_event', ?, ?)`).bind(id('idem'), eventKey, requestFingerprint, eventId, timestamp)
-  ];
-  await config.db.batch(statements);
-  const created = await first(config.db, 'SELECT * FROM journey_events WHERE event_key = ?', eventKey);
-  return success(config, corr, originState, { journey_event: created }, 201, 'accepted', { idempotent_replay: false });
-}
-
-async function handleFixture(config, corr, originState) {
-  if (!['qa', 'local'].includes(config.environment) || !config.fixtureMode) {
-    throw new GVError('GV_FIXTURE_DISABLED', 'The Day 1 fixture route is unavailable.', 404);
-  }
-  return success(config, corr, originState, {
-    fixture: {
-      ...FIXTURE,
-      deterministic: true,
-      schema_version: REQUIRED_SCHEMA,
-      expected_session_request: {
-        session_id: FIXTURE.session_id,
-        founder_id: FIXTURE.founder_id,
-        venture_id: FIXTURE.venture_id,
-        bmr_id: FIXTURE.bmr_id,
-        source: FIXTURE.source,
-        current_stage: FIXTURE.current_stage
-      },
-      expected_event_request: {
-        event_key: `day1:${FIXTURE.session_id}:triage_opened:001`,
-        session_id: FIXTURE.session_id,
-        event_name: 'triage_opened',
-        product: 'GalviTriage',
-        current_stage: FIXTURE.current_stage,
-        metadata: { fixture: true, source: 'day1-human-e2e' }
-      }
-    }
+  if (!session) throw new GVError('GV_NOT_FOUND', 'The requested Day 1 session was not found.', 404);
+  const bmr = await first(config.db, `SELECT bmr_id, venture_id, status, record_version,
+      current_session_id, opened_at, closed_at, created_at, updated_at
+    FROM gv1_business_medical_records WHERE bmr_id = ?`, session.bmr_id);
+  return ok(config, corr, origin, { session, business_medical_record: bmr }, 200, 'ok', {
+    record_version: Number(bmr?.record_version || 1)
   });
 }
 
-async function dispatchCompatibility(request, config, corr, originState) {
-  const body = await parseJson(request);
-  const action = text(body.action);
-  const payload = body.payload && typeof body.payload === 'object' ? body.payload : body;
-  const headers = new Headers(request.headers);
-  headers.set('Content-Type', 'application/json');
-  const origin = new URL(request.url).origin;
-  if (action === 'health') return handleHealth(config, corr, originState);
-  if (action === 'readiness') return handleReady(config, corr, originState);
-  if (action === 'get_session') return handleGetSession(text(payload.session_id), config, corr, originState);
-  if (action === 'fixture_result') return handleFixture(config, corr, originState);
-  if (action === 'create_or_resume_session') {
-    return handleCreateSession(new Request(`${origin}/api/v1/sessions`, { method: 'POST', headers, body: JSON.stringify(payload) }), config, corr, originState);
+function validateEventBody(body) {
+  requireFields(body, ['event_key', 'session_id', 'event_name', 'product', 'current_stage']);
+  const event_key = clean(body.event_key);
+  const session_id = requireSyntheticId('session_id', body.session_id, 'ses_day1_');
+  if (!safeId(event_key) || !event_key.startsWith(`day1:${session_id}:`)) {
+    throw new GVError('GV_REQ_SCHEMA', 'event_key must be scoped to the Day 1 session.', 422);
   }
-  if (action === 'journey_event') {
-    return handleJourneyEvent(new Request(`${origin}/api/v1/journey-events`, { method: 'POST', headers, body: JSON.stringify(payload) }), config, corr, originState);
-  }
-  throw new GVError('GV_NOT_FOUND', 'The requested compatibility action is not supported.', 404);
+  return {
+    event_key,
+    session_id,
+    event_name: clean(body.event_name),
+    product: clean(body.product),
+    current_stage: clean(body.current_stage),
+    metadata: body.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+      ? body.metadata
+      : {}
+  };
 }
 
-async function route(request, config, corr, originState) {
+async function loadEvent(db, eventKey) {
+  return first(db, `SELECT journey_event_id, event_key, bmr_id, session_id, event_name,
+      product, current_stage, occurred_at, actor_type, metadata_json, request_fingerprint,
+      correlation_id, environment, created_at
+    FROM gv1_journey_events WHERE event_key = ?`, eventKey);
+}
+
+async function createJourneyEvent(request, config, corr, origin) {
+  requireDb(config);
+  if (!config.fixtureMode) throw new GVError('GV_FIXTURE_DISABLED', 'The Day 1 fixture context is disabled.', 404);
+  const key = idempotencyKey(request);
+  const body = validateEventBody(await jsonBody(request));
+  const requestFingerprint = await fingerprint('journey-event:create', body);
+  const receipt = await loadReceipt(config.db, 'journey-event:create', key);
+
+  if (receipt) {
+    if (receipt.request_fingerprint !== requestFingerprint) {
+      throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH', 'The idempotency key was reused with a different journey event.', 409);
+    }
+    const replay = await loadEvent(config.db, receipt.response_entity_id);
+    if (!replay) throw new GVError('GV_INTERNAL', 'The idempotency receipt references an unavailable event.', 500, undefined, true);
+    return ok(config, corr, origin, { journey_event: replay }, 200, 'replayed', {
+      idempotent_replay: true
+    });
+  }
+
+  const session = await loadSession(config.db, body.session_id);
+  if (!session) throw new GVError('GV_NOT_FOUND', 'The Day 1 session must exist before appending a journey event.', 404);
+  const existing = await loadEvent(config.db, body.event_key);
+  if (existing) {
+    if (existing.request_fingerprint !== requestFingerprint) {
+      throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH', 'The event key was reused with different event content.', 409);
+    }
+    await receiptStatement(config.db, {
+      scope: 'journey-event:create', key, requestFingerprint, status: 200,
+      entityType: 'journey_event', entityId: body.event_key, timestamp: now()
+    }).run();
+    return ok(config, corr, origin, { journey_event: existing }, 200, 'replayed', {
+      idempotent_replay: true
+    });
+  }
+
+  const timestamp = now();
+  const statements = [
+    config.db.prepare(`INSERT INTO gv1_journey_events
+      (journey_event_id, event_key, bmr_id, session_id, event_name, product,
+       current_stage, occurred_at, actor_type, metadata_json, request_fingerprint,
+       correlation_id, environment, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'human_e2e', ?, ?, ?, ?, ?)`)
+      .bind(newId('jev'), body.event_key, session.bmr_id, body.session_id, body.event_name,
+        body.product, body.current_stage, timestamp, JSON.stringify(body.metadata),
+        requestFingerprint, corr, config.environment, timestamp),
+    config.db.prepare(`INSERT INTO gv1_audit_log
+      (audit_id, entity_type, entity_id, operation, prior_version, new_version, actor_type,
+       source, reason_code, safe_change_json, correlation_id, environment, occurred_at, created_at)
+      VALUES (?, 'journey_event', ?, 'append', NULL, 1, 'human_e2e', 'day1-worker',
+       'DAY1_JOURNEY_APPEND', ?, ?, ?, ?, ?)`)
+      .bind(newId('aud'), body.event_key, JSON.stringify({ event_name: body.event_name, product: body.product }),
+        corr, config.environment, timestamp, timestamp),
+    receiptStatement(config.db, {
+      scope: 'journey-event:create', key, requestFingerprint, status: 201,
+      entityType: 'journey_event', entityId: body.event_key, timestamp
+    })
+  ];
+  await config.db.batch(statements);
+  const created = await loadEvent(config.db, body.event_key);
+  return ok(config, corr, origin, { journey_event: created }, 201, 'created');
+}
+
+async function fixtureResult(request, config, corr, origin) {
+  if (!['qa', 'local'].includes(config.environment) || !config.fixtureMode) {
+    throw new GVError('GV_FIXTURE_DISABLED', 'The Day 1 fixture context is disabled.', 404);
+  }
+  if (request.method === 'POST') await jsonBody(request);
+  return ok(config, corr, origin, { fixture: FIXTURE }, 200, 'ok', {
+    record_version: 1,
+    evidence_version: 1
+  });
+}
+
+async function route(request, config, corr, origin) {
   const url = new URL(request.url);
-  const path = url.pathname.replace(/\/+$/, '') || '/';
-  if (request.method === 'GET' && path === '/health') return handleHealth(config, corr, originState);
-  if (request.method === 'GET' && path === '/ready') return handleReady(config, corr, originState);
-  if (request.method === 'GET' && path === '/api/v1/schema-version') return handleSchemaVersion(config, corr, originState);
-  if (request.method === 'POST' && path === '/api/v1/sessions') return handleCreateSession(request, config, corr, originState);
-  if (request.method === 'GET' && path.startsWith('/api/v1/sessions/')) return handleGetSession(decodeURIComponent(path.slice('/api/v1/sessions/'.length)), config, corr, originState);
-  if (request.method === 'POST' && path === '/api/v1/journey-events') return handleJourneyEvent(request, config, corr, originState);
-  if (request.method === 'POST' && path === '/api/v1/fixtures/results') return handleFixture(config, corr, originState);
-  if (request.method === 'POST' && ['/api', '/api/v1/actions'].includes(path)) return dispatchCompatibility(request, config, corr, originState);
-  if (['GET', 'POST'].includes(request.method)) throw new GVError('GV_NOT_FOUND', 'The requested route was not found.', 404);
-  throw new GVError('GV_REQ_METHOD_NOT_ALLOWED', 'The request method is not allowed.', 405);
+  const pathname = url.pathname.replace(/\/+$/, '') || '/';
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: headers(config, corr, origin) });
+  }
+  if (request.method === 'GET' && pathname === '/health') return health(config, corr, origin);
+  if (request.method === 'GET' && pathname === '/ready') return ready(config, corr, origin);
+  if (request.method === 'GET' && pathname === '/api/v1/schema-version') return schemaVersion(config, corr, origin);
+  if (request.method === 'POST' && pathname === '/api/v1/sessions') return createSession(request, config, corr, origin);
+  if (request.method === 'POST' && pathname === '/api/v1/journey-events') return createJourneyEvent(request, config, corr, origin);
+  if (request.method === 'POST' && pathname === '/api/v1/fixtures/results') return fixtureResult(request, config, corr, origin);
+  if (request.method === 'GET' && pathname.startsWith('/api/v1/sessions/')) {
+    return getSession(config, corr, origin, decodeURIComponent(pathname.slice('/api/v1/sessions/'.length)));
+  }
+  throw new GVError('GV_NOT_FOUND', 'The requested GalviVault Day 1 route was not found.', 404);
 }
 
-export default {
+const worker = {
   async fetch(request, env) {
     const config = runtime(env);
     const corr = correlationId(request);
-    const originState = allowedOrigin(request, config);
+    const origin = originState(request, config);
+    if (!origin.allowed) {
+      return fail(config, corr, origin, new GVError('GV_CORS_DENIED', 'The request origin is not allowed.', 403));
+    }
     try {
-      if (!originState.allowed) throw new GVError('GV_ORIGIN_FORBIDDEN', 'The request origin is not allowed.', 403);
-      if (request.method === 'OPTIONS') {
-        return new Response(null, { status: 204, headers: responseHeaders(config, corr, originState) });
-      }
-      return await route(request, config, corr, originState);
+      return await route(request, config, corr, origin);
     } catch (error) {
-      return failure(config, corr, originState, error);
+      return fail(config, corr, origin, error);
     }
   }
 };
 
-export { API_VERSION, FIXTURE, REQUIRED_SCHEMA, SERVICE };
+export { API_VERSION, FIXTURE, REQUIRED_SCHEMA, SERVICE, TABLE_PREFIX };
+export default worker;
