@@ -12,7 +12,7 @@ const required = [
   'tests/day1-foundation.test.mjs',
   'tests/galvivault-day2-identity-continuity.test.mjs',
   'scripts/galvivault-day2-e2e.mjs',
-  '.github/workflows/day2-qa-identity.yml'
+  '.github/workflows/day2-normalize-executable-files.yml'
 ];
 
 const missing = required.filter((file) => !fs.existsSync(path.resolve(file)));
@@ -57,4 +57,4 @@ for (const name of forbiddenNames) {
   if (fs.existsSync(name)) throw new Error(`Forbidden local/secret artifact is present: ${name}`);
 }
 
-console.log('PASS: GalviVault Day 2 critical-path files, scripts, QA entry, D1 target, and Production isolation are valid.');
+console.log('PASS: GalviVault Day 2 critical-path files, scripts, QA entry, D1 target, Production isolation, and the single authoritative Day 2 workflow are valid.');
