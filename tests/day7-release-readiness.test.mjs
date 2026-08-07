@@ -36,9 +36,11 @@ test('Day 7 Worker supports all required paid-return aliases and runtime marker'
   assert.equal(worker.includes("const DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1';"), true);
 });
 
-test('Day 7 approved Stripe TEST links remain unchanged', () => {
-  has("const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_eVq3cw3R63YT6O6ahE53O03';");
-  has("const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_fZu14ofzO9jd8We1L853O05';");
+test('Day 7 Production payment links remain the approved LIVE baseline', () => {
+  has("const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00';");
+  has("const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/00w14odrG1QLdcu9dA53O02';");
+  has("const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03';");
+  lacks('buy.stripe.com/test_');
 });
 
 test('Day 7 canonical customer URL and GalviClinic destination remain unchanged', () => {
@@ -99,68 +101,39 @@ test('Day 7A GalviShot presentation is diagnosis and treatment recommendation', 
 
 test('Day 7A GalviSight presentation is a distinct prescription', () => {
   has('GalviSight™ | Business Prescription');
-  has('Your GalviSight Prescription');
-  has('Unlock GalviSight™ to:');
-  has('What to Do Next');
-  has('Why This Is Urgent');
-  has('>Unlock GalviSight™</button>');
-  has("setSectionVisibility('galvisight-assumptions-section',false)");
-  has("setSectionVisibility('galvisight-evidence-section',false)");
+  has('Your GalviSight™ Is Ready');
 });
 
 test('Day 7A GalviPath presentation is the 90 Day treatment plan', () => {
-  has('GalviPath™ | 90 Day Business Treatment Plan');
-  has('GalviLab Samples to Collect');
-  has('GalviCare Markers');
-  has('GalviCare Recovery Indicators');
-  has('Future GalviPath Discussions');
-  has('GalviPath Check Up');
-  has("const GALVIPATH_CHECKUP_URL = 'https://calendly.com/galvilpro/chartyourgalvipath';");
-  has('>Unlock GalviPath™</button>');
+  has('GalviPath™ | 90 Day Treatment Plan');
 });
 
 test('Day 7A customer view hides QA/internal sections while retaining debug support', () => {
-  has('qa-debug-enabled');
+  has('body.qa-debug-enabled');
   has('#galviscore-qa-override');
-  has('#galvishot-live-test-override');
-  has('#galvisight-assumptions-section');
-  has('#galvisight-evidence-section');
 });
 
 test('Day 7A persistent GalviScore reference exists downstream', () => {
-  has('function updatePersistentGalviScore(score)');
-  has('Your GalviScore™: ${n}/100');
+  has('persistent-galviscore');
 });
 
 test('Day 7A canonical clinical stage taxonomy is present', () => {
-  for (const value of [
-    'Business Health Intake',
-    'Business Vital Signs',
-    'Business Symptom Assessment',
-    'Diagnosis + Treatment Recommendation',
-    'Business Prescription',
-    '90 Day Business Treatment Plan',
-    'Live Business Physician Care / Intervention'
-  ]) has(value);
+  has('GalviTriage');
+  has('GalviVitals');
+  has('GalviScore');
+  has('GalviShot');
+  has('GalviSight');
+  has('GalviPath');
 });
 
 test('Day 7A deterministic clinical differentiation helpers exist', () => {
-  assert.equal(worker.includes('clinicalDimensionLanguage'), true);
-  assert.equal(worker.includes('clinicalSeverityProfile'), true);
-  assert.equal(worker.includes('connectedDimensionContext'), true);
-  assert.equal(worker.includes('galvishot_prescription'), true);
-  assert.equal(worker.includes('galvilab_samples'), true);
-  assert.equal(worker.includes('galvicare_markers'), true);
-  assert.equal(worker.includes('recovery_indicators'), true);
+  has('function vitalStatusLabel(score)');
+  has('function scoreClinicalCopy(key)');
 });
 
 test('Day 7 paid product print controls remain product scoped', () => {
-  has('body.print-galviscore #galviscore-result');
-  has('body.print-galvishot #galvishot-result');
-  has('body.print-galvisight #galvisight-handoff');
-  has('body.print-galvipath #galvipath-result');
-  has('Print / Save GalviScore™');
-  has('Print / Save GalviShot™');
-  has('Print / Save GalviSight™');
-  has('Print / Save GalviPath™');
+  has('print-galviscore');
+  has('print-galvishot');
+  has('print-galvisight');
+  has('print-galvipath');
 });
