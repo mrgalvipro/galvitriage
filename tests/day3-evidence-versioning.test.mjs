@@ -4,17 +4,26 @@ import { readFileSync } from 'node:fs';
 import worker from '../worker/day3.js';
 
 const source = readFileSync(new URL('../worker/day3.js', import.meta.url), 'utf8');
-const migration = readFileSync(new URL('../migrations/day1/0002_day3_evidence_versioning.sql', import.meta.url), 'utf8');
-const wrangler = JSON.parse(readFileSync(new URL('../wrangler.json', import.meta.url), 'utf8'));
+const migration = readFileSync(new URL('../migrations/day1/0003_day3_evidence_versioning.sql', import.meta.url), 'utf8');
+const day1 = JSON.parse(readFileSync(new URL('../wrangler.json', import.meta.url), 'utf8'));
+const day2 = JSON.parse(readFileSync(new URL('../wrangler.day2.json', import.meta.url), 'utf8'));
+const day3 = JSON.parse(readFileSync(new URL('../wrangler.day3.json', import.meta.url), 'utf8'));
 
-test('D3-A01 QA entry preserves protected QA D1 binding and requires schema 0002', () => {
-  assert.equal(wrangler.main, 'worker/day3.js');
-  assert.equal(wrangler.vars.ENVIRONMENT, 'qa');
-  assert.equal(wrangler.vars.MIN_SCHEMA_VERSION, '0002');
-  const binding = wrangler.d1_databases.find((entry) => entry.binding === 'DB');
-  assert.equal(binding.database_name, 'galvivault-0-5-qa');
-  assert.equal(binding.database_id, 'cdf9042b-ab09-498a-ac66-010b6cce47d4');
-  assert.equal(binding.migrations_dir, 'migrations/day1');
+test('D3-A01 Day 1, Day 2, and Day 3 runtime configurations are isolated and share only the approved QA D1', () => {
+  assert.equal(day1.main, 'worker/day1.js');
+  assert.equal(day1.vars.MIN_SCHEMA_VERSION, '0001');
+  assert.equal(day2.main, 'worker/day2.js');
+  assert.equal(day2.vars.MIN_SCHEMA_VERSION, '0002');
+  assert.equal(day3.name, 'galvivault-p0-day3-qa');
+  assert.equal(day3.main, 'worker/day3.js');
+  assert.equal(day3.vars.ENVIRONMENT, 'qa');
+  assert.equal(day3.vars.MIN_SCHEMA_VERSION, '0003');
+  for (const config of [day1, day2, day3]) {
+    const binding = config.d1_databases.find((entry) => entry.binding === 'DB');
+    assert.equal(binding.database_name, 'galvivault-0-5-qa');
+    assert.equal(binding.database_id, 'cdf9042b-ab09-498a-ac66-010b6cce47d4');
+    assert.equal(binding.migrations_dir, 'migrations/day1');
+  }
 });
 
 test('D3-A02 additive migration supplies Day 3 version, import, and immutable evidence objects', () => {
@@ -25,8 +34,9 @@ test('D3-A02 additive migration supplies Day 3 version, import, and immutable ev
     'gv1_import_row_receipts',
     'trg_gv1_accepted_evidence_no_update',
     'triage.problem_clarity',
-    "'0002'"
+    "'0003'"
   ]) assert.ok(migration.includes(required), `missing migration contract: ${required}`);
+  assert.equal(migration.includes("('0002', 'day3_evidence_versioning_v1'"), false);
   assert.equal(migration.includes('DROP TABLE'), false);
   assert.equal(migration.includes('DELETE FROM'), false);
 });
@@ -84,7 +94,7 @@ test('Day 1 health remains available through the Day 3 wrapper', async () => {
     ENVIRONMENT: 'qa',
     FIXTURE_MODE: 'true',
     API_VERSION: 'v1',
-    MIN_SCHEMA_VERSION: '0002',
+    MIN_SCHEMA_VERSION: '0003',
     ALLOWED_ORIGINS: ''
   });
   assert.equal(response.status, 200);
