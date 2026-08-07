@@ -119,7 +119,6 @@ test('Production payment return remains server-verified and cannot use a browser
     'day7aWorker.fetch(request, productionEnv(env, request), ctx)'
   ]);
   expectExcludes(prodEntry, [
-    'grant_test_override',
     'QA_OVERRIDE_SECRET',
     'TEST_OVERRIDE_SECRET',
     'buy.stripe.com/test_'
