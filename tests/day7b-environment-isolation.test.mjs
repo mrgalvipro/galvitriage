@@ -46,6 +46,17 @@ test('Production keeps the current GalviCare security boundary and approved entr
   expectExcludes(prodEntry, ["import day7dWorker from './day7d-engine.js'"]);
 });
 
+test('Production delegation cannot execute the QA Day 7C HubSpot adapter', () => {
+  const start = qaWorker.indexOf("if (action === 'submit_triage')");
+  const end = qaWorker.indexOf("if (!required(sid))", start);
+  assert.ok(start >= 0 && end > start, 'submit_triage handler must be present');
+  const submitTriage = qaWorker.slice(start, end);
+  const productionGuard = submitTriage.indexOf('if (!isQaEnvironment(env))');
+  const qaHubSpotCall = submitTriage.indexOf('await upsertHubSpotContact(env, payload, session_id)');
+  assert.ok(productionGuard >= 0, 'Production must exit submit_triage before the QA Day 7C adapter');
+  assert.ok(qaHubSpotCall > productionGuard, 'QA HubSpot adapter must execute only after the Production guard');
+});
+
 test('Day 1, Day 7D and Production Worker services are distinct', () => {
   expectIncludes(day1Wrangler, [
     '"name": "galvivault-p0-day1-qa"',
