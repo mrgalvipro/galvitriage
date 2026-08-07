@@ -1,9 +1,10 @@
 repository=mrgalvipro/galvitriage
 branch=qa-revamped-galvicare-0-5
-candidate=20b32e84d49b4a1aaf48612e38e74a89358d5923
+candidate=6f13c8f3dea37f89ae83e86bfa9013830f4ba1c4
 qa_worker=galvivault-p0-day1-qa
 qa_database=galvivault-0-5-qa
 schema_target=0005
 day4_final=e6058ef6ef21f9e4bde2c665d75407d53a042b1d
 galvicare_completion_baseline=ae41b41892de2e9b88b4e81d5e521c535719bb15
+galvicare_production_baseline=920f8bf98f8f19ee98a41c69dffd4eb0949b7248
 production_branch=main

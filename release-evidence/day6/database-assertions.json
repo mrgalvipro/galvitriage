@@ -12,13 +12,13 @@
       "served_by_colo": "EWR",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.2748
+        "sql_duration_ms": 0.1983
       },
-      "duration": 0.2748,
+      "duration": 0.1983,
       "changes": 0,
-      "last_row_id": 135,
+      "last_row_id": 166,
       "changed_db": false,
-      "size_after": 2830336,
+      "size_after": 2899968,
       "rows_read": 22,
       "rows_written": 0,
       "total_attempts": 1
@@ -37,13 +37,13 @@
       "served_by_colo": "EWR",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.3327
+        "sql_duration_ms": 0.3039
       },
-      "duration": 0.3327,
+      "duration": 0.3039,
       "changes": 0,
-      "last_row_id": 135,
+      "last_row_id": 166,
       "changed_db": false,
-      "size_after": 2830336,
+      "size_after": 2899968,
       "rows_read": 48,
       "rows_written": 0,
       "total_attempts": 1
@@ -62,14 +62,14 @@
       "served_by_colo": "EWR",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.1644
+        "sql_duration_ms": 0.1387
       },
-      "duration": 0.1644,
+      "duration": 0.1387,
       "changes": 0,
-      "last_row_id": 135,
+      "last_row_id": 166,
       "changed_db": false,
-      "size_after": 2830336,
-      "rows_read": 48,
+      "size_after": 2899968,
+      "rows_read": 50,
       "rows_written": 0,
       "total_attempts": 1
     }
@@ -87,14 +87,14 @@
       "served_by_colo": "EWR",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.171
+        "sql_duration_ms": 0.1334
       },
-      "duration": 0.171,
+      "duration": 0.1334,
       "changes": 0,
-      "last_row_id": 135,
+      "last_row_id": 166,
       "changed_db": false,
-      "size_after": 2830336,
-      "rows_read": 45,
+      "size_after": 2899968,
+      "rows_read": 72,
       "rows_written": 0,
       "total_attempts": 1
     }
@@ -112,14 +112,14 @@
       "served_by_colo": "EWR",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.1732
+        "sql_duration_ms": 0.2308
       },
-      "duration": 0.1732,
+      "duration": 0.2308,
       "changes": 0,
-      "last_row_id": 135,
+      "last_row_id": 166,
       "changed_db": false,
-      "size_after": 2830336,
-      "rows_read": 18,
+      "size_after": 2899968,
+      "rows_read": 30,
       "rows_written": 0,
       "total_attempts": 1
     }
@@ -137,14 +137,14 @@
       "served_by_colo": "EWR",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.1479
+        "sql_duration_ms": 0.1416
       },
-      "duration": 0.1479,
+      "duration": 0.1416,
       "changes": 0,
-      "last_row_id": 135,
+      "last_row_id": 166,
       "changed_db": false,
-      "size_after": 2830336,
-      "rows_read": 6,
+      "size_after": 2899968,
+      "rows_read": 12,
       "rows_written": 0,
       "total_attempts": 1
     }

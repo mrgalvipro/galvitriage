@@ -39,13 +39,13 @@
       "served_by_colo": "EWR",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.821
+        "sql_duration_ms": 0.4037
       },
-      "duration": 0.821,
+      "duration": 0.4037,
       "changes": 0,
       "last_row_id": 0,
       "changed_db": false,
-      "size_after": 2797568,
+      "size_after": 2863104,
       "rows_read": 10,
       "rows_written": 0,
       "total_attempts": 1
@@ -64,13 +64,13 @@
       "served_by_colo": "EWR",
       "served_by_primary": true,
       "timings": {
-        "sql_duration_ms": 0.2655
+        "sql_duration_ms": 1.5096
       },
-      "duration": 0.2655,
+      "duration": 1.5096,
       "changes": 0,
       "last_row_id": 0,
       "changed_db": false,
-      "size_after": 2797568,
+      "size_after": 2863104,
       "rows_read": 22,
       "rows_written": 0,
       "total_attempts": 1

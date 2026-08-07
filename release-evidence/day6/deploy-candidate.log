@@ -14,7 +14,7 @@ env.MIN_SCHEMA_VERSION ("0005")                                             Envi
 env.ALLOWED_ORIGINS ("https://galvipro.com,https://www.galv...")            Environment Variable      
 env.STRIPE_WEBHOOK_SECRET ("(hidden)")                                      Environment Variable      
 
-Uploaded galvivault-p0-day1-qa (1.43 sec)
-Deployed galvivault-p0-day1-qa triggers (0.44 sec)
+Uploaded galvivault-p0-day1-qa (3.08 sec)
+Deployed galvivault-p0-day1-qa triggers (0.74 sec)
   https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
-Current Version ID: 06a9c9d6-5d29-454b-a2ac-a65769c36a47
+Current Version ID: 811b1e61-5711-4c3f-8c2d-ac1b37443c59

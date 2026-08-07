@@ -1,6 +1,6 @@
 {
-  "sha": "20b32e84d49b4a1aaf48612e38e74a89358d5923",
-  "run": "20b32e84",
+  "sha": "6f13c8f3dea37f89ae83e86bfa9013830f4ba1c4",
+  "run": "6f13c8f3",
   "steps": [
     {
       "id": "H5.1",
@@ -153,8 +153,13 @@
     {
       "id": "STRIPE-REPLAY",
       "pass": true,
-      "first": 200,
-      "second": 200
+      "statuses": [
+        200,
+        200,
+        200
+      ],
+      "consecutive": 3,
+      "count": 1
     },
     {
       "id": "REMOTE-D1-BLOCK-MATRIX",
@@ -164,8 +169,8 @@
   "ids": {
     "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
     "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
-    "recommendation_id": "rec_d32fd84f65174731969a8e047ffeeb7b",
-    "treatment_plan_id": "trp_11d8761b43a9487b90f3b7160d731fe8",
-    "outcome_id": "out_4b541acda2be4f35b5b07f02365ec7ce"
+    "recommendation_id": "rec_5a4226a9e9e84bc08021fa2efbf5b213",
+    "treatment_plan_id": "trp_f8543b9c7fe9472bb54efbd5ec1b96ba",
+    "outcome_id": "out_5923831fa8724f2387ecaded6259e104"
   }
 }
