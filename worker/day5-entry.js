@@ -1,5 +1,5 @@
 import day4Worker from './day4-entry.js';
-import { context, failure, headers, requireRuntime, success } from './day5-common.js';
+import { GVError, context, failure, headers, requireRuntime, success } from './day5-common.js';
 import { first } from './repositories/care-repository.js';
 import { handleCareRoute } from './routes/care.js';
 
@@ -27,7 +27,7 @@ const worker={
     const ctx=context(request,env);
     try{
       requireRuntime(env,ctx);
-      if(ctx.origin&&!ctx.allowedOrigins.includes(ctx.origin)) throw new Error('GV_CORS_DENIED');
+      if(ctx.origin&&!ctx.allowedOrigins.includes(ctx.origin)) throw new GVError('GV_CORS_DENIED','The request origin is not allowed.',403);
       const url=new URL(request.url); const path=url.pathname.replace(/\/+$/,'')||'/';
       if(request.method==='OPTIONS'&&path.startsWith('/api/v1/')) return new Response(null,{status:204,headers:headers(ctx)});
       if(request.method==='GET'&&(path==='/api/v1/day5/readiness'||path==='/api/v1/day5/schema-version')) return readiness(env,ctx);
@@ -35,7 +35,6 @@ const worker={
       if(response) return response;
       return day4Worker.fetch(request,env,executionContext);
     }catch(error){
-      if(error?.message==='GV_CORS_DENIED') error=Object.assign(new Error('The request origin is not allowed.'),{code:'GV_CORS_DENIED',status:403});
       console.error('GalviVault Day 5 error',error?.code||'GV_INTERNAL',error?.message||'unexpected');
       return failure(ctx,error);
     }
