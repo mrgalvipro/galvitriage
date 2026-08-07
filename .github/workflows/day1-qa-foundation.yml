@@ -7,11 +7,10 @@ on:
       - qa-revamped-galvicare-0-5
     paths:
       - "worker/day1.js"
-      - "migrations/day1/**"
+      - "migrations/day1/0001_canonical_business_medical_record.sql"
       - "tests/day1-foundation.test.mjs"
       - "package.json"
       - "wrangler.json"
-      - ".github/workflows/day1-qa-foundation.yml"
 
 permissions:
   contents: read
