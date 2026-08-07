@@ -261,7 +261,10 @@ jobs:
             wrangler.qa-frontend.jsonc \
             wrangler.production.jsonc
           printf 'PASS: GalviCare/Production protected sources remain unchanged from the known completion baseline and from the start of this Day 3 run.\n' | tee /tmp/day3/galvicare-post-runtime.txt
-          test "$(curl -sS -o /tmp/day3/production.html -w '%{http_code}' https://www.galvipro.com/)" = "200"
+          PRODUCTION_RESULT="$(curl -sS -L --max-redirs 5 --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 10 --max-time 45 -o /tmp/day3/production.html -w '%{http_code} %{url_effective}' https://www.galvipro.com/)"
+          read -r PRODUCTION_HTTP PRODUCTION_URL <<< "$PRODUCTION_RESULT"
+          printf 'Production baseline final HTTP status: %s; effective URL: %s\n' "$PRODUCTION_HTTP" "$PRODUCTION_URL" | tee -a /tmp/day3/galvicare-post-runtime.txt
+          test "$PRODUCTION_HTTP" = "200"
 
       - name: Verify rollback candidate without mutating QA
         shell: bash
