@@ -1,0 +1,324 @@
+[
+  {
+    "results": [
+      {
+        "question_id": "triage.problem_clarity",
+        "version": "v1",
+        "product": "GalviTriage",
+        "dimension": "Problem",
+        "response_type": "number",
+        "required_flag": 1,
+        "minimum_value": 0,
+        "maximum_value": 100,
+        "weight": 1,
+        "score_direction": "higher_is_better",
+        "status": "active"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.3161
+      },
+      "duration": 0.3161,
+      "changes": 0,
+      "last_row_id": 60,
+      "changed_db": false,
+      "size_after": 2510848,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "answer_id": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+        "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+        "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+        "question_id": "triage.problem_clarity",
+        "question_version": "v1",
+        "answer_group_id": "ang_c1124a8957de408fad580b7c8f73eb10",
+        "version_no": 1,
+        "supersedes_answer_id": null,
+        "raw_value_number": 72,
+        "normalized_value_number": 72,
+        "source": "assessment_answer",
+        "captured_at": "2026-08-07T13:26:30.951Z",
+        "status": "draft",
+        "content_hash": "104fb64b510d43234304b1246dc500b7f22aee9bd9c084f235ee4c6688828385"
+      },
+      {
+        "answer_id": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+        "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+        "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+        "question_id": "triage.problem_clarity",
+        "question_version": "v1",
+        "answer_group_id": "ang_c1124a8957de408fad580b7c8f73eb10",
+        "version_no": 2,
+        "supersedes_answer_id": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+        "raw_value_number": 81,
+        "normalized_value_number": 81,
+        "source": "day3-entry",
+        "captured_at": "2026-08-07T13:26:31.606Z",
+        "status": "draft",
+        "content_hash": "c4997fa725be5bda003029bddee02f2c2438db1b15670f9ab0f99027209bc472"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.3176
+      },
+      "duration": 0.3176,
+      "changes": 0,
+      "last_row_id": 60,
+      "changed_db": false,
+      "size_after": 2510848,
+      "rows_read": 6,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+        "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+        "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+        "evidence_group_id": "evg_5e40e89cfd364e669aa17c665ddc02f8",
+        "version_no": 1,
+        "supersedes_evidence_id": null,
+        "source_type": "assessment_answer",
+        "source_ref": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+        "value_type": "number",
+        "value_number": 72,
+        "status": "accepted",
+        "consent_status": "approved",
+        "captured_at": "2026-08-07T13:26:30.951Z",
+        "content_hash": "e2776c7d722f73cd78766a62559066f441ebe949d8ec358136617c15332154b4"
+      },
+      {
+        "evidence_id": "evd_9a171900bc904d6c89b0685853f4d68d",
+        "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+        "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+        "evidence_group_id": "evg_5e40e89cfd364e669aa17c665ddc02f8",
+        "version_no": 2,
+        "supersedes_evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+        "source_type": "assessment_answer",
+        "source_ref": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+        "value_type": "number",
+        "value_number": 81,
+        "status": "draft",
+        "consent_status": "approved",
+        "captured_at": "2026-08-07T13:26:31.606Z",
+        "content_hash": "d0908e93160709a3dafd555545545681652e796847cd1a179364392e49eccfe8"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.2806
+      },
+      "duration": 0.2806,
+      "changes": 0,
+      "last_row_id": 60,
+      "changed_db": false,
+      "size_after": 2510848,
+      "rows_read": 6,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "lineage": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1659
+      },
+      "duration": 0.1659,
+      "changes": 0,
+      "last_row_id": 60,
+      "changed_db": false,
+      "size_after": 2510848,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "v1_successors": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1118
+      },
+      "duration": 0.1118,
+      "changes": 0,
+      "last_row_id": 60,
+      "changed_db": false,
+      "size_after": 2510848,
+      "rows_read": 2,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "rejected": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1305
+      },
+      "duration": 0.1305,
+      "changes": 0,
+      "last_row_id": 60,
+      "changed_db": false,
+      "size_after": 2510848,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "processed_count": 3,
+        "imported_count": 1,
+        "skipped_count": 1,
+        "error_count": 1,
+        "status": "completed_with_errors"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1066
+      },
+      "duration": 0.1066,
+      "changes": 0,
+      "last_row_id": 60,
+      "changed_db": false,
+      "size_after": 2510848,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "import_receipts": 3
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.0898
+      },
+      "duration": 0.0898,
+      "changes": 0,
+      "last_row_id": 60,
+      "changed_db": false,
+      "size_after": 2510848,
+      "rows_read": 4,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "import_errors": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.0815
+      },
+      "duration": 0.0815,
+      "changes": 0,
+      "last_row_id": 60,
+      "changed_db": false,
+      "size_after": 2510848,
+      "rows_read": 2,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "immutable_trigger": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1144
+      },
+      "duration": 0.1144,
+      "changes": 0,
+      "last_row_id": 60,
+      "changed_db": false,
+      "size_after": 2510848,
+      "rows_read": 214,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]

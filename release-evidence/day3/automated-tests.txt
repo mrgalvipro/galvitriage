@@ -1,0 +1,326 @@
+TAP version 13
+# (node:2381) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: required Day 1 files exist at exact canonical paths
+ok 1 - required Day 1 files exist at exact canonical paths
+  ---
+  duration_ms: 1.165029
+  type: 'test'
+  ...
+# Subtest: package and Wrangler configuration are QA-only and executable
+ok 2 - package and Wrangler configuration are QA-only and executable
+  ---
+  duration_ms: 0.495961
+  type: 'test'
+  ...
+# Subtest: Production protection keeps Day 1 out of the Production entry and database
+ok 3 - Production protection keeps Day 1 out of the Production entry and database
+  ---
+  duration_ms: 0.310848
+  type: 'test'
+  ...
+# Subtest: migration is additive, namespaced, repeatable, and complete
+ok 4 - migration is additive, namespaced, repeatable, and complete
+  ---
+  duration_ms: 80.728189
+  type: 'test'
+  ...
+# Subtest: migration coexists with incompatible legacy GalviCare table names and data
+ok 5 - migration coexists with incompatible legacy GalviCare table names and data
+  ---
+  duration_ms: 2.37875
+  type: 'test'
+  ...
+# Subtest: health is canonical, QA-only, and does not expose database identity
+ok 6 - health is canonical, QA-only, and does not expose database identity
+  ---
+  duration_ms: 63.871858
+  type: 'test'
+  ...
+# Subtest: readiness and schema version agree with the namespaced migration ledger
+ok 7 - readiness and schema version agree with the namespaced migration ledger
+  ---
+  duration_ms: 10.861657
+  type: 'test'
+  ...
+# Subtest: CORS grants only exact approved origins
+ok 8 - CORS grants only exact approved origins
+  ---
+  duration_ms: 3.777424
+  type: 'test'
+  ...
+# Subtest: missing database binding fails closed with safe JSON
+ok 9 - missing database binding fails closed with safe JSON
+  ---
+  duration_ms: 3.261202
+  type: 'test'
+  ...
+# Subtest: session create, replay, get, audit, and actual idempotency key persist correctly
+ok 10 - session create, replay, get, audit, and actual idempotency key persist correctly
+  ---
+  duration_ms: 39.422981
+  type: 'test'
+  ...
+# Subtest: journey event create, replay, and mismatch are idempotent
+ok 11 - journey event create, replay, and mismatch are idempotent
+  ---
+  duration_ms: 6.870538
+  type: 'test'
+  ...
+# Subtest: fixture is deterministic in QA and unavailable under Production policy
+ok 12 - fixture is deterministic in QA and unavailable under Production policy
+  ---
+  duration_ms: 9.509963
+  type: 'test'
+  ...
+# Subtest: invalid route, payload, and unknown session return safe canonical errors
+ok 13 - invalid route, payload, and unknown session return safe canonical errors
+  ---
+  duration_ms: 3.012596
+  type: 'test'
+  ...
+# Subtest: OPTIONS returns no body and approved CORS metadata
+ok 14 - OPTIONS returns no body and approved CORS metadata
+  ---
+  duration_ms: 2.358541
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 304.619127
+TAP version 13
+# (node:2401) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Day 2 migration is additive and enforces identity continuity constraints
+ok 1 - Day 2 migration is additive and enforces identity continuity constraints
+  ---
+  duration_ms: 5.896931
+  type: 'test'
+  ...
+# Subtest: Day 2 readiness proves migration 0002 and required constraints
+ok 2 - Day 2 readiness proves migration 0002 and required constraints
+  ---
+  duration_ms: 27.881821
+  type: 'test'
+  ...
+# Subtest: new identity, exact replay, and refresh retrieval preserve one canonical identity set
+ok 3 - new identity, exact replay, and refresh retrieval preserve one canonical identity set
+  ---
+  duration_ms: 18.671421
+  type: 'test'
+  ...
+# Subtest: email case and whitespace variation resolve the same Founder
+ok 4 - email case and whitespace variation resolve the same Founder
+  ---
+  duration_ms: 10.28717
+  type: 'test'
+  ...
+# Subtest: new session reuses Founder, Venture, and BMR while changing only session_id
+ok 5 - new session reuses Founder, Venture, and BMR while changing only session_id
+  ---
+  duration_ms: 9.70447
+  type: 'test'
+  ...
+# Subtest: same Founder can create a second Venture with its own BMR and Session
+ok 6 - same Founder can create a second Venture with its own BMR and Session
+  ---
+  duration_ms: 9.391398
+  type: 'test'
+  ...
+# Subtest: Venture update is versioned, no-op safe, and stale-version safe
+ok 7 - Venture update is versioned, no-op safe, and stale-version safe
+  ---
+  duration_ms: 12.489779
+  type: 'test'
+  ...
+# Subtest: idempotency-key reuse, privilege injection, and cross-scope mismatch produce no mutation
+ok 8 - idempotency-key reuse, privilege injection, and cross-scope mismatch produce no mutation
+  ---
+  duration_ms: 12.138892
+  type: 'test'
+  ...
+# Subtest: one BMR per Venture is enforced independently of idempotency key
+ok 9 - one BMR per Venture is enforced independently of idempotency key
+  ---
+  duration_ms: 9.993457
+  type: 'test'
+  ...
+# Subtest: Day 2 CORS and missing DB failures remain safe JSON
+ok 10 - Day 2 CORS and missing DB failures remain safe JSON
+  ---
+  duration_ms: 10.937349
+  type: 'test'
+  ...
+1..10
+# tests 10
+# suites 0
+# pass 10
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 206.560334
+TAP version 13
+# Subtest: D3-A01 Days 1-3 advance one GalviVault QA Worker authority while preserving GalviCare and Production separation
+ok 1 - D3-A01 Days 1-3 advance one GalviVault QA Worker authority while preserving GalviCare and Production separation
+  ---
+  duration_ms: 1.011242
+  type: 'test'
+  ...
+# Subtest: D3-A02 additive migration supplies Day 3 version, import, and immutable evidence objects
+ok 2 - D3-A02 additive migration supplies Day 3 version, import, and immutable evidence objects
+  ---
+  duration_ms: 0.27787
+  type: 'test'
+  ...
+# Subtest: D3-A03 cumulative entry routes Day 3 to evidence runtime and preserves Day 2/Day 1 fallback
+ok 3 - D3-A03 cumulative entry routes Day 3 to evidence runtime and preserves Day 2/Day 1 fallback
+  ---
+  duration_ms: 0.179225
+  type: 'test'
+  ...
+# Subtest: EV-001/002 typed evidence contract is explicit and exactly-one validation is present
+ok 4 - EV-001/002 typed evidence contract is explicit and exactly-one validation is present
+  ---
+  duration_ms: 0.211142
+  type: 'test'
+  ...
+# Subtest: EV-004 acceptance and immutable correction paths are separated
+ok 5 - EV-004 acceptance and immutable correction paths are separated
+  ---
+  duration_ms: 0.302466
+  type: 'test'
+  ...
+# Subtest: EV-005 current selection derives from supersession lineage
+ok 6 - EV-005 current selection derives from supersession lineage
+  ---
+  duration_ms: 0.96197
+  type: 'test'
+  ...
+# Subtest: IP-003 exact replay and changed-key reuse are implemented
+ok 7 - IP-003 exact replay and changed-key reuse are implemented
+  ---
+  duration_ms: 0.203991
+  type: 'test'
+  ...
+# Subtest: IM-001 import rows use receipts, quarantine, and reconciled counts
+ok 8 - IM-001 import rows use receipts, quarantine, and reconciled counts
+  ---
+  duration_ms: 0.233595
+  type: 'test'
+  ...
+# Subtest: Day 1 health remains available through the cumulative Day 3 entry
+ok 9 - Day 1 health remains available through the cumulative Day 3 entry
+  ---
+  duration_ms: 27.272763
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 108.727675
+PASS: GalviCare runtime/Production files and established GalviCare package scripts remain identical to completion baseline ae41b41892de2e9b88b4e81d5e521c535719bb15.
+TAP version 13
+# Subtest: Day 7A Worker remains the QA/build source without product-logic rewrite
+ok 1 - Day 7A Worker remains the QA/build source without product-logic rewrite
+  ---
+  duration_ms: 0.923473
+  type: 'test'
+  ...
+# Subtest: Production has a separate security boundary around the approved Day 7D runtime
+ok 2 - Production has a separate security boundary around the approved Day 7D runtime
+  ---
+  duration_ms: 0.941329
+  type: 'test'
+  ...
+# Subtest: Day 1, Day 7D and Production Worker services are distinct
+ok 3 - Day 1, Day 7D and Production Worker services are distinct
+  ---
+  duration_ms: 0.148269
+  type: 'test'
+  ...
+# Subtest: QA and Production D1 targets are physically distinct
+ok 4 - QA and Production D1 targets are physically distinct
+  ---
+  duration_ms: 0.123011
+  type: 'test'
+  ...
+# Subtest: Production runtime is explicitly production and customer-origin only
+ok 5 - Production runtime is explicitly production and customer-origin only
+  ---
+  duration_ms: 0.207916
+  type: 'test'
+  ...
+# Subtest: QA-only fixture and override capabilities are denied by Production boundary
+ok 6 - QA-only fixture and override capabilities are denied by Production boundary
+  ---
+  duration_ms: 0.111094
+  type: 'test'
+  ...
+# Subtest: Production health fingerprint identifies RUN lane, Production GalviVault, DB binding, Stripe mode and Day 7D runtime
+ok 7 - Production health fingerprint identifies RUN lane, Production GalviVault, DB binding, Stripe mode and Day 7D runtime
+  ---
+  duration_ms: 0.262807
+  type: 'test'
+  ...
+# Subtest: Production payment return is fail-closed and requires Stripe LIVE paid authority
+ok 8 - Production payment return is fail-closed and requires Stripe LIVE paid authority
+  ---
+  duration_ms: 0.132335
+  type: 'test'
+  ...
+# Subtest: Production config contains no QA-only D1 or test-payment authority
+ok 9 - Production config contains no QA-only D1 or test-payment authority
+  ---
+  duration_ms: 0.383666
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 67.895755
+PASS: GalviCare/Production protected sources remain unchanged from the known completion baseline and from the start of this Day 3 run.
+Production baseline final HTTP status: 200; effective URL: https://galvipro.com/
+{
+  "success": true,
+  "gate": "verify:day3:evidence",
+  "evidence_path": "/tmp/day3/h3.json",
+  "canonical_ids": {
+    "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+    "venture_id": "ven_f4ce972aba3b4ca185b724c12ee03301",
+    "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+    "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+    "answer_v1_id": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+    "answer_v2_id": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+    "evidence_v1_id": "evd_e56233001af044e3b442c5f340bb57ba",
+    "evidence_v2_id": "evd_9a171900bc904d6c89b0685853f4d68d",
+    "rejected_evidence_id": "evd_6b6fe1f262164faa870b3a3e5e04c8e5",
+    "import_batch_id": "imp_2bd2db76b8cd49169851691692c83394"
+  },
+  "import_reconciliation": {
+    "processed": 3,
+    "imported": 1,
+    "skipped": 1,
+    "errors": 1,
+    "status": "completed_with_errors",
+    "reconciled": true
+  }
+}
+Rollback target worker/day2.js + wrangler.day2.json: DRY-RUN PASS
+No QA deployment mutation performed.
