@@ -1,0 +1,544 @@
+name: GalviVault Day 6 QA Integration Hardening
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - '.github/workflows/galvivault-day6-qa.yml'
+      - 'worker/**'
+      - 'migrations/day1/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'wrangler*.json'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: galvivault-day6-qa
+  cancel-in-progress: true
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DAY6_ALLOWED_ORIGIN: https://galvipro.com
+  DAY6_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
+  GALVICARE_COMPLETION_BASELINE: ae41b41892de2e9b88b4e81d5e521c535719bb15
+  DAY4_FINAL_COMMIT: e6058ef6ef21f9e4bde2c665d75407d53a042b1d
+
+jobs:
+  day6:
+    name: Prove Day 6 candidate and release rehearsal
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment: qa
+
+    steps:
+      - name: Checkout exact QA candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install repository dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Capture authoritative branch baseline and protect GalviCare
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
+          mkdir -p /tmp/day6 release-evidence/day6
+          git rev-parse HEAD | tee /tmp/day6/candidate-sha.txt
+          git status --short | tee /tmp/day6/git-status.txt
+          git log -1 --oneline | tee /tmp/day6/git-head.txt
+          git merge-base --is-ancestor "$DAY4_FINAL_COMMIT" "$GITHUB_SHA"
+
+          git diff --exit-code "$GALVICARE_COMPLETION_BASELINE" -- \
+            worker/worker.js \
+            worker/day7d-engine.js \
+            worker/day7d-runtime.js \
+            worker/production-entry.js \
+            day7c-browser-observability.js \
+            day7d-browser-customer-intelligence.js \
+            index.html \
+            qa-frontend-worker.js \
+            wrangler.day7d.json \
+            wrangler.qa-frontend.jsonc \
+            wrangler.production.jsonc
+
+          cat > /tmp/day6/baseline.txt <<EOF
+          repository=mrgalvipro/galvitriage
+          branch=qa-revamped-galvicare-0-5
+          candidate=$GITHUB_SHA
+          qa_worker=galvivault-p0-day1-qa
+          qa_database=galvivault-0-5-qa
+          schema_target=0005
+          day4_final=$DAY4_FINAL_COMMIT
+          galvicare_completion_baseline=$GALVICARE_COMPLETION_BASELINE
+          production_branch=main
+          EOF
+
+      - name: Static manifest security and no-skip gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/day5-entry.js
+          node --check worker/day5-common.js
+          node --check worker/domain/care-service.js
+          node --check worker/domain/day5-timeline-service.js
+          node --check worker/repositories/care-repository.js
+          node --check worker/routes/care.js
+          node --check scripts/day5-deployed-e2e.mjs
+
+          node --input-type=module <<'NODE' | tee /tmp/day6/static-manifest.txt
+          import fs from 'node:fs';
+          const required = [
+            'tests/day1-foundation.test.mjs',
+            'tests/galvivault-day2-identity-continuity.test.mjs',
+            'tests/day3-evidence-versioning.test.mjs',
+            'tests/day4-reasoning-timeline.test.mjs',
+            'tests/day4-reasoning-integration.test.mjs',
+            'tests/day5-care.test.mjs',
+            'tests/day7b-environment-isolation.test.mjs'
+          ];
+          for (const file of required) {
+            if (!fs.existsSync(file)) throw new Error(`Missing required regression test: ${file}`);
+            const text = fs.readFileSync(file, 'utf8');
+            if (/\b(?:test|it|describe)\.(?:skip|only|todo)\b|\.(?:skip|only|todo)\s*\(/.test(text)) {
+              throw new Error(`Mandatory skip/only/todo found in ${file}`);
+            }
+          }
+          const production = fs.readFileSync('worker/production-entry.js','utf8');
+          if (/from\s+['"][^'"]*fixture|import\s*\([^)]*fixture/i.test(production)) {
+            throw new Error('Production entry can reach QA fixture code.');
+          }
+          console.log('ST-009 PASS: mandatory skip/only/todo = 0');
+          console.log('ST-010 PASS: Production entry has no QA fixture import path');
+          NODE
+
+          if git grep -nE -- \
+            '-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{20,}|sk_(live|test)_[A-Za-z0-9]{16,}' \
+            -- ':!release-evidence/**' > /tmp/day6/secret-scan.txt; then
+            echo "Secret-like value detected in tracked source." >&2
+            cat /tmp/day6/secret-scan.txt >&2
+            exit 1
+          fi
+          echo "No tracked secret-value pattern found." | tee /tmp/day6/secret-scan.txt
+
+      - name: Run inherited Day 1 through Day 5 automated regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test \
+            tests/day1-foundation.test.mjs \
+            tests/galvivault-day2-identity-continuity.test.mjs \
+            tests/day3-evidence-versioning.test.mjs \
+            tests/day4-reasoning-timeline.test.mjs \
+            tests/day4-reasoning-integration.test.mjs \
+            tests/day5-care.test.mjs \
+            tests/day7b-environment-isolation.test.mjs \
+            | tee /tmp/day6/automated-tests.txt
+          ! grep -E '# (fail|failed) [1-9][0-9]*' /tmp/day6/automated-tests.txt
+          ! grep -E '# skipped [1-9][0-9]*' /tmp/day6/automated-tests.txt
+          ! grep -E '# todo [1-9][0-9]*' /tmp/day6/automated-tests.txt
+
+      - name: Resolve Wrangler with bounded retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wrangler-retry <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            npx --yes wrangler@4.120.0 "$@" && exit 0
+            [ "$attempt" = 4 ] && exit 1
+            sleep $((attempt*5))
+          done
+          SH
+          chmod +x /tmp/wrangler-retry
+          /tmp/wrangler-retry --version | tee /tmp/day6/wrangler-version.txt
+
+      - name: Prove clean and upgrade migration rehearsals
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          apply_sequence () {
+            local persist="$1"
+            shift
+            rm -rf "$persist"
+            for file in "$@"; do
+              /tmp/wrangler-retry d1 execute galvivault-0-5-qa \
+                --local --persist-to "$persist" --file="$file" --config wrangler.day5.json
+            done
+          }
+
+          ALL=(
+            migrations/day1/0001_canonical_business_medical_record.sql
+            migrations/day1/0002_day2_identity_continuity.sql
+            migrations/day1/0003_day3_evidence_versioning.sql
+            migrations/day1/0004_day4_governed_reasoning.sql
+            migrations/day1/0005_day5_governed_care.sql
+          )
+          PRIOR=("${ALL[@]:0:4}")
+
+          apply_sequence /tmp/day6-clean "${ALL[@]}"
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --local --persist-to /tmp/day6-clean \
+            --command="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations ORDER BY migration_id; SELECT COUNT(*) AS d5_tables FROM sqlite_master WHERE type='table' AND name IN ('gv1_recommendations','gv1_treatment_plans','gv1_treatment_events','gv1_outcomes','gv1_learning_candidates','gv1_adapter_deliveries'); SELECT COUNT(*) AS d5_indexes FROM sqlite_master WHERE type='index' AND name IN ('idx_recommendations_bmr','idx_treatment_plans_bmr','idx_treatment_events_plan','idx_outcomes_bmr','idx_feedback_target','idx_adapter_status'); SELECT COUNT(*) AS d5_triggers FROM sqlite_master WHERE type='trigger' AND name IN ('trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete'); PRAGMA foreign_key_check;" \
+            --config wrangler.day5.json --json | tee /tmp/day6/migration-clean.json
+          grep -q '"migration_id": "0005"' /tmp/day6/migration-clean.json
+          grep -q '"d5_tables": 6' /tmp/day6/migration-clean.json
+          grep -q '"d5_indexes": 6' /tmp/day6/migration-clean.json
+          grep -q '"d5_triggers": 2' /tmp/day6/migration-clean.json
+
+          for id in 0001 0002 0003 0004 0005; do
+            /tmp/wrangler-retry d1 execute galvivault-0-5-qa --local --persist-to /tmp/day6-clean \
+              --command="SELECT COUNT(*) AS ledger_count FROM gv1_schema_migrations WHERE migration_id='$id';" \
+              --config wrangler.day5.json --json > "/tmp/day6/ledger-$id.json"
+            grep -q '"ledger_count": 1' "/tmp/day6/ledger-$id.json"
+          done
+
+          apply_sequence /tmp/day6-upgrade "${PRIOR[@]}"
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --local --persist-to /tmp/day6-upgrade \
+            --command="SELECT migration_id FROM gv1_schema_migrations ORDER BY migration_id;" \
+            --config wrangler.day5.json --json | tee /tmp/day6/migration-upgrade-before.json
+          ! grep -q '"migration_id": "0005"' /tmp/day6/migration-upgrade-before.json
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --local --persist-to /tmp/day6-upgrade \
+            --file=migrations/day1/0005_day5_governed_care.sql --config wrangler.day5.json
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --local --persist-to /tmp/day6-upgrade \
+            --command="SELECT migration_id FROM gv1_schema_migrations ORDER BY migration_id; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); PRAGMA foreign_key_check;" \
+            --config wrangler.day5.json --json | tee /tmp/day6/migration-upgrade-after.json
+          grep -q '"migration_id": "0005"' /tmp/day6/migration-upgrade-after.json
+          grep -q '"duplicate_bmr_ventures": 0' /tmp/day6/migration-upgrade-after.json
+
+      - name: Prove QA remote schema and Day 5 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/wrangler-retry d1 execute DB --remote --config wrangler.day5.json \
+            --command="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0001','0002','0003','0004','0005') ORDER BY migration_id;" \
+            --json | tee /tmp/day6/remote-ledger-before.json
+
+          if ! grep -q '"migration_id": "0005"' /tmp/day6/remote-ledger-before.json; then
+            /tmp/wrangler-retry d1 execute DB --remote --config wrangler.day5.json \
+              --file=migrations/day1/0005_day5_governed_care.sql | tee /tmp/day6/remote-migration-0005.txt
+          else
+            echo "Migration 0005 already present." | tee /tmp/day6/remote-migration-0005.txt
+          fi
+
+          /tmp/wrangler-retry d1 execute DB --remote --config wrangler.day5.json \
+            --command="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0001','0002','0003','0004','0005') ORDER BY migration_id; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1);" \
+            --json | tee /tmp/day6/remote-schema.json
+          grep -q '"migration_id": "0005"' /tmp/day6/remote-schema.json
+          grep -q '"duplicate_bmr_ventures": 0' /tmp/day6/remote-schema.json
+
+      - name: Prove missing DB and stale schema fail closed locally
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' | tee /tmp/day6/failure-local.txt
+          import worker from './worker/day5-entry.js';
+
+          const vars = {
+            ENVIRONMENT: 'qa', FIXTURE_MODE: 'true', API_VERSION: 'v1', MIN_SCHEMA_VERSION: '0005',
+            ALLOWED_ORIGINS: 'https://galvipro.com'
+          };
+          const request = () => new Request('https://worker.test/api/v1/day5/readiness', {
+            headers: { Origin: 'https://galvipro.com', 'X-Correlation-Id': 'corr_day6_fault' }
+          });
+
+          let response = await worker.fetch(request(), vars, {});
+          let payload = await response.json();
+          if (response.status !== 503 || payload?.error?.code !== 'GV_DB_UNAVAILABLE') {
+            throw new Error(`RC-001 failed: ${response.status} ${JSON.stringify(payload)}`);
+          }
+          console.log('RC-001 PASS: missing DB fails closed with GV_DB_UNAVAILABLE');
+
+          const staleDb = { prepare() { return { bind() { return this; }, async first() { return null; }, async all() { return { results: [] }; }, async run() { throw new Error('writes not allowed'); } }; } };
+          response = await worker.fetch(request(), { ...vars, DB: staleDb }, {});
+          payload = await response.json();
+          if (response.status !== 503 || payload?.data?.ready !== false) {
+            throw new Error(`RC-002 failed: ${response.status} ${JSON.stringify(payload)}`);
+          }
+          console.log('RC-002 PASS: stale schema readiness is 503 and ready=false');
+          NODE
+
+      - name: Deploy exact cumulative Day 5 runtime as Day 6 QA candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          STRIPE_WEBHOOK_SECRET="$(openssl rand -hex 32)"
+          echo "STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET" >> "$GITHUB_ENV"
+          /tmp/wrangler-retry deploy --config wrangler.day5.json \
+            --var "STRIPE_WEBHOOK_SECRET:$STRIPE_WEBHOOK_SECRET" 2>&1 | tee /tmp/day6/deploy-candidate.log
+          URL="$(grep -Eo 'https://[[:alnum:].-]+\.workers\.dev' /tmp/day6/deploy-candidate.log | tail -n 1)"
+          test -n "$URL"
+          echo "DAY6_BASE_URL=$URL" >> "$GITHUB_ENV"
+          echo "$URL" > /tmp/day6/deployed-url.txt
+
+      - name: Verify Day 6 candidate runtime convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            STATUS="$(curl -sS -o /tmp/day6/ready.json -D /tmp/day6/ready.headers -w '%{http_code}' \
+              -H "Origin: $DAY6_ALLOWED_ORIGIN" \
+              "$DAY6_BASE_URL/api/v1/day5/readiness?day6=$GITHUB_RUN_ID&attempt=$attempt" || true)"
+            if [ "$STATUS" = "200" ] \
+              && node -e "const p=require('/tmp/day6/ready.json');if(p?.success!==true||p?.data?.ready!==true||p?.data?.current_schema_version!=='0005')process.exit(1)" \
+              && grep -qi '^x-galvivault-environment: qa' /tmp/day6/ready.headers; then
+              exit 0
+            fi
+            sleep 3
+          done
+          cat /tmp/day6/ready.headers || true
+          cat /tmp/day6/ready.json || true
+          exit 1
+
+      - name: Execute complete deployed governed care BMR workflow
+        shell: bash
+        run: |
+          set -euo pipefail
+          DAY5_QA_URL="$DAY6_BASE_URL" \
+          STRIPE_WEBHOOK_SECRET="$STRIPE_WEBHOOK_SECRET" \
+          node scripts/day5-deployed-e2e.mjs | tee /tmp/day6/day5-deployed-e2e-console.txt
+          cp release-evidence/day5-runtime/deployed-e2e.json /tmp/day6/day5-deployed-e2e.json
+          cp release-evidence/day5-runtime/deployed-e2e.txt /tmp/day6/day5-deployed-e2e.txt
+          node --input-type=module <<'NODE' >> "$GITHUB_ENV"
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('/tmp/day6/day5-deployed-e2e.json','utf8'));
+          if(!p.ids?.bmr_id) throw new Error('Day 5 E2E did not expose BMR ID');
+          console.log(`DAY6_BMR_ID=${p.ids.bmr_id}`);
+          NODE
+
+      - name: Execute import reconciliation and quarantine proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/wrangler-retry d1 execute DB --remote --config wrangler.day5.json \
+            --command="SELECT session_id FROM gv1_assessment_sessions WHERE bmr_id='$DAY6_BMR_ID' ORDER BY created_at DESC LIMIT 1;" \
+            --json > /tmp/day6/session.json
+          DAY6_SESSION_ID="$(node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('/tmp/day6/session.json','utf8')); const rows=[];
+          const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){rows.push(v);Object.values(v).forEach(walk)}};walk(p);
+          const row=rows.find(x=>x.session_id); if(!row) process.exit(1); console.log(row.session_id);
+          NODE
+          )"
+          export DAY6_SESSION_ID
+          node --input-type=module <<'NODE' | tee /tmp/day6/import-reconciliation.txt
+          const U=process.env.DAY6_BASE_URL, bmr=process.env.DAY6_BMR_ID, session=process.env.DAY6_SESSION_ID;
+          const suffix=String(process.env.GITHUB_RUN_ID||Date.now());
+          async function req(path,body,key){
+            const r=await fetch(U+path,{method:'POST',headers:{Origin:'https://galvipro.com','Content-Type':'application/json','X-Galvi-Role':'import','X-Galvi-Actor-Id':'day6-import','X-GalviVault-Actor-Id':'day6-import','X-GalviVault-Actor-Type':'operator','X-Correlation-Id':`corr_d6_import_${suffix}_${key||'x'}`,...(key?{'Idempotency-Key':key}:{})},body:JSON.stringify(body)});
+            const j=await r.json(); if(![200,201].includes(r.status)) throw new Error(`${path}: ${r.status} ${JSON.stringify(j)}`); return j;
+          }
+          const created=await req('/api/v1/import-batches',{source_name:`day6-${suffix}.json`,source_checksum:`sha256:day6-${suffix}`,expected_count:3},`d6-batch-${suffix}`);
+          const id=created.data?.batch?.import_batch_id; if(!id) throw new Error('import batch id missing');
+          const command={bmr_id:bmr,session_id:session,value_type:'text',value_text:'Day 6 import evidence',consent_status:'approved',captured_at:new Date().toISOString()};
+          const a=await req(`/api/v1/import-batches/${id}/rows`,{source_row_key:'R1',command});
+          const b=await req(`/api/v1/import-batches/${id}/rows`,{source_row_key:'R2',command});
+          const c=await req(`/api/v1/import-batches/${id}/rows`,{source_row_key:'R3',command:{bmr_id:bmr,session_id:session,value_type:'number',value_text:'not-a-number'}});
+          const close=await req(`/api/v1/import-batches/${id}/close`,{},`d6-close-${suffix}`);
+          const batch=close.data?.batch;
+          if(a.data?.row?.result!=='imported'||b.data?.row?.result!=='skipped'||c.data?.row?.result!=='error') throw new Error('F10 row outcomes incorrect');
+          if(Number(batch?.processed_count)!==3||Number(batch?.imported_count)!==1||Number(batch?.skipped_count)!==1||Number(batch?.error_count)!==1||close.data?.reconciled!==true) throw new Error('F10 counts did not reconcile');
+          console.log(JSON.stringify({F10:'PASS',import_batch_id:id,processed:3,imported:1,skipped:1,error:1,status:batch.status},null,2));
+          NODE
+
+      - name: Execute security privacy bounded-query and direct D1 assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' | tee /tmp/day6/security-performance.txt
+          const U=process.env.DAY6_BASE_URL, bmr=process.env.DAY6_BMR_ID;
+          const allowed=await fetch(`${U}/health`,{headers:{Origin:'https://galvipro.com','X-Correlation-Id':'corr_d6_allowed'}});
+          if(allowed.status!==200||allowed.headers.get('access-control-allow-origin')!=='https://galvipro.com') throw new Error('CORS allowed-origin failed');
+          const denied=await fetch(`${U}/health`,{headers:{Origin:'https://evil.example','X-Correlation-Id':'corr_d6_denied'}});
+          if(denied.status!==403||denied.headers.get('access-control-allow-origin')) throw new Error('CORS denied-origin failed');
+
+          const unauth=await fetch(`${U}/api/v1/business-medical-records/${encodeURIComponent(bmr)}/timeline`,{headers:{Origin:'https://galvipro.com','X-Correlation-Id':'corr_d6_unauth'}});
+          if(![401,403].includes(unauth.status)) throw new Error(`protected timeline unexpectedly returned ${unauth.status}`);
+
+          const history=await fetch(`${U}/api/v1/business-medical-records/${encodeURIComponent(bmr)}/care?history=true&limit=9999`,{headers:{Origin:'https://galvipro.com','X-Galvi-Role':'operator','X-Galvi-Actor-Id':'day6-operator','X-Correlation-Id':'corr_d6_history'}});
+          const hj=await history.json(); if(history.status!==200) throw new Error(`care history ${history.status}`);
+          for(const [k,v] of Object.entries(hj.data||{})) if(Array.isArray(v)&&v.length>200) throw new Error(`PF bound exceeded for ${k}: ${v.length}`);
+
+          const timeline=await fetch(`${U}/api/v1/business-medical-records/${encodeURIComponent(bmr)}/timeline?limit=9999`,{headers:{Origin:'https://galvipro.com','X-Galvi-Role':'operator','X-Galvi-Actor-Id':'day6-operator','X-Correlation-Id':'corr_d6_timeline'}});
+          const tj=await timeline.json(); if(timeline.status!==200||!Array.isArray(tj.data?.entries)||tj.data.entries.length>200) throw new Error(`PF timeline bound failed: ${timeline.status}`);
+
+          const bad=await fetch(`${U}/api/v1/does-not-exist`,{headers:{Origin:'https://galvipro.com','X-Correlation-Id':'corr_d6_bad'}});
+          const text=await bad.text();
+          if(/SQLITE|SELECT .* FROM|stack|Bearer\s|cdf9042b-ab09-498a-ac66-010b6cce47d4/i.test(text)) throw new Error('HT-012 unsafe error leakage');
+
+          console.log(JSON.stringify({CORS:'PASS',authZ:'PASS',HT_012:'PASS',PF_001_003:'PASS',max_limit:200},null,2));
+          NODE
+
+          /tmp/wrangler-retry d1 execute DB --remote --config wrangler.day5.json \
+            --command="SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS orphan_sessions FROM gv1_assessment_sessions s LEFT JOIN gv1_business_medical_records b ON b.bmr_id=s.bmr_id WHERE b.bmr_id IS NULL OR b.venture_id<>s.venture_id; SELECT COUNT(*) AS orphan_evidence FROM gv1_evidence_items e LEFT JOIN gv1_business_medical_records b ON b.bmr_id=e.bmr_id WHERE b.bmr_id IS NULL; SELECT COUNT(*) AS orphan_recommendation_findings FROM gv1_recommendation_findings rf LEFT JOIN gv1_recommendations r ON r.recommendation_id=rf.recommendation_id LEFT JOIN gv1_findings f ON f.finding_id=rf.finding_id WHERE r.recommendation_id IS NULL OR f.finding_id IS NULL; SELECT COUNT(*) AS orphan_treatment_bmrs FROM gv1_treatment_plans p LEFT JOIN gv1_business_medical_records b ON b.bmr_id=p.bmr_id WHERE b.bmr_id IS NULL; SELECT COUNT(*) AS orphan_outcome_bmrs FROM gv1_outcomes o LEFT JOIN gv1_business_medical_records b ON b.bmr_id=o.bmr_id WHERE b.bmr_id IS NULL;" \
+            --json | tee /tmp/day6/database-assertions.json
+          for field in duplicate_bmr_ventures orphan_sessions orphan_evidence orphan_recommendation_findings orphan_treatment_bmrs orphan_outcome_bmrs; do
+            grep -q "\"$field\": 0" /tmp/day6/database-assertions.json
+          done
+
+      - name: Rehearse QA Worker rollback to Day 4 and restore Day 6 candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/wrangler-retry deploy --config wrangler.day4.json 2>&1 | tee /tmp/day6/rollback-day4.log
+          for attempt in $(seq 1 45); do
+            STATUS="$(curl -sS -o /tmp/day6/rollback-ready.json -w '%{http_code}' \
+              -H "Origin: $DAY6_ALLOWED_ORIGIN" "$DAY6_BASE_URL/api/v1/day4/readiness?day6rollback=$attempt" || true)"
+            if [ "$STATUS" = "200" ] && node -e "const p=require('/tmp/day6/rollback-ready.json');if(p?.success!==true||p?.data?.ready!==true)process.exit(1)"; then break; fi
+            [ "$attempt" = "45" ] && exit 1
+            sleep 2
+          done
+
+          /tmp/wrangler-retry deploy --config wrangler.day5.json \
+            --var "STRIPE_WEBHOOK_SECRET:$STRIPE_WEBHOOK_SECRET" 2>&1 | tee /tmp/day6/restore-day5.log
+          for attempt in $(seq 1 60); do
+            STATUS="$(curl -sS -o /tmp/day6/restored-ready.json -w '%{http_code}' \
+              -H "Origin: $DAY6_ALLOWED_ORIGIN" "$DAY6_BASE_URL/api/v1/day5/readiness?day6restore=$attempt" || true)"
+            if [ "$STATUS" = "200" ] && node -e "const p=require('/tmp/day6/restored-ready.json');if(p?.success!==true||p?.data?.ready!==true||p?.data?.current_schema_version!=='0005')process.exit(1)"; then
+              echo "RC-003/RC-004 PASS: rollback and restore deterministic" | tee /tmp/day6/rollback-result.txt
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Prove existing GalviCare Production baseline remains untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code "$GALVICARE_COMPLETION_BASELINE" -- \
+            worker/worker.js worker/day7d-engine.js worker/day7d-runtime.js worker/production-entry.js \
+            day7c-browser-observability.js day7d-browser-customer-intelligence.js \
+            index.html qa-frontend-worker.js wrangler.day7d.json wrangler.qa-frontend.jsonc wrangler.production.jsonc
+          STATUS="$(curl -L -sS -o /tmp/day6/production.html -w '%{http_code}' https://www.galvipro.com/)"
+          case "$STATUS" in 2*|3*) ;; *) echo "Production public smoke returned $STATUS"; exit 1;; esac
+          printf 'RG-006 PASS: protected GalviCare runtime unchanged; https://www.galvipro.com returned HTTP %s\n' "$STATUS" \
+            | tee /tmp/day6/production-baseline-smoke.txt
+
+      - name: Build Day 7 Human E2E preflight and Day 6 evidence package
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/day6/human-e2e-preflight.md <<'EOF'
+          # GalviVault Day 7 Human E2E Preflight
+          - Candidate source: exact Day 6 GO candidate recorded in `candidate.json`.
+          - Environment: Production only after explicit Day 7 GO; QA fault evidence remains Day 6 evidence.
+          - Test identity: F12_PROD_SAFE — clearly marked release-test founder/venture created through normal supported Production routes; fixture mode is prohibited.
+          - Tester records UTC timestamp, correlation IDs, founder/venture/BMR/session IDs, Worker deployment, schema version, and defects.
+          - Step 1: verify Production health/readiness, environment=production, fixture mode unavailable, and approved Production DB binding before writes.
+          - Step 2: create/resume one supported founder/venture/session through normal API/UI flow; capture canonical IDs.
+          - Step 3: submit evidence, retrieve after refresh, and prove idempotent replay does not duplicate state.
+          - Step 4: complete the governed evidence → finding → recommendation → treatment → outcome path supported by the approved release.
+          - Step 5: retrieve current/history/timeline views and reconcile UI/API state to committed D1 IDs.
+          - Step 6: run Production-safe negative checks only: unauthorized protected route, idempotent replay, fixture route unavailable, refresh/retrieval continuity.
+          - Step 7: query D1 for one BMR per venture, separated record classes, version/lineage, care links, append-only event/audit evidence, and zero duplicate/orphan/partial state.
+          - Step 8: distinguish canonical success from downstream adapter delivery status; adapter failure cannot invalidate committed canonical state.
+          - Rollback reference: prior approved Production Worker deployment/commit captured before cutover. No destructive down migration.
+          - Cleanup/retention: keep or soft-archive the clearly marked release-test record per release evidence policy; do not delete it to hide evidence.
+          - Prohibited in Production: destructive failure injection, ad hoc canonical SQL repair, fixture mode, first-time migration/lifecycle discovery.
+          EOF
+
+          if grep -Eqi 'fix manually if needed|update D1|try again until it passes' /tmp/day6/human-e2e-preflight.md; then
+            echo "D6-06 preflight contains undocumented repair." >&2
+            exit 1
+          fi
+
+          cp /tmp/day6/baseline.txt release-evidence/day6/baseline.txt
+          cp /tmp/day6/automated-tests.txt release-evidence/day6/automated-tests.txt
+          cp /tmp/day6/migration-clean.json release-evidence/day6/migration-clean.json
+          cp /tmp/day6/migration-upgrade-before.json release-evidence/day6/migration-upgrade-before.json
+          cp /tmp/day6/migration-upgrade-after.json release-evidence/day6/migration-upgrade-after.json
+          cp /tmp/day6/remote-schema.json release-evidence/day6/remote-schema.json
+          cp /tmp/day6/failure-local.txt release-evidence/day6/failure-local.txt
+          cp /tmp/day6/deploy-candidate.log release-evidence/day6/deploy-candidate.log
+          cp /tmp/day6/deployed-url.txt release-evidence/day6/deployed-url.txt
+          cp /tmp/day6/ready.json release-evidence/day6/readiness.json
+          cp /tmp/day6/day5-deployed-e2e.json release-evidence/day6/deployed-e2e.json
+          cp /tmp/day6/import-reconciliation.txt release-evidence/day6/import-reconciliation.txt
+          cp /tmp/day6/security-performance.txt release-evidence/day6/security-performance.txt
+          cp /tmp/day6/database-assertions.json release-evidence/day6/database-assertions.json
+          cp /tmp/day6/rollback-day4.log release-evidence/day6/rollback-day4.log
+          cp /tmp/day6/restore-day5.log release-evidence/day6/restore-day5.log
+          cp /tmp/day6/rollback-result.txt release-evidence/day6/rollback-result.txt
+          cp /tmp/day6/production-baseline-smoke.txt release-evidence/day6/production-baseline-smoke.txt
+          cp /tmp/day6/human-e2e-preflight.md release-evidence/day6/human-e2e-preflight.md
+
+          cat > release-evidence/day6/defects.md <<'EOF'
+          # Day 6 Defect Register
+          Blocker: 0
+          Critical: 0
+          High: 0
+          Accepted Medium/Low: none recorded by the blocking Day 6 workflow.
+          EOF
+
+          cat > release-evidence/day6/daily-gate.md <<EOF
+          # GalviVault P0 Daily Gate — Day 6
+          - Candidate: $GITHUB_SHA
+          - Branch: qa-revamped-galvicare-0-5
+          - QA Worker: galvivault-p0-day1-qa
+          - QA D1: galvivault-0-5-qa
+          - Schema: 0005
+          - Scope: PASS
+          - Repository/static: PASS
+          - Migration/data: PASS
+          - Worker/API: PASS
+          - Security/privacy: PASS
+          - Regression: PASS
+          - Recovery/rollback: PASS
+          - Human E2E preflight: PASS
+          - Mandatory skipped: 0
+          - D6-01: PASS
+          - D6-02: PASS
+          - D6-03: PASS
+          - D6-04: PASS
+          - D6-05: PASS
+          - D6-06: PASS
+          - Blocking defects: 0
+          - Decision: GO TO DAY 7
+          - Final status: DAY 6 BUILD PASS — READY FOR DAY 7 CONTROLLED PRODUCTION READINESS.
+          - Release note: GALVIVAULT P0 IS NOT YET PRODUCTION FINAL.
+          EOF
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          import crypto from 'node:crypto';
+          const dir='release-evidence/day6';
+          const files=fs.readdirSync(dir).filter(x=>x!=='evidence-manifest.json').sort();
+          const manifest={candidate_commit:process.env.GITHUB_SHA,branch:'qa-revamped-galvicare-0-5',qa_worker:'galvivault-p0-day1-qa',qa_d1:'galvivault-0-5-qa',schema_version:'0005',generated_at:new Date().toISOString(),files:Object.fromEntries(files.map(name=>[name,crypto.createHash('sha256').update(fs.readFileSync(`${dir}/${name}`)).digest('hex')]))};
+          fs.writeFileSync(`${dir}/evidence-manifest.json`,JSON.stringify(manifest,null,2)+'\n');
+          NODE
+
+      - name: Persist Day 6 GO evidence to authoritative QA branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add release-evidence/day6
+          git commit -m "Record GalviVault Day 6 QA PASS evidence [skip ci]"
+          git push origin HEAD:qa-revamped-galvicare-0-5
+
+      - name: Upload Day 6 evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: galvivault-day6-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/day6
+            release-evidence/day6
+          if-no-files-found: warn
