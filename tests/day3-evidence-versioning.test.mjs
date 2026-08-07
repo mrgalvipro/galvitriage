@@ -55,8 +55,10 @@ test('EV-001/002 typed evidence contract is explicit and exactly-one validation 
 
 test('EV-004 acceptance and immutable correction paths are separated', () => {
   assert.ok(source.includes("SET status='accepted'"));
-  assert.ok(source.includes('GV_EVIDENCE_IMMUTABLE'));
+  // The cumulative Day 3 entry owns PATCH/PUT immutability interception so accepted
+  // evidence is rejected before normal evidence commands reach worker/day3.js.
   assert.ok(entry.includes('GV_EVIDENCE_IMMUTABLE'));
+  assert.ok(entry.includes('immutableMutation'));
   assert.ok(source.includes("relationship_type='corrects'") || source.includes("'corrects'"));
   assert.ok(source.includes('Only the current leaf evidence can be superseded.'));
   assert.equal(source.includes("SET status='superseded'"), false);
