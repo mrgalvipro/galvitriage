@@ -10,17 +10,19 @@ const day1 = JSON.parse(readFileSync(new URL('../wrangler.json', import.meta.url
 const day2 = JSON.parse(readFileSync(new URL('../wrangler.day2.json', import.meta.url), 'utf8'));
 const day3 = JSON.parse(readFileSync(new URL('../wrangler.day3.json', import.meta.url), 'utf8'));
 
-test('D3-A01 Day 1, Day 2, and Day 3 runtime configurations are isolated and share only the approved QA D1', () => {
+test('D3-A01 Days 1-3 advance one GalviVault QA Worker authority while preserving GalviCare and Production separation', () => {
+  assert.equal(day1.name, 'galvivault-p0-day1-qa');
   assert.equal(day1.main, 'worker/day1.js');
   assert.equal(day1.vars.MIN_SCHEMA_VERSION, '0001');
+  assert.equal(day2.name, 'galvivault-p0-day1-qa');
   assert.equal(day2.main, 'worker/day2.js');
   assert.equal(day2.vars.MIN_SCHEMA_VERSION, '0002');
-  assert.equal(day3.name, 'galvivault-p0-day3-qa');
+  assert.equal(day3.name, 'galvivault-p0-day1-qa');
   assert.equal(day3.main, 'worker/day3-entry.js');
   assert.equal(day3.vars.ENVIRONMENT, 'qa');
   assert.equal(day3.vars.MIN_SCHEMA_VERSION, '0003');
   for (const config of [day1, day2, day3]) {
-    const binding = config.d1_databases.find((entry) => entry.binding === 'DB');
+    const binding = config.d1_databases.find((item) => item.binding === 'DB');
     assert.equal(binding.database_name, 'galvivault-0-5-qa');
     assert.equal(binding.database_id, 'cdf9042b-ab09-498a-ac66-010b6cce47d4');
     assert.equal(binding.migrations_dir, 'migrations/day1');
