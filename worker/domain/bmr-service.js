@@ -1,33 +1,57 @@
 import { GVError, newId, now, hash, requireId } from '../day4-common.js';
-import { first, all, findBmr, loadReceipt, receiptStmt } from '../repositories/reasoning-repository.js';
+import { all, findBmr, loadReceipt, receiptStmt } from '../repositories/reasoning-repository.js';
 
 export async function getTimeline(env,bmrId,{limit=100}={}){
   bmrId=requireId('bmr_id',bmrId);
   const bmr=await findBmr(env.DB,bmrId);
   if(!bmr) throw new GVError('GV_NOT_FOUND','BMR was not found.',404);
   const safeLimit=Math.max(1,Math.min(200,Number(limit)||100));
-  const rows=await all(env.DB,`
-    SELECT 'session' AS entry_type,session_id AS canonical_id,NULL AS version_no,COALESCE(started_at,created_at) AS occurred_at,source AS source,'assessment session' AS safe_summary,NULL AS correlation_id
-      FROM gv1_assessment_sessions WHERE bmr_id=?
-    UNION ALL
-    SELECT 'evidence',evidence_id,version_no,COALESCE(captured_at,created_at),source_type,'evidence',NULL
-      FROM gv1_evidence_items WHERE bmr_id=?
-    UNION ALL
-    SELECT 'observation',observation_id,version_no,created_at,source_type,'observation',correlation_id
-      FROM gv1_observations WHERE bmr_id=?
-    UNION ALL
-    SELECT 'hypothesis',hypothesis_id,version_no,created_at,source_type,'hypothesis',correlation_id
-      FROM gv1_hypotheses WHERE bmr_id=?
-    UNION ALL
-    SELECT 'finding',finding_id,version_no,created_at,source_type,'finding',correlation_id
-      FROM gv1_findings WHERE bmr_id=?
-    UNION ALL
-    SELECT 'governance',entity_id,new_version,occurred_at,source,operation,correlation_id
-      FROM gv1_audit_log WHERE entity_type IN ('finding','business_medical_record') AND entity_id IN (
-        SELECT finding_id FROM gv1_findings WHERE bmr_id=? UNION SELECT ?
-      )
-    ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,bmrId,bmrId,bmrId,bmrId,bmrId,bmrId,safeLimit);
-  return {bmr:{bmr_id:bmr.bmr_id,venture_id:bmr.venture_id,status:bmr.status,record_version:bmr.record_version,current_session_id:bmr.current_session_id},entries:rows};
+
+  // Keep each D1 query simple and independently bindable. The previous compound
+  // UNION query passed local SQLite tests but returned GV_INTERNAL from deployed
+  // Cloudflare D1 at H4.14. Merge the bounded typed projections in Worker code so
+  // the canonical timeline remains deterministic without relying on a compound
+  // remote SQL execution path.
+  const [sessions,evidence,observations,hypotheses,findings,governance] = await Promise.all([
+    all(env.DB,`SELECT session_id AS canonical_id,NULL AS version_no,COALESCE(started_at,created_at) AS occurred_at,source,NULL AS correlation_id
+      FROM gv1_assessment_sessions WHERE bmr_id=? ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,safeLimit),
+    all(env.DB,`SELECT evidence_id AS canonical_id,version_no,COALESCE(captured_at,created_at) AS occurred_at,source_type AS source,NULL AS correlation_id
+      FROM gv1_evidence_items WHERE bmr_id=? ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,safeLimit),
+    all(env.DB,`SELECT observation_id AS canonical_id,version_no,created_at AS occurred_at,source_type AS source,correlation_id
+      FROM gv1_observations WHERE bmr_id=? ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,safeLimit),
+    all(env.DB,`SELECT hypothesis_id AS canonical_id,version_no,created_at AS occurred_at,source_type AS source,correlation_id
+      FROM gv1_hypotheses WHERE bmr_id=? ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,safeLimit),
+    all(env.DB,`SELECT finding_id AS canonical_id,version_no,created_at AS occurred_at,source_type AS source,correlation_id
+      FROM gv1_findings WHERE bmr_id=? ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,safeLimit),
+    all(env.DB,`SELECT entity_id AS canonical_id,new_version AS version_no,occurred_at,source,operation AS safe_summary,correlation_id
+      FROM gv1_audit_log
+      WHERE (entity_type='business_medical_record' AND entity_id=?)
+         OR (entity_type='finding' AND entity_id IN (SELECT finding_id FROM gv1_findings WHERE bmr_id=?))
+      ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,bmrId,safeLimit)
+  ]);
+
+  const typed = [
+    ...sessions.map(row=>({...row,entry_type:'session',safe_summary:'assessment session'})),
+    ...evidence.map(row=>({...row,entry_type:'evidence',safe_summary:'evidence'})),
+    ...observations.map(row=>({...row,entry_type:'observation',safe_summary:'observation'})),
+    ...hypotheses.map(row=>({...row,entry_type:'hypothesis',safe_summary:'hypothesis'})),
+    ...findings.map(row=>({...row,entry_type:'finding',safe_summary:'finding'})),
+    ...governance.map(row=>({...row,entry_type:'governance',safe_summary:row.safe_summary||'governance'}))
+  ];
+
+  typed.sort((a,b)=>{
+    const at=String(a.occurred_at||'');
+    const bt=String(b.occurred_at||'');
+    if(at!==bt) return at<bt?-1:1;
+    const ai=String(a.canonical_id||'');
+    const bi=String(b.canonical_id||'');
+    return ai<bi?-1:ai>bi?1:0;
+  });
+
+  return {
+    bmr:{bmr_id:bmr.bmr_id,venture_id:bmr.venture_id,status:bmr.status,record_version:bmr.record_version,current_session_id:bmr.current_session_id},
+    entries:typed.slice(0,safeLimit)
+  };
 }
 
 export async function transitionBmr(env,ctx,actor,key,bmrId,input){
