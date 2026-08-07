@@ -3,10 +3,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const engine = readFileSync('worker/day7d-engine.js', 'utf8');
-const wrangler = JSON.parse(readFileSync('wrangler.json', 'utf8'));
+const day7dWrangler = JSON.parse(readFileSync('wrangler.day7d.json', 'utf8'));
+const galviVaultWrangler = JSON.parse(readFileSync('wrangler.json', 'utf8'));
 
-test('authoritative QA Worker delegates legacy payment return before Day 7D session governance', () => {
-  assert.equal(wrangler.main, 'worker/day7d-engine.js');
+test('authoritative Day 7D Worker delegates legacy payment return before Day 7D session governance', () => {
+  assert.equal(day7dWrangler.main, 'worker/day7d-engine.js');
+  assert.equal(galviVaultWrangler.main, 'worker/day1.js');
+  assert.equal(galviVaultWrangler.name, 'galvivault-p0-day1-qa');
   assert.match(engine, /const product=ACTION_PRODUCT\[action\]/);
   assert.match(engine, /const day7dOwned=Boolean\(product\)\|\|action==='get_clinical_file'/);
   assert.match(engine, /if\(!day7dOwned\)return legacyWorker\.fetch\(request,env,ctx\)/);
