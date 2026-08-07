@@ -1,5 +1,5 @@
 import { idempotencyKey, jsonBody, requireOperator, success } from '../day4-common.js';
-import { getTimeline, transitionUnderReview } from '../domain/bmr-service.js';
+import { getTimeline, transitionBmr } from '../domain/bmr-service.js';
 
 export async function handleBmrRoute(request,env,ctx,path){
   const timeline=path.match(/^\/api\/v1\/business-medical-records\/([^/]+)\/timeline$/);
@@ -13,7 +13,7 @@ export async function handleBmrRoute(request,env,ctx,path){
   if(request.method==='POST'&&transition){
     const operator=requireOperator(request);
     const input=await jsonBody(request);
-    const data=await transitionUnderReview(env,ctx,operator,idempotencyKey(request),decodeURIComponent(transition[1]),input);
+    const data=await transitionBmr(env,ctx,operator,idempotencyKey(request),decodeURIComponent(transition[1]),input);
     return success(ctx,data,200,data.idempotent_replay?'no_change':'ok',{idempotent_replay:data.idempotent_replay});
   }
   return null;
