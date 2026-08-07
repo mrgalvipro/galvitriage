@@ -229,7 +229,7 @@ jobs:
             `SELECT COUNT(*) AS immutable_trigger FROM sqlite_master WHERE type='trigger' AND name='trg_gv1_accepted_evidence_no_update'`
           ].join('; ')+';'; fs.writeFileSync('/tmp/day3/assertions.sql',sql+'\n');
           NODE
-          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --file=/tmp/day3/assertions.sql --config wrangler.day3.json --json | tee /tmp/day3/assertions.json
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="$(cat /tmp/day3/assertions.sql)" --config wrangler.day3.json --json | tee /tmp/day3/assertions.json
           node --input-type=module <<'NODE'
           import fs from 'node:fs'; const e=JSON.parse(fs.readFileSync('/tmp/day3/h3.json','utf8')); const p=JSON.parse(fs.readFileSync('/tmp/day3/assertions.json','utf8')); const rows=[]; const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){rows.push(v);Object.values(v).forEach(walk)}}; walk(p); const n=k=>Number(rows.find(x=>Object.hasOwn(x,k))?.[k]??-1);
           const q=rows.find(x=>x.question_id==='triage.problem_clarity'&&x.version==='v1'); if(!q||q.product!=='GalviTriage'||q.dimension!=='Problem'||q.response_type!=='number'||Number(q.required_flag)!==1||Number(q.minimum_value)!==0||Number(q.maximum_value)!==100||Number(q.weight)!==1||q.score_direction!=='higher_is_better'||q.status!=='active') throw new Error('Question definition assertion failed.');
