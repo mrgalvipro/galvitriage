@@ -30,36 +30,38 @@ export async function getTimeline(env,bmrId,{limit=100}={}){
   return {bmr:{bmr_id:bmr.bmr_id,venture_id:bmr.venture_id,status:bmr.status,record_version:bmr.record_version,current_session_id:bmr.current_session_id},entries:rows};
 }
 
-export async function transitionUnderReview(env,ctx,actor,key,bmrId,input){
+export async function transitionBmr(env,ctx,actor,key,bmrId,input){
   bmrId=requireId('bmr_id',bmrId);
   const bmr=await findBmr(env.DB,bmrId);
   if(!bmr) throw new GVError('GV_NOT_FOUND','BMR was not found.',404);
   const expected=Number(input.expected_version);
   if(!Number.isInteger(expected)||expected!==Number(bmr.record_version)) throw new GVError('GV_VERSION_CONFLICT','expected_version does not match the current BMR version.',409);
-  if(String(input.to_status||'').trim()!=='under_review') throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','Day 4 only permits transition to under_review.',409);
-  if(bmr.status!=='assessment_in_progress') throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','BMR must be assessment_in_progress before under_review.',409);
-  if(!bmr.current_session_id) throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','A current session is required before under_review.',409);
-  const reason=String(input.reason_code||input.reason||'day4_review').trim().slice(0,120);
-  const fp=await hash('day4:bmr:under_review',{bmrId,expected,to_status:'under_review',reason,actor});
-  const receipt=await loadReceipt(env.DB,'day4:bmr:under_review',key);
+  const toStatus=String(input.to_status||'').trim();
+  const allowed=(bmr.status==='active'&&toStatus==='assessment_in_progress')||(bmr.status==='assessment_in_progress'&&toStatus==='under_review');
+  if(!allowed) throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION',`Transition ${bmr.status} -> ${toStatus||'(missing)'} is not permitted by the Day 4 critical path.`,409);
+  if(!bmr.current_session_id) throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','A current session is required for the requested transition.',409);
+  const reason=String(input.reason_code||input.reason||`day4_${toStatus}`).trim().slice(0,120);
+  const scope=`day4:bmr:${toStatus}`;
+  const fp=await hash(scope,{bmrId,expected,to_status:toStatus,reason,actor});
+  const receipt=await loadReceipt(env.DB,scope,key);
   if(receipt){
     if(receipt.request_fingerprint!==fp) throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH','The idempotency key was reused with different content.',409);
     return {bmr:await findBmr(env.DB,bmrId),idempotent_replay:true};
   }
   const timestamp=now(); const nextVersion=expected+1;
   await env.DB.batch([
-    env.DB.prepare(`UPDATE gv1_business_medical_records SET status='under_review',record_version=?,updated_at=? WHERE bmr_id=? AND record_version=?`).bind(nextVersion,timestamp,bmrId,expected),
+    env.DB.prepare(`UPDATE gv1_business_medical_records SET status=?,record_version=?,updated_at=? WHERE bmr_id=? AND record_version=?`).bind(toStatus,nextVersion,timestamp,bmrId,expected),
     env.DB.prepare(`INSERT INTO gv1_journey_events
       (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
       VALUES (?,?,?,?,?,'GalviVault','Day4',?,?,?,?,?,?,?)`)
-      .bind(newId('jev'),`day4:bmr_under_review:${bmrId}:${nextVersion}`,bmrId,bmr.current_session_id,'bmr_under_review',timestamp,actor.role,JSON.stringify({prior_status:bmr.status,new_status:'under_review',record_version:nextVersion}),fp,ctx.correlation,ctx.environment,timestamp),
+      .bind(newId('jev'),`day4:bmr_${toStatus}:${bmrId}:${nextVersion}`,bmrId,bmr.current_session_id,`bmr_${toStatus}`,timestamp,actor.role,JSON.stringify({prior_status:bmr.status,new_status:toStatus,record_version:nextVersion}),fp,ctx.correlation,ctx.environment,timestamp),
     env.DB.prepare(`INSERT INTO gv1_audit_log
       (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(newId('aud'),'business_medical_record',bmrId,'transition',expected,nextVersion,actor.role,'bmr-service',reason,JSON.stringify({from:bmr.status,to:'under_review'}),ctx.correlation,ctx.environment,timestamp,timestamp),
-    receiptStmt(env.DB,{id:newId('idem'),scope:'day4:bmr:under_review',key,fingerprint:fp,status:200,entityType:'business_medical_record',entityId:bmrId,timestamp})
+      .bind(newId('aud'),'business_medical_record',bmrId,'transition',expected,nextVersion,actor.role,'bmr-service',reason,JSON.stringify({from:bmr.status,to:toStatus}),ctx.correlation,ctx.environment,timestamp,timestamp),
+    receiptStmt(env.DB,{id:newId('idem'),scope,key,fingerprint:fp,status:200,entityType:'business_medical_record',entityId:bmrId,timestamp})
   ]);
   const updated=await findBmr(env.DB,bmrId);
-  if(updated.status!=='under_review'||Number(updated.record_version)!==nextVersion) throw new GVError('GV_VERSION_CONFLICT','BMR changed concurrently.',409);
+  if(updated.status!==toStatus||Number(updated.record_version)!==nextVersion) throw new GVError('GV_VERSION_CONFLICT','BMR changed concurrently.',409);
   return {bmr:updated,idempotent_replay:false};
 }
