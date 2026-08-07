@@ -1,58 +1,43 @@
-import day7dWorker from './day7d-engine.js';
+import day7aWorker from './worker.js';
 
-const PRODUCTION_ORIGIN = 'https://www.galvipro.com';
-const DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v1';
-const DAY7D_PRODUCTION_MARKER = 'day7d-cumulative-customer-intelligence-v1';
+const PRODUCTION_ORIGINS = new Set([
+  'https://www.galvipro.com',
+  'https://galvipro.com',
+  'https://mrgalvipro.github.io'
+]);
+const PRIMARY_PRODUCTION_ORIGIN = 'https://www.galvipro.com';
+const DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v4';
+const HUBSPOT_ADAPTER_MARKER = 'production-hubspot-upsert-v2';
 
-function productionEnv(env = {}) {
+function requestOrigin(request) {
+  return String(request.headers.get('Origin') || '').trim();
+}
+function isAllowedOrigin(origin) {
+  return !origin || PRODUCTION_ORIGINS.has(origin);
+}
+function productionEnv(env = {}, request = null) {
+  const origin = request ? requestOrigin(request) : '';
   return {
     ...env,
     ENVIRONMENT: 'production',
     APP_ENV: 'production',
-    RELEASE_BRANCH: 'qa-revamped-galvicare-0-5',
+    RELEASE_BRANCH: 'main',
     GALVIVAULT_NAME: 'galvivault-0-5-production',
-    ALLOWED_ORIGIN: PRODUCTION_ORIGIN
+    HUBSPOT_ENABLED: 'true',
+    ALLOWED_ORIGIN: isAllowedOrigin(origin) && origin ? origin : PRIMARY_PRODUCTION_ORIGIN
   };
 }
-
-function stripeSecret(env = {}) {
-  return String(env.STRIPE_SECRET_KEY || env.STRIPE_LIVE_SECRET_KEY || '').trim();
-}
-
-function stripeMode(env = {}) {
-  const key = stripeSecret(env);
-  if (key.startsWith('sk_live_')) return 'live';
-  if (key.startsWith('sk_test_')) return 'test';
-  return 'missing';
-}
-
-function normalizeProduct(value) {
-  const normalized = String(value || '').trim().toLowerCase().replace(/[™®]/g, '').replace(/[_-]+/g, ' ').replace(/\s+/g, ' ');
-  if (normalized === 'galviscore' || normalized === 'galvi score' || normalized === 'galviscore unlock') return 'galviscore';
-  if (normalized === 'galvishot' || normalized === 'galvi shot' || normalized === 'galvishot unlock') return 'galvishot';
-  if (normalized === 'galvisight' || normalized === 'galvi sight' || normalized === 'galvisight unlock') return 'galvisight';
-  if (normalized === 'galvipath' || normalized === 'galvi path' || normalized === 'galvipath unlock') return 'galvipath';
-  return '';
-}
-
-function expectedAmountCents(product) {
-  if (product === 'galviscore') return 900;
-  if (['galvishot', 'galvisight', 'galvipath'].includes(product)) return 2900;
-  return null;
-}
-
 function corsHeaders(request) {
-  const origin = request.headers.get('Origin');
-  if (origin !== PRODUCTION_ORIGIN) return {};
+  const origin = requestOrigin(request);
+  if (!origin || !PRODUCTION_ORIGINS.has(origin)) return {};
   return {
-    'Access-Control-Allow-Origin': PRODUCTION_ORIGIN,
+    'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin'
   };
 }
-
 function commonHeaders(request) {
   return {
     'Cache-Control': 'no-store',
@@ -60,120 +45,116 @@ function commonHeaders(request) {
     'Referrer-Policy': 'no-referrer',
     'X-GalviCare-Environment': 'production',
     'X-GalviCare-Runtime-Marker': DAY7B_RUNTIME_MARKER,
-    'X-GalviCare-Day7D': DAY7D_PRODUCTION_MARKER,
     ...corsHeaders(request)
   };
 }
-
 function json(request, body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      ...commonHeaders(request)
-    }
+    headers: { 'Content-Type': 'application/json; charset=utf-8', ...commonHeaders(request) }
   });
 }
-
 function forbiddenOrigin(request) {
-  const origin = request.headers.get('Origin');
-  return Boolean(origin && origin !== PRODUCTION_ORIGIN);
+  return !isAllowedOrigin(requestOrigin(request));
 }
-
-async function apiPayload(request) {
-  if (request.method !== 'POST') return null;
-  if (new URL(request.url).pathname !== '/api') return null;
-  try {
-    return await request.clone().json();
-  } catch {
-    return null;
-  }
+async function parseApiPayload(request) {
+  if (request.method !== 'POST' || new URL(request.url).pathname !== '/api') return null;
+  try { return await request.clone().json(); } catch { return null; }
 }
-
-function sessionProductFromStripe(stripeSession) {
-  const metadata = normalizeProduct(stripeSession?.metadata?.product || stripeSession?.metadata?.galvicare_product);
-  if (metadata) return metadata;
-  const items = stripeSession?.line_items?.data || [];
-  for (const item of items) {
-    const product = item?.price?.product;
-    const name = typeof product === 'object' ? product?.name : '';
-    const description = item?.description || '';
-    const normalized = normalizeProduct(name || description);
-    if (normalized) return normalized;
-  }
-  return '';
+function textAt(object, path, fallback = '') {
+  const value = path.split('.').reduce((current, key) => current?.[key], object);
+  return String(value ?? fallback).trim();
 }
-
-async function verifyProductionStripeReturn(request, env, payload) {
-  if (stripeMode(env) !== 'live') {
-    return json(request, {
-      success: false,
-      action: 'resolve_payment_return',
-      status: 'stripe_live_configuration_required',
-      message: 'Production payment verification is unavailable until a Stripe LIVE secret key is configured.'
-    }, 503);
-  }
-
-  const stripeSessionId = String(payload?.payload?.stripe_session_id || payload?.stripe_session_id || '').trim();
-  const expectedProduct = normalizeProduct(payload?.payload?.expected_product || payload?.expected_product);
-  if (!stripeSessionId.startsWith('cs_') || !expectedProduct) {
-    return json(request, { success:false, action:'resolve_payment_return', status:'invalid_payment_return' }, 400);
-  }
-
-  const secret = stripeSecret(env);
-  const url = `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(stripeSessionId)}?expand[]=line_items.data.price.product`;
-  const stripeResponse = await fetch(url, { headers: { Authorization: `Bearer ${secret}` } });
-  let stripeSession = {};
-  try { stripeSession = await stripeResponse.json(); } catch { stripeSession = {}; }
-  if (!stripeResponse.ok) {
-    return json(request, {
-      success:false,
-      action:'resolve_payment_return',
-      status:'stripe_session_not_verified',
-      message:'Stripe did not verify this Checkout Session.'
-    }, stripeResponse.status === 404 ? 404 : 402);
-  }
-
-  const paymentStatus = String(stripeSession.payment_status || '').toLowerCase();
-  const livemode = stripeSession.livemode === true;
-  const paymentIntent = String(stripeSession.payment_intent || '').trim();
-  const amountTotal = Number(stripeSession.amount_total);
-  const currency = String(stripeSession.currency || '').toLowerCase();
-  const actualProduct = sessionProductFromStripe(stripeSession);
-  const expectedAmount = expectedAmountCents(expectedProduct);
-
-  if (!livemode || paymentStatus !== 'paid' || !paymentIntent || !Number.isFinite(amountTotal) || amountTotal <= 0) {
-    return json(request, {
-      success:false,
-      action:'resolve_payment_return',
-      status:'payment_not_live_and_paid',
-      message:'A verified Stripe LIVE paid transaction is required before GalviCare can unlock this product.'
-    }, 402);
-  }
-
-  if (currency !== 'usd' || expectedAmount === null || amountTotal !== expectedAmount) {
-    return json(request, {
-      success:false,
-      action:'resolve_payment_return',
-      status:'payment_amount_mismatch',
-      message:'Stripe payment amount does not match the requested GalviCare product.'
-    }, 409);
-  }
-
-  if (!actualProduct || actualProduct !== expectedProduct) {
-    return json(request, {
-      success:false,
-      action:'resolve_payment_return',
-      status:'payment_product_mismatch',
-      message:'Stripe Checkout product does not match the requested GalviCare product.'
-    }, 409);
-  }
-
-  return null;
+function hubspotProperties(payload) {
+  const properties = {
+    email: textAt(payload, 'founder.email'),
+    firstname: textAt(payload, 'founder.first_name'),
+    lastname: textAt(payload, 'founder.last_name'),
+    phone: textAt(payload, 'founder.phone'),
+    company: textAt(payload, 'venture.venture_name'),
+    website: textAt(payload, 'venture.website')
+  };
+  return Object.fromEntries(Object.entries(properties).filter(([, value]) => value !== ''));
 }
-
-async function delegate(request, env, ctx) {
-  const response = await day7dWorker.fetch(request, productionEnv(env), ctx);
+async function hubspotFetch(env, path, options = {}) {
+  const token = String(env?.HUBSPOT_PRIVATE_APP_TOKEN || '').trim();
+  if (!token) throw new Error('HUBSPOT_PRIVATE_APP_TOKEN is missing');
+  const response = await fetch(`https://api.hubapi.com${path}`, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      ...(options.headers || {})
+    }
+  });
+  const text = await response.text();
+  let body = {};
+  try { body = text ? JSON.parse(text) : {}; } catch { body = { raw: text }; }
+  if (!response.ok) {
+    const error = new Error(`HubSpot request failed (${response.status})`);
+    error.status = response.status;
+    error.body = body;
+    throw error;
+  }
+  return body;
+}
+async function upsertHubSpotContact(env, payload) {
+  if (String(env?.HUBSPOT_ENABLED || '').toLowerCase() !== 'true') {
+    return { attempted: false, success: false, status: 'disabled', adapter: HUBSPOT_ADAPTER_MARKER };
+  }
+  const properties = hubspotProperties(payload);
+  if (!properties.email) {
+    return { attempted: false, success: false, status: 'missing_email', adapter: HUBSPOT_ADAPTER_MARKER };
+  }
+  const search = await hubspotFetch(env, '/crm/v3/objects/contacts/search', {
+    method: 'POST',
+    body: JSON.stringify({
+      filterGroups: [{ filters: [{ propertyName: 'email', operator: 'EQ', value: properties.email }] }],
+      properties: ['email'],
+      limit: 1
+    })
+  });
+  if (Array.isArray(search.results) && search.results.length > 0) {
+    const contactId = search.results[0].id;
+    const contact = await hubspotFetch(env, `/crm/v3/objects/contacts/${encodeURIComponent(contactId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ properties })
+    });
+    return { attempted: true, success: true, status: 'updated', contact_id: contact.id, adapter: HUBSPOT_ADAPTER_MARKER };
+  }
+  const contact = await hubspotFetch(env, '/crm/v3/objects/contacts', {
+    method: 'POST',
+    body: JSON.stringify({ properties })
+  });
+  return { attempted: true, success: true, status: 'created', contact_id: contact.id, adapter: HUBSPOT_ADAPTER_MARKER };
+}
+async function delegate(request, env, ctx, payload = null) {
+  const response = await day7aWorker.fetch(request, productionEnv(env, request), ctx);
+  let responseBody = null;
+  const contentType = String(response.headers.get('Content-Type') || '');
+  if (payload?.action === 'submit_triage' && response.ok && contentType.includes('application/json')) {
+    try {
+      responseBody = await response.clone().json();
+      let hubspot;
+      try {
+        hubspot = await upsertHubSpotContact(productionEnv(env, request), payload);
+      } catch (error) {
+        console.error('Production HubSpot synchronization failed', error?.body || error);
+        hubspot = {
+          attempted: true,
+          success: false,
+          status: 'failed',
+          error: error?.message || String(error),
+          http_status: error?.status || null,
+          details: error?.body || null,
+          adapter: HUBSPOT_ADAPTER_MARKER
+        };
+      }
+      responseBody = { ...responseBody, hubspot };
+    } catch (error) {
+      console.error('Unable to enrich submit_triage response', error);
+    }
+  }
   const headers = new Headers(response.headers);
   headers.delete('Access-Control-Allow-Origin');
   headers.delete('Access-Control-Allow-Credentials');
@@ -181,62 +162,57 @@ async function delegate(request, env, ctx) {
   headers.delete('Access-Control-Allow-Methods');
   headers.delete('Access-Control-Max-Age');
   for (const [key, value] of Object.entries(commonHeaders(request))) headers.set(key, value);
-  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+  return new Response(responseBody ? JSON.stringify(responseBody) : response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
 }
-
 export default {
   async fetch(request, env, ctx) {
     const pathname = new URL(request.url).pathname;
-
     if (request.method === 'OPTIONS') {
-      if (forbiddenOrigin(request)) return json(request, { success:false, status:'forbidden_origin' }, 403);
-      return new Response(null, { status:204, headers:commonHeaders(request) });
+      if (forbiddenOrigin(request)) return json(request, { success: false, status: 'forbidden_origin' }, 403);
+      return new Response(null, { status: 204, headers: commonHeaders(request) });
     }
-
-    if (forbiddenOrigin(request)) return json(request, { success:false, status:'forbidden_origin' }, 403);
-
+    if (forbiddenOrigin(request)) return json(request, { success: false, status: 'forbidden_origin' }, 403);
     if (request.method === 'GET' && (pathname === '/' || pathname === '/health')) {
       return json(request, {
-        success:true,
-        service:'GalviCare 0.5 Worker',
-        environment:'production',
-        release_branch:'qa-revamped-galvicare-0-5',
-        galvivault:'galvivault-0-5-production',
-        runtime_marker:DAY7B_RUNTIME_MARKER,
-        day7d_runtime_marker:DAY7D_PRODUCTION_MARKER,
-        day7a_runtime_marker:'day7a-payment-products-v1',
-        db_bound:Boolean(env?.DB),
-        stripe_mode:stripeMode(env)
+        success: true,
+        service: 'GalviCare 0.5 Worker',
+        environment: 'production',
+        release_branch: 'main',
+        galvivault: 'galvivault-0-5-production',
+        runtime_marker: DAY7B_RUNTIME_MARKER,
+        day7a_runtime_marker: 'day7a-payment-products-v1',
+        allowed_origins: Array.from(PRODUCTION_ORIGINS),
+        hubspot_enabled: true,
+        hubspot_credential_present: Boolean(String(env?.HUBSPOT_PRIVATE_APP_TOKEN || '').trim()),
+        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,
+        db_bound: Boolean(env?.DB)
       });
     }
-
-    const payload = await apiPayload(request);
+    const payload = await parseApiPayload(request);
     const action = String(payload?.action || '').trim();
-
     if (action === 'health_check') {
       return json(request, {
-        success:true,
+        success: true,
         action,
-        environment:'production',
-        release_branch:'qa-revamped-galvicare-0-5',
-        galvivault:'galvivault-0-5-production',
-        runtime_marker:DAY7B_RUNTIME_MARKER,
-        day7d_runtime_marker:DAY7D_PRODUCTION_MARKER,
-        day7a_runtime_marker:'day7a-payment-products-v1',
-        db_bound:Boolean(env?.DB),
-        stripe_mode:stripeMode(env)
+        environment: 'production',
+        release_branch: 'main',
+        galvivault: 'galvivault-0-5-production',
+        runtime_marker: DAY7B_RUNTIME_MARKER,
+        day7a_runtime_marker: 'day7a-payment-products-v1',
+        allowed_origins: Array.from(PRODUCTION_ORIGINS),
+        hubspot_enabled: true,
+        hubspot_credential_present: Boolean(String(env?.HUBSPOT_PRIVATE_APP_TOKEN || '').trim()),
+        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,
+        db_bound: Boolean(env?.DB)
       });
     }
-
     if (action === 'get_fixture_result' || action === 'grant_test_override') {
-      return json(request, { success:false, action, status:'not_found', message:'QA-only capability is unavailable in production.' }, 404);
+      return json(request, { success: false, action, status: 'not_found', message: 'QA-only capability is unavailable in production.' }, 404);
     }
-
-    if (action === 'resolve_payment_return') {
-      const rejection = await verifyProductionStripeReturn(request, env, payload);
-      if (rejection) return rejection;
-    }
-
-    return delegate(request, env, ctx);
+    return delegate(request, env, ctx, payload);
   }
 };
