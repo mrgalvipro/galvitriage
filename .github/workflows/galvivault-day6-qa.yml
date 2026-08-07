@@ -349,7 +349,7 @@ jobs:
           }
           const created=await req('/api/v1/import-batches',{source_name:`day6-${suffix}.json`,source_checksum:`sha256:day6-${suffix}`,expected_count:3},`d6-batch-${suffix}`);
           const id=created.data?.batch?.import_batch_id; if(!id) throw new Error('import batch id missing');
-          const command={bmr_id:bmr,session_id:session,value_type:'text',value_text:'Day 6 import evidence',consent_status:'approved',captured_at:new Date().toISOString()};
+          const command={bmr_id:bmr,session_id:session,value_type:'text',value_text:`Day 6 import evidence ${suffix}`,consent_status:'approved',captured_at:new Date().toISOString()};
           const a=await req(`/api/v1/import-batches/${id}/rows`,{source_row_key:'R1',command});
           const b=await req(`/api/v1/import-batches/${id}/rows`,{source_row_key:'R2',command});
           const c=await req(`/api/v1/import-batches/${id}/rows`,{source_row_key:'R3',command:{bmr_id:bmr,session_id:session,value_type:'number',value_text:'not-a-number'}});
