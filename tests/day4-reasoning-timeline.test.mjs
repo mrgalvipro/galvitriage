@@ -75,7 +75,16 @@ test('LC-004/008/009 Day 4 BMR transition uses versioned idempotent lifecycle', 
 });
 
 test('D4-04 timeline reconstructs typed identity evidence reasoning governance', () => {
-  for (const type of ["'session' AS entry_type","'evidence'","'observation'","'hypothesis'","'finding'","'governance'"]) assert.ok(bmr.includes(type), type);
+  // The deployed timeline intentionally uses independent bounded D1 reads and
+  // merges typed entries in Worker memory. Assert the semantic projection rather
+  // than the former compound UNION SQL text so the static gate matches the
+  // D1-safe runtime implementation. The integration suite separately proves the
+  // route behavior through Worker + D1-compatible persistence.
+  for (const type of ['session','evidence','observation','hypothesis','finding','governance']) {
+    assert.ok(bmr.includes(`entry_type:'${type}'`), `missing typed ${type} projection`);
+  }
+  assert.ok(bmr.includes('typed.sort('), 'timeline must be chronologically ordered');
+  assert.ok(bmr.includes('entries:typed.slice(0,safeLimit)'), 'timeline must remain bounded');
 });
 
 test('D4-05 customer projection excludes internal reasoning and returns confirmed current findings only', () => {
