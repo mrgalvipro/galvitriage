@@ -23,8 +23,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: galvivault-day5-qa
-  cancel-in-progress: true
+  group: galvivault-qa-exclusive-mutator
+  cancel-in-progress: false
 
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
