@@ -36,11 +36,14 @@ assertConfig('galvivault-p0-day1-qa', day2, 'worker/day2.js', '0002');
 assertConfig('galvivault-p0-day1-qa', day3, 'worker/day3-entry.js', '0003');
 
 const worker = await readFile('worker/day3.js', 'utf8');
-for (const marker of ['/api/v1/evidence','evidence_accepted','evidence_superseded','GV_EVIDENCE_IMMUTABLE','gv1_import_row_receipts','processed_count','supersedes_evidence_id']) {
+for (const marker of ['/api/v1/evidence','evidence_accepted','evidence_superseded','gv1_import_row_receipts','processed_count','supersedes_evidence_id']) {
   if (!worker.includes(marker)) throw new Error(`Day 3 runtime marker missing: ${marker}`);
 }
+
+// Accepted-evidence mutation protection is intentionally owned by the cumulative Day 3 entry,
+// which intercepts PATCH/PUT before delegating normal Day 3 evidence operations to worker/day3.js.
 const entry = await readFile('worker/day3-entry.js', 'utf8');
-for (const marker of ["import day2Worker from './day2.js'","import day3Worker from './day3.js'",'/api/v1/day3/readiness','GV_EVIDENCE_IMMUTABLE','assessmentSupersede','return day2Worker.fetch(request, env, executionContext)']) {
+for (const marker of ["import day2Worker from './day2.js'","import day3Worker from './day3.js'",'/api/v1/day3/readiness','GV_EVIDENCE_IMMUTABLE','immutableMutation','assessmentSupersede','return day2Worker.fetch(request, env, executionContext)']) {
   if (!entry.includes(marker)) throw new Error(`Day 3 cumulative entry marker missing: ${marker}`);
 }
 
