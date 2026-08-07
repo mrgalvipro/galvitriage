@@ -27,7 +27,8 @@ env:
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   DAY6_ALLOWED_ORIGIN: https://galvipro.com
   DAY6_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
-  GALVICARE_COMPLETION_BASELINE: 920f8bf98f8f19ee98a41c69dffd4eb0949b7248
+  GALVICARE_COMPLETION_BASELINE: ae41b41892de2e9b88b4e81d5e521c535719bb15
+  GALVICARE_PRODUCTION_BASELINE: 920f8bf98f8f19ee98a41c69dffd4eb0949b7248
   DAY4_FINAL_COMMIT: e6058ef6ef21f9e4bde2c665d75407d53a042b1d
 
 jobs:
@@ -67,13 +68,15 @@ jobs:
             worker/worker.js \
             worker/day7d-engine.js \
             worker/day7d-runtime.js \
-            worker/production-entry.js \
             day7c-browser-observability.js \
             day7d-browser-customer-intelligence.js \
-            index.html \
             qa-frontend-worker.js \
             wrangler.day7d.json \
-            wrangler.qa-frontend.jsonc \
+            wrangler.qa-frontend.jsonc
+
+          git diff --exit-code "$GALVICARE_PRODUCTION_BASELINE" -- \
+            worker/production-entry.js \
+            index.html \
             wrangler.production.jsonc
 
           cat > /tmp/day6/baseline.txt <<EOF
@@ -85,6 +88,7 @@ jobs:
           schema_target=0005
           day4_final=$DAY4_FINAL_COMMIT
           galvicare_completion_baseline=$GALVICARE_COMPLETION_BASELINE
+          galvicare_production_baseline=$GALVICARE_PRODUCTION_BASELINE
           production_branch=main
           EOF
 
@@ -422,9 +426,18 @@ jobs:
         run: |
           set -euo pipefail
           git diff --exit-code "$GALVICARE_COMPLETION_BASELINE" -- \
-            worker/worker.js worker/day7d-engine.js worker/day7d-runtime.js worker/production-entry.js \
-            day7c-browser-observability.js day7d-browser-customer-intelligence.js \
-            index.html qa-frontend-worker.js wrangler.day7d.json wrangler.qa-frontend.jsonc wrangler.production.jsonc
+            worker/worker.js \
+            worker/day7d-engine.js \
+            worker/day7d-runtime.js \
+            day7c-browser-observability.js \
+            day7d-browser-customer-intelligence.js \
+            qa-frontend-worker.js \
+            wrangler.day7d.json \
+            wrangler.qa-frontend.jsonc
+          git diff --exit-code "$GALVICARE_PRODUCTION_BASELINE" -- \
+            worker/production-entry.js \
+            index.html \
+            wrangler.production.jsonc
           STATUS="$(curl -L -sS -o /tmp/day6/production.html -w '%{http_code}' https://www.galvipro.com/)"
           case "$STATUS" in 2*|3*) ;; *) echo "Production public smoke returned $STATUS"; exit 1;; esac
           printf 'RG-006 PASS: protected GalviCare runtime unchanged; https://www.galvipro.com returned HTTP %s\n' "$STATUS" \
