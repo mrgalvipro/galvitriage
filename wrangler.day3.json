@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvivault-p0-day3-qa",
-  "main": "worker/day3.js",
+  "main": "worker/day3-entry.js",
   "compatibility_date": "2026-07-23",
   "workers_dev": true,
   "observability": {
