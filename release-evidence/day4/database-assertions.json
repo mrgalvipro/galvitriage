@@ -1,0 +1,302 @@
+[
+  {
+    "results": [
+      {
+        "observation_support": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.306
+      },
+      "duration": 0.306,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "hypothesis_support": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1278
+      },
+      "duration": 0.1278,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 2,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "finding_v1": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.165
+      },
+      "duration": 0.165,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "finding_v2": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1214
+      },
+      "duration": 0.1214,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 1,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "finding_v2_support": 3
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.132
+      },
+      "duration": 0.132,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 6,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "confirm_audit": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1233
+      },
+      "duration": 0.1233,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 3,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "find_receipt": 1
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1268
+      },
+      "duration": 0.1268,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 7,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "orphan_observations": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.213
+      },
+      "duration": 0.213,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 6,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "orphan_hypotheses": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.159
+      },
+      "duration": 0.159,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 6,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "orphan_findings": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1535
+      },
+      "duration": 0.1535,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 18,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "cross_observation": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1505
+      },
+      "duration": 0.1505,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 9,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "cross_finding": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.1307
+      },
+      "duration": 0.1307,
+      "changes": 0,
+      "last_row_id": 91,
+      "changed_db": false,
+      "size_after": 2666496,
+      "rows_read": 27,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
