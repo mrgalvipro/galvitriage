@@ -35,11 +35,7 @@ export async function transitionBmr(env,ctx,actor,key,bmrId,input){
   const bmr=await findBmr(env.DB,bmrId);
   if(!bmr) throw new GVError('GV_NOT_FOUND','BMR was not found.',404);
   const expected=Number(input.expected_version);
-  if(!Number.isInteger(expected)||expected!==Number(bmr.record_version)) throw new GVError('GV_VERSION_CONFLICT','expected_version does not match the current BMR version.',409);
   const toStatus=String(input.to_status||'').trim();
-  const allowed=(bmr.status==='active'&&toStatus==='assessment_in_progress')||(bmr.status==='assessment_in_progress'&&toStatus==='under_review');
-  if(!allowed) throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION',`Transition ${bmr.status} -> ${toStatus||'(missing)'} is not permitted by the Day 4 critical path.`,409);
-  if(!bmr.current_session_id) throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','A current session is required for the requested transition.',409);
   const reason=String(input.reason_code||input.reason||`day4_${toStatus}`).trim().slice(0,120);
   const scope=`day4:bmr:${toStatus}`;
   const fp=await hash(scope,{bmrId,expected,to_status:toStatus,reason,actor});
@@ -48,6 +44,10 @@ export async function transitionBmr(env,ctx,actor,key,bmrId,input){
     if(receipt.request_fingerprint!==fp) throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH','The idempotency key was reused with different content.',409);
     return {bmr:await findBmr(env.DB,bmrId),idempotent_replay:true};
   }
+  if(!Number.isInteger(expected)||expected!==Number(bmr.record_version)) throw new GVError('GV_VERSION_CONFLICT','expected_version does not match the current BMR version.',409);
+  const allowed=(bmr.status==='active'&&toStatus==='assessment_in_progress')||(bmr.status==='assessment_in_progress'&&toStatus==='under_review');
+  if(!allowed) throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION',`Transition ${bmr.status} -> ${toStatus||'(missing)'} is not permitted by the Day 4 critical path.`,409);
+  if(!bmr.current_session_id) throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','A current session is required for the requested transition.',409);
   const timestamp=now(); const nextVersion=expected+1;
   await env.DB.batch([
     env.DB.prepare(`UPDATE gv1_business_medical_records SET status=?,record_version=?,updated_at=? WHERE bmr_id=? AND record_version=?`).bind(toStatus,nextVersion,timestamp,bmrId,expected),
