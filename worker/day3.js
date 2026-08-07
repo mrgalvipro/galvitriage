@@ -640,6 +640,50 @@ async function createImportBatch(request, cfg, corr, origin) {
   return ok(cfg, corr, origin, { batch: await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId) }, 201, 'created');
 }
 
+async function buildImportErrorStatement(db, { errorId, batchId, sourceRowKey, error, safePayload, timestamp, corr }) {
+  const info = await all(db, `SELECT name FROM pragma_table_info('gv1_import_errors')`);
+  const names = new Set(info.map((row) => clean(row.name)));
+  for (const required of ['import_error_id','import_batch_id','error_code','created_at','source_row_key','field_name','quarantined_payload_json','correlation_id']) {
+    if (!names.has(required)) throw new GVError('GV_DB_SCHEMA_OUTDATED', `The import error schema is missing ${required}.`, 503);
+  }
+
+  const columns = ['import_error_id','import_batch_id'];
+  const values = [errorId,batchId];
+  if (names.has('source_row_reference')) {
+    columns.push('source_row_reference');
+    values.push(sourceRowKey);
+  } else if (names.has('row_number')) {
+    const rowNumberMatch = sourceRowKey.match(/(\d+)$/);
+    columns.push('row_number');
+    values.push(rowNumberMatch ? Number(rowNumberMatch[1]) : 0);
+  }
+
+  columns.push('error_code');
+  values.push(error.code);
+  if (names.has('safe_error_message')) {
+    columns.push('safe_error_message');
+    values.push(error.message);
+  } else if (names.has('error_message')) {
+    columns.push('error_message');
+    values.push(error.message);
+  } else {
+    throw new GVError('GV_DB_SCHEMA_OUTDATED', 'The import error message column is unavailable.', 503);
+  }
+
+  if (names.has('safe_error_json')) {
+    columns.push('safe_error_json');
+    values.push(safePayload);
+  } else if (names.has('safe_payload_json')) {
+    columns.push('safe_payload_json');
+    values.push(safePayload);
+  }
+
+  columns.push('created_at','source_row_key','field_name','quarantined_payload_json','correlation_id');
+  values.push(timestamp,sourceRowKey,null,safePayload,corr);
+  const placeholders = columns.map(() => '?').join(',');
+  return db.prepare(`INSERT INTO gv1_import_errors (${columns.join(',')}) VALUES (${placeholders})`).bind(...values);
+}
+
 async function importRow(request, cfg, corr, origin, batchId) {
   requireRuntime(cfg);
   const resolvedActor = requireImport(request);
@@ -723,15 +767,8 @@ async function importRow(request, cfg, corr, origin, batchId) {
     const errorId = newId('imp_err');
     const timestamp = now();
     const safePayload = JSON.stringify({ source_row_key: sourceRowKey, value_type: command.value_type || null });
-    const quarantineStatements = [
-      cfg.db.prepare(`INSERT INTO gv1_import_errors
-        (import_error_id,import_batch_id,source_row_reference,error_code,safe_error_message,safe_error_json,created_at,
-         source_row_key,field_name,quarantined_payload_json,correlation_id)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(
-        errorId, batchId, sourceRowKey, error.code, error.message, safePayload, timestamp,
-        sourceRowKey, null, safePayload, corr
-      )
-    ];
+    const importErrorStatement = await buildImportErrorStatement(cfg.db, { errorId, batchId, sourceRowKey, error, safePayload, timestamp, corr });
+    const quarantineStatements = [importErrorStatement];
     if (rowBmrId && rowSessionId) {
       quarantineStatements.push(
         cfg.db.prepare(`INSERT INTO gv1_journey_events
