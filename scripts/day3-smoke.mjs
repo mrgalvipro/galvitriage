@@ -9,23 +9,98 @@ if (!base) throw new Error('DAY3_BASE_URL is required.');
 
 const evidence = { day: 3, run_suffix: suffix, base_url: base, origin, started_at: new Date().toISOString(), steps: [] };
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-async function request(step, pathname, { method = 'GET', body, key, role, actorId, expected = [200] } = {}) {
-  const headers = new Headers({ Origin: origin, 'X-Correlation-Id': `corr_d3_${suffix}_${step.toLowerCase().replace(/[^a-z0-9]+/g, '_')}` });
+function requestHeaders(step, { body, key, role, actorId } = {}) {
+  const headers = new Headers({
+    Origin: origin,
+    'Cache-Control': 'no-cache',
+    'X-Correlation-Id': `corr_d3_${suffix}_${step.toLowerCase().replace(/[^a-z0-9]+/g, '_')}`
+  });
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   if (key) headers.set('Idempotency-Key', key);
   if (role) headers.set('X-Galvi-Role', role);
   if (actorId) headers.set('X-Galvi-Actor-Id', actorId);
   headers.set('X-GalviVault-Actor-Id', actorId || 'galvivault_day3_qa_harness');
   headers.set('X-GalviVault-Actor-Type', role === 'operator' || role === 'admin' ? 'operator' : 'qa_fixture');
-  const response = await fetch(`${base}${pathname}`, { method, headers, ...(body !== undefined ? { body: JSON.stringify(body) } : {}) });
-  const payload = response.status === 204 ? null : await response.json();
-  const record = { step, timestamp: new Date().toISOString(), method, path: pathname, status: response.status, correlation_id: response.headers.get('x-correlation-id'), environment: response.headers.get('x-galvivault-environment'), request: body ?? null, response: payload };
+  return headers;
+}
+
+async function parsePayload(response) {
+  if (response.status === 204) return null;
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { non_json_response: text.slice(0, 500) };
+  }
+}
+
+async function request(step, pathname, { method = 'GET', body, key, role, actorId, expected = [200] } = {}) {
+  const headers = requestHeaders(step, { body, key, role, actorId });
+  const response = await fetch(`${base}${pathname}`, {
+    method,
+    headers,
+    cache: 'no-store',
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {})
+  });
+  const payload = await parsePayload(response);
+  const record = {
+    step,
+    timestamp: new Date().toISOString(),
+    method,
+    path: pathname,
+    status: response.status,
+    correlation_id: response.headers.get('x-correlation-id'),
+    environment: response.headers.get('x-galvivault-environment'),
+    request: body ?? null,
+    response: payload
+  };
   evidence.steps.push(record);
   assert(expected.includes(response.status), `${step}: expected ${expected.join('/')} but received ${response.status}: ${JSON.stringify(payload)}`);
   assert(record.environment === 'qa', `${step}: expected QA environment`);
   assert(record.correlation_id, `${step}: missing correlation ID`);
   return { response, payload, record };
+}
+
+async function waitForDay3Runtime(step, { maxAttempts = 40, consecutivePasses = 3 } = {}) {
+  let consecutive = 0;
+  let last = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const probeStep = `${step}_PROBE_${attempt}`;
+    const probePath = `/api/v1/day3/readiness?run=${encodeURIComponent(suffix)}&probe=${attempt}`;
+    const headers = requestHeaders(probeStep);
+    const response = await fetch(`${base}${probePath}`, { method: 'GET', headers, cache: 'no-store' });
+    const payload = await parsePayload(response);
+    const record = {
+      step: probeStep,
+      timestamp: new Date().toISOString(),
+      method: 'GET',
+      path: probePath,
+      status: response.status,
+      correlation_id: response.headers.get('x-correlation-id'),
+      environment: response.headers.get('x-galvivault-environment'),
+      request: null,
+      response: payload
+    };
+    evidence.steps.push(record);
+    last = record;
+
+    const currentSchema = payload?.data?.current_schema_version;
+    const envelopeSchema = payload?.meta?.schema_version;
+    const valid = response.status === 200 &&
+      record.environment === 'qa' &&
+      Boolean(record.correlation_id) &&
+      payload?.success === true &&
+      payload?.data?.ready === true &&
+      currentSchema === '0003' &&
+      envelopeSchema === '0003';
+
+    consecutive = valid ? consecutive + 1 : 0;
+    if (consecutive >= consecutivePasses) return { response, payload, record };
+    await sleep(1500);
+  }
+  throw new Error(`${step}: Day 3 runtime did not converge through the Node/H3 client after ${maxAttempts} probes. Last response: ${JSON.stringify(last)}`);
 }
 
 function identity(result) {
@@ -41,7 +116,10 @@ function identity(result) {
 }
 
 try {
-  const ready = await request('H3.0_READINESS', '/api/v1/day3/readiness');
+  // Cloudflare deployment propagation can briefly expose the prior Day 1/2 Worker on one edge
+  // even after a curl probe reaches Day 3. Require three consecutive Day 3 responses through
+  // the exact Node/H3 client before any state-changing Human E2E command is allowed to run.
+  const ready = await waitForDay3Runtime('H3.0_READINESS');
   assert(ready.payload?.data?.ready === true, 'Day 3 readiness is false.');
   assert(ready.payload?.data?.current_schema_version === '0003', 'Schema 0003 is not active.');
 
@@ -139,7 +217,7 @@ try {
   assert(Number(batch?.processed_count) === 3 && Number(batch?.imported_count) === 1 && Number(batch?.skipped_count) === 1 && Number(batch?.error_count) === 1, 'H3.12 import counts do not reconcile');
   assert(batch?.status === 'completed_with_errors' && close.payload?.data?.reconciled === true, 'H3.12 final batch status invalid');
 
-  const h313 = await request('H3.13_FINAL_READINESS', '/api/v1/day3/readiness');
+  const h313 = await waitForDay3Runtime('H3.13_FINAL_READINESS', { maxAttempts: 10, consecutivePasses: 2 });
   assert(h313.payload?.data?.ready === true, 'H3.13 final readiness failed');
 
   evidence.canonical_ids = { founder_id: first.founder_id, venture_id: first.venture_id, bmr_id: first.bmr_id, session_id: first.session_id, answer_v1_id: answerV1.answer_id, answer_v2_id: answerV2.answer_id, evidence_v1_id: evidenceV1.evidence_id, evidence_v2_id: evidenceV2.evidence_id, rejected_evidence_id: rejectId, import_batch_id: batchId };
@@ -153,7 +231,9 @@ try {
   console.log(JSON.stringify(evidence, null, 2));
   console.log(`PASS: H3.1-H3.13 synthetic QA execution complete. Evidence: ${evidencePath}`);
 } catch (error) {
-  evidence.result = 'FAIL'; evidence.completed_at = new Date().toISOString(); evidence.error = { message: error.message, stack: error.stack };
+  evidence.result = 'FAIL';
+  evidence.completed_at = new Date().toISOString();
+  evidence.error = { message: error.message, stack: error.stack };
   fs.mkdirSync(path.dirname(evidencePath), { recursive: true });
   fs.writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
   console.error(error);
