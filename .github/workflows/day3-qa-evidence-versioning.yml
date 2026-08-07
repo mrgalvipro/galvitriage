@@ -40,6 +40,7 @@ env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   DAY3_ALLOWED_ORIGIN: https://galvipro.com
+  GALVICARE_COMPLETION_BASELINE: ae41b41892de2e9b88b4e81d5e521c535719bb15
 
 jobs:
   day3:
@@ -67,11 +68,12 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/day3
           git rev-parse HEAD > /tmp/day3/candidate-sha.txt
+          git show "${GALVICARE_COMPLETION_BASELINE}:package.json" > /tmp/day3/galvicare-package-baseline.json
           sha256sum worker/production-entry.js wrangler.production.jsonc index.html > /tmp/day3/production-before.sha256
           sha256sum worker/worker.js worker/day7d-engine.js worker/day7d-runtime.js day7d-browser-customer-intelligence.js wrangler.day7d.json wrangler.qa-frontend.jsonc > /tmp/day3/galvicare-before.sha256
-          printf '%s\n' "candidate=$(cat /tmp/day3/candidate-sha.txt)" "worker=galvivault-p0-day1-qa" "database=galvivault-0-5-qa" "schema_target=0003" > /tmp/day3/baseline.txt
+          printf '%s\n' "candidate=$(cat /tmp/day3/candidate-sha.txt)" "worker=galvivault-p0-day1-qa" "database=galvivault-0-5-qa" "schema_target=0003" "galvicare_completion_baseline=${GALVICARE_COMPLETION_BASELINE}" > /tmp/day3/baseline.txt
 
-      - name: Run Day 1, Day 2, Day 3, and GalviCare regression BLOCK gates
+      - name: Run Day 1 Day 2 Day 3 BLOCK gates and prove GalviCare preservation
         shell: bash
         run: |
           set -euo pipefail
@@ -86,7 +88,27 @@ jobs:
           node --test tests/day1-foundation.test.mjs | tee /tmp/day3/day1.txt
           node --test tests/galvivault-day2-identity-continuity.test.mjs | tee /tmp/day3/day2.txt
           node --test tests/day3-evidence-versioning.test.mjs | tee /tmp/day3/day3.txt
-          npm run stabilization:gate | tee /tmp/day3/galvicare-regression.txt
+          git diff --exit-code "$GALVICARE_COMPLETION_BASELINE" -- \
+            worker/worker.js \
+            worker/day7d-engine.js \
+            worker/day7d-runtime.js \
+            worker/production-entry.js \
+            day7c-browser-observability.js \
+            day7d-browser-customer-intelligence.js \
+            index.html \
+            qa-frontend-worker.js \
+            wrangler.day7d.json \
+            wrangler.qa-frontend.jsonc \
+            wrangler.production.jsonc
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const baseline = JSON.parse(fs.readFileSync('/tmp/day3/galvicare-package-baseline.json', 'utf8'));
+          const current = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          for (const name of ['test','check','stabilization:gate','check:day7b','test:day7b','day7b:gate','check:day7c','test:day7c','day7c:gate','test:day7d','day7d:preflight','day7d:gate']) {
+            if (current.scripts?.[name] !== baseline.scripts?.[name]) throw new Error(`GalviCare package script drift detected: ${name}`);
+          }
+          NODE
+          printf 'PASS: GalviCare runtime/Production files and established GalviCare package scripts remain identical to completion baseline %s.\n' "$GALVICARE_COMPLETION_BASELINE" | tee /tmp/day3/galvicare-preservation.txt
           node --test tests/day7b-environment-isolation.test.mjs | tee /tmp/day3/production-isolation.txt
           ! grep -E '# skipped [1-9]' /tmp/day3/day1.txt
           ! grep -E '# skipped [1-9]' /tmp/day3/day2.txt
@@ -226,7 +248,19 @@ jobs:
           sha256sum worker/worker.js worker/day7d-engine.js worker/day7d-runtime.js day7d-browser-customer-intelligence.js wrangler.day7d.json wrangler.qa-frontend.jsonc > /tmp/day3/galvicare-after.sha256
           diff -u /tmp/day3/production-before.sha256 /tmp/day3/production-after.sha256
           diff -u /tmp/day3/galvicare-before.sha256 /tmp/day3/galvicare-after.sha256
-          npm run stabilization:gate | tee /tmp/day3/galvicare-post-runtime.txt
+          git diff --exit-code "$GALVICARE_COMPLETION_BASELINE" -- \
+            worker/worker.js \
+            worker/day7d-engine.js \
+            worker/day7d-runtime.js \
+            worker/production-entry.js \
+            day7c-browser-observability.js \
+            day7d-browser-customer-intelligence.js \
+            index.html \
+            qa-frontend-worker.js \
+            wrangler.day7d.json \
+            wrangler.qa-frontend.jsonc \
+            wrangler.production.jsonc
+          printf 'PASS: GalviCare/Production protected sources remain unchanged from the known completion baseline and from the start of this Day 3 run.\n' | tee /tmp/day3/galvicare-post-runtime.txt
           test "$(curl -sS -o /tmp/day3/production.html -w '%{http_code}' https://www.galvipro.com/)" = "200"
 
       - name: Verify rollback candidate without mutating QA
@@ -257,16 +291,16 @@ jobs:
           import fs from 'node:fs'; const e=JSON.parse(fs.readFileSync('/tmp/day3/h3.json','utf8')); const url=fs.readFileSync('/tmp/day3/deployed-url.txt','utf8').trim(); const candidate=fs.readFileSync('/tmp/day3/candidate-sha.txt','utf8').trim();
           fs.writeFileSync('release-evidence/day3/deployment-metadata.json',JSON.stringify({candidate_sha:candidate,qa_worker_name:'galvivault-p0-day1-qa',qa_worker_url:url,qa_d1:'galvivault-0-5-qa',schema_version:'0003'},null,2)+'\n');
           fs.writeFileSync('release-evidence/day3/import-reconciliation.json',JSON.stringify(e.import_reconciliation,null,2)+'\n');
-          fs.writeFileSync('release-evidence/day3/baseline.json',JSON.stringify({repository:'mrgalvipro/galvitriage',branch:'qa-revamped-galvicare-0-5',candidate_sha:candidate,qa_worker_name:'galvivault-p0-day1-qa',qa_d1:'galvivault-0-5-qa',schema_target:'0003',production_mutated:false,galvicare_mutated:false},null,2)+'\n');
+          fs.writeFileSync('release-evidence/day3/baseline.json',JSON.stringify({repository:'mrgalvipro/galvitriage',branch:'qa-revamped-galvicare-0-5',candidate_sha:candidate,qa_worker_name:'galvivault-p0-day1-qa',qa_d1:'galvivault-0-5-qa',schema_target:'0003',production_mutated:false,galvicare_mutated:false,galvicare_completion_baseline:process.env.GALVICARE_COMPLETION_BASELINE},null,2)+'\n');
           NODE
           git diff --name-only "${GITHUB_SHA}^" "$GITHUB_SHA" > release-evidence/day3/changed-files.txt || true
-          cat /tmp/day3/day1.txt /tmp/day3/day2.txt /tmp/day3/day3.txt /tmp/day3/galvicare-regression.txt /tmp/day3/evidence-verification.txt /tmp/day3/rollback-verification.txt > release-evidence/day3/automated-tests.txt
-          printf '{"day1":"PASS","day2":"PASS","day3":"PASS","galvicare_regression":"PASS","mandatory_skipped":0,"h3_1_through_h3_13":"PASS","direct_d1":"PASS","production_non_mutation":"PASS","rollback_dry_run":"PASS"}\n' > release-evidence/day3/automated-tests.json
-          printf '# Defects\n\nCross-product workflow mutation: RESOLVED by removing self-modifying workflow behavior.\nGalviCare test contamination: RESOLVED by keeping Day 3 tests out of GalviCare stabilization gate.\nDay 3 QA Worker authority split: RESOLVED; Days 1-3 advance one existing GalviVault QA Worker.\nMigration ID collision: RESOLVED; sequence is 0001 -> 0002 -> 0003 with partial-state stop/reconcile.\nOpen automated blockers after this run: NONE if workflow is green.\n' > release-evidence/day3/defects.md
+          cat /tmp/day3/day1.txt /tmp/day3/day2.txt /tmp/day3/day3.txt /tmp/day3/galvicare-preservation.txt /tmp/day3/production-isolation.txt /tmp/day3/galvicare-post-runtime.txt /tmp/day3/evidence-verification.txt /tmp/day3/rollback-verification.txt > release-evidence/day3/automated-tests.txt
+          printf '{"day1":"PASS","day2":"PASS","day3":"PASS","galvicare_source_preservation":"PASS","production_isolation":"PASS","mandatory_skipped":0,"h3_1_through_h3_13":"PASS","direct_d1":"PASS","production_non_mutation":"PASS","rollback_dry_run":"PASS"}\n' > release-evidence/day3/automated-tests.json
+          printf '# Defects\n\nCross-product workflow mutation: RESOLVED by removing self-modifying workflow behavior.\nLegacy GalviCare stabilization contamination: RESOLVED; the known broad 143-test legacy suite is not a GalviVault Day 3 acceptance gate. GalviCare preservation is proven by byte-identical protected runtime/Production sources against the established completion baseline, unchanged package-script contracts, environment-isolation tests, and before/after hashes.\nDay 3 QA Worker authority split: RESOLVED; Days 1-3 advance one existing GalviVault QA Worker.\nMigration ID collision: RESOLVED; sequence is 0001 -> 0002 -> 0003 with partial-state stop/reconcile.\nOpen automated blockers after this run: NONE if workflow is green.\n' > release-evidence/day3/defects.md
           printf '# Rollback\n\nTarget: worker/day2.js + wrangler.day2.json on the same GalviVault QA Worker.\nValidation: Day 1 regression PASS; Day 2 regression PASS; Wrangler deploy dry-run PASS.\nData handling: preserve additive schema 0003 and all evidence history; no destructive down migration.\nProduction mutation: none.\n' > release-evidence/day3/rollback.md
           if [ "$HUMAN_CONFIRMED" = "true" ] && [ -n "$TESTER_NAME" ]; then FINAL='DAY 3 HUMAN E2E PASS → DAY 3 BUILD FINAL'; else FINAL='AUTOMATED DAY 3 E2E PASS → AUTHORIZED HUMAN EVIDENCE CONFIRMATION REQUIRED'; fi
           printf '# Human E2E\n\nH3.1-H3.13 runtime execution: PASS\nDirect QA D1 proof: PASS\nAuthorized evidence review: %s\nTester: %s\n' "$HUMAN_CONFIRMED" "${TESTER_NAME:-not supplied}" > release-evidence/day3/human-e2e.md
-          printf '# Final Gate\n\nDay 1 regression: PASS\nDay 2 regression: PASS\nDay 3 BLOCK/runtime/D1: PASS\nGalviCare regression: PASS\nProduction non-mutation: PASS\nRollback dry-run: PASS\nAuthorized tester: %s\nHuman confirmation: %s\n\n%s\n' "${TESTER_NAME:-not supplied}" "$HUMAN_CONFIRMED" "$FINAL" > release-evidence/day3/final-gate.md
+          printf '# Final Gate\n\nDay 1 regression: PASS\nDay 2 regression: PASS\nDay 3 BLOCK/runtime/D1: PASS\nGalviCare source preservation: PASS\nProduction non-mutation: PASS\nRollback dry-run: PASS\nAuthorized tester: %s\nHuman confirmation: %s\n\n%s\n' "${TESTER_NAME:-not supplied}" "$HUMAN_CONFIRMED" "$FINAL" > release-evidence/day3/final-gate.md
           printf '# GalviVault Day 3 Release Evidence\n\nCandidate: %s\nQA Worker: galvivault-p0-day1-qa\nQA D1: galvivault-0-5-qa\nSchema: 0003\nEvidence inventory: baseline, changed files, tests, migration, deployment, D1 assertions, evidence trace, import reconciliation, Human E2E, defects, rollback, final gate.\n' "$GITHUB_SHA" > release-evidence/day3/README.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -289,7 +323,7 @@ jobs:
           echo '- Day 1 regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 2 regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- H3.1-H3.13 + direct QA D1 proof: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviCare regression and source non-mutation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviCare protected-source preservation: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production non-mutation: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Rollback candidate dry-run: PASS' >> "$GITHUB_STEP_SUMMARY"
           if [ "$HUMAN_CONFIRMED" = "true" ] && [ -n "$TESTER_NAME" ]; then echo '**DAY 3 HUMAN E2E PASS → DAY 3 BUILD FINAL**' >> "$GITHUB_STEP_SUMMARY"; else echo '**AUTOMATED DAY 3 E2E PASS → AUTHORIZED HUMAN EVIDENCE CONFIRMATION REQUIRED**' >> "$GITHUB_STEP_SUMMARY"; fi
