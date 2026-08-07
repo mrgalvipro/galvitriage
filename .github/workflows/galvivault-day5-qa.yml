@@ -21,6 +21,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: galvivault-day5-qa
+  cancel-in-progress: true
+
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -52,14 +56,29 @@ jobs:
           test -n "$CLOUDFLARE_API_TOKEN"
           test -n "$CLOUDFLARE_ACCOUNT_ID"
 
-      - name: Apply Day 5 migration to isolated QA D1
-        run: npx --yes wrangler@4.120.0 d1 migrations apply DB --remote --config wrangler.day5.json
+      - name: Inspect canonical Day 5 migration ledger
+        run: |
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id='0005';" | tee day5-migration-before.txt
+
+      - name: Apply only Day 5 migration when absent
+        run: |
+          if grep -q "day5_governed_care_v1" day5-migration-before.txt; then
+            echo "Migration 0005 already complete."
+          else
+            npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --file migrations/day1/0005_day5_governed_care.sql
+          fi
 
       - name: Capture direct remote D1 schema assertions
         run: |
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id='0005';" | tee day5-d1-migration.txt
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT type,name FROM sqlite_master WHERE name IN ('idx_recommendations_bmr','idx_treatment_plans_bmr','idx_treatment_events_plan','idx_outcomes_bmr','idx_feedback_target','idx_adapter_status','trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete') ORDER BY type,name;" | tee day5-d1-schema.txt
-          grep -q "0005" day5-d1-migration.txt
+          grep -q "day5_governed_care_v1" day5-d1-migration.txt
+          grep -q "idx_recommendations_bmr" day5-d1-schema.txt
+          grep -q "idx_treatment_plans_bmr" day5-d1-schema.txt
+          grep -q "idx_treatment_events_plan" day5-d1-schema.txt
+          grep -q "idx_outcomes_bmr" day5-d1-schema.txt
+          grep -q "idx_feedback_target" day5-d1-schema.txt
+          grep -q "idx_adapter_status" day5-d1-schema.txt
           grep -q "trg_gv1_treatment_events_no_update" day5-d1-schema.txt
           grep -q "trg_gv1_treatment_events_no_delete" day5-d1-schema.txt
 
@@ -88,6 +107,7 @@ jobs:
         with:
           name: galvivault-day5-hosted-evidence-${{ github.sha }}
           path: |
+            day5-migration-before.txt
             day5-d1-migration.txt
             day5-d1-schema.txt
             day5-deploy.txt
