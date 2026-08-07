@@ -1,0 +1,97 @@
+name: GalviVault Day 5 QA Governed Care
+
+on:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - '.github/workflows/galvivault-day5-qa.yml'
+      - 'migrations/day1/0005_day5_governed_care.sql'
+      - 'worker/day5-entry.js'
+      - 'worker/day5-common.js'
+      - 'worker/domain/care-service.js'
+      - 'worker/domain/day5-timeline-service.js'
+      - 'worker/repositories/care-repository.js'
+      - 'worker/routes/care.js'
+      - 'tests/day5-care.test.mjs'
+      - 'wrangler.day5.json'
+      - 'package.json'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DAY5_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
+
+jobs:
+  day5-gate-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact QA candidate
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Prove QA-only configuration
+        run: |
+          node -e "const w=require('./wrangler.day5.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='0005'||w.d1_databases?.[0]?.binding!=='DB'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
+          test ! -e wrangler.production.day5.json
+
+      - name: Day 5 local contract and regression gate
+        run: npm run day5:gate
+
+      - name: Require Cloudflare credentials
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN"
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Apply Day 5 migration to isolated QA D1
+        run: npx --yes wrangler@4.120.0 d1 migrations apply DB --remote --config wrangler.day5.json
+
+      - name: Capture direct remote D1 schema assertions
+        run: |
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id='0005';" | tee day5-d1-migration.txt
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT type,name FROM sqlite_master WHERE name IN ('idx_recommendations_bmr','idx_treatment_plans_bmr','idx_treatment_events_plan','idx_outcomes_bmr','idx_feedback_target','idx_adapter_status','trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete') ORDER BY type,name;" | tee day5-d1-schema.txt
+          grep -q "0005" day5-d1-migration.txt
+          grep -q "trg_gv1_treatment_events_no_update" day5-d1-schema.txt
+          grep -q "trg_gv1_treatment_events_no_delete" day5-d1-schema.txt
+
+      - name: Deploy cumulative Day 5 QA Worker
+        run: npx --yes wrangler@4.120.0 deploy --config wrangler.day5.json | tee day5-deploy.txt
+
+      - name: Wait for Worker convergence
+        run: sleep 12
+
+      - name: Verify deployed Day 5 readiness
+        run: |
+          curl --fail --silent --show-error "$DAY5_QA_URL/health" | tee day5-health.json
+          curl --fail --silent --show-error "$DAY5_QA_URL/ready" | tee day5-ready.json
+          curl --fail --silent --show-error "$DAY5_QA_URL/api/v1/day5/readiness" | tee day5-readiness.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const r=JSON.parse(fs.readFileSync('day5-readiness.json','utf8'));
+          if(!r.success||r.environment!=='qa'||!r.data?.ready||r.data?.current_schema_version!=='0005'||r.data?.required_schema_version!=='0005'){
+            console.error(r); process.exit(1);
+          }
+          NODE
+
+      - name: Upload Day 5 hosted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: galvivault-day5-hosted-evidence-${{ github.sha }}
+          path: |
+            day5-d1-migration.txt
+            day5-d1-schema.txt
+            day5-deploy.txt
+            day5-health.json
+            day5-ready.json
+            day5-readiness.json
+          if-no-files-found: warn
