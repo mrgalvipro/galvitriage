@@ -1,0 +1,20 @@
+
+ ⛅️ wrangler 4.120.0
+────────────────────
+
+Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+Total Upload: 281.23 KiB / gzip: 48.45 KiB
+Your Worker has access to the following bindings:
+Binding                                                                     Resource                  
+env.DB (galvivault-0-5-qa)                                                  D1 Database               
+env.ENVIRONMENT ("qa")                                                      Environment Variable      
+env.FIXTURE_MODE ("true")                                                   Environment Variable      
+env.API_VERSION ("v1")                                                      Environment Variable      
+env.MIN_SCHEMA_VERSION ("0005")                                             Environment Variable      
+env.ALLOWED_ORIGINS ("https://galvipro.com,https://www.galv...")            Environment Variable      
+env.STRIPE_WEBHOOK_SECRET ("(hidden)")                                      Environment Variable      
+
+Uploaded galvivault-p0-day1-qa (1.43 sec)
+Deployed galvivault-p0-day1-qa triggers (0.44 sec)
+  https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
+Current Version ID: 06a9c9d6-5d29-454b-a2ac-a65769c36a47

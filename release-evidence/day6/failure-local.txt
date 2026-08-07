@@ -1,0 +1,2 @@
+RC-001 PASS: missing DB fails closed with GV_DB_UNAVAILABLE
+RC-002 PASS: stale schema readiness is 503 and ready=false

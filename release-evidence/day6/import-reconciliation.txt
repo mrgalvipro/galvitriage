@@ -1,0 +1,9 @@
+{
+  "F10": "PASS",
+  "import_batch_id": "imp_eb3f29f1254f4802940af0f277cf2fdc",
+  "processed": 3,
+  "imported": 1,
+  "skipped": 1,
+  "error": 1,
+  "status": "completed_with_errors"
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "results": [
+      {
+        "migration_id": "0001"
+      },
+      {
+        "migration_id": "0002"
+      },
+      {
+        "migration_id": "0003"
+      },
+      {
+        "migration_id": "0004"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  }
+]

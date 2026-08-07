@@ -1,0 +1,7 @@
+{
+  "CORS": "PASS",
+  "authZ": "PASS",
+  "HT_012": "PASS",
+  "PF_001_003": "PASS",
+  "max_limit": 200
+}

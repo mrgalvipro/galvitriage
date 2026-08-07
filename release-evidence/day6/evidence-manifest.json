@@ -1,0 +1,31 @@
+{
+  "candidate_commit": "20b32e84d49b4a1aaf48612e38e74a89358d5923",
+  "branch": "qa-revamped-galvicare-0-5",
+  "qa_worker": "galvivault-p0-day1-qa",
+  "qa_d1": "galvivault-0-5-qa",
+  "schema_version": "0005",
+  "generated_at": "2026-08-07T21:48:19.473Z",
+  "files": {
+    "automated-tests.txt": "836b2ed105e558f2e2727ff46dc101ec105a55ef87b14696d3e3442e39fda8b2",
+    "baseline.txt": "d29eaa12cca67234b2264a77a33344565469d38a154817243c7efb5c17037c56",
+    "daily-gate.md": "ed4e01563e6948ef72d738f24ca1746c67e61d2154eff07ed7d7e6266345a240",
+    "database-assertions.json": "45f0a1c99775d19a003a1c43ff0c0d3d9974f6a1f923e12d60dd95c68dbe48b2",
+    "defects.md": "850ad95d5d7110d1d5b2cd00954a6b86f0157f55992d9910ee29b1ceeabf5fb2",
+    "deploy-candidate.log": "17460310a00c90f3970b2c7ea5226110b845832da2133ed20c158bdfd071377f",
+    "deployed-e2e.json": "432e6de632cc38f1dec4e62cb732a158dc5ad56c84ce3ae0d62df48656f6a664",
+    "deployed-url.txt": "0bdd1617a642f462b9325c80c9c935d7d2e40e261a05ca8de820caa552365d63",
+    "failure-local.txt": "70a3eaaf17cfed2c021e426a1abd7762d1d98956052d5f4eb5113e46c9c0fa64",
+    "human-e2e-preflight.md": "b8d809cca5692816179a09f3a02705030b63f53d459f4252211b3c8cc3834845",
+    "import-reconciliation.txt": "932fbb2e18f758bd0d4937bfec0e0ba7cbf578e5e4c191cbc7719ca34b9906e7",
+    "migration-clean.json": "011a1e3003605484f323bb5c2178b5032b7759792ce0be16d5e4c3bc824f1b92",
+    "migration-upgrade-after.json": "f0806c75db3e4e1677bcc5092f725e476a55d6b9f0af0e78caf37022b0566339",
+    "migration-upgrade-before.json": "8807051e084364f6d8a6585ebf48a4b14620460d89e445aa14658b12814f79e3",
+    "production-baseline-smoke.txt": "40c23f578dac771b293607813c5defda85840f3fa2fd7d31e73016cbbee08fd9",
+    "readiness.json": "0c6bd623bf7c7fbb3ea49082916ad4b426cbcf90c7cc2c6ae2d928d4e096dbcf",
+    "remote-schema.json": "5b0dac9388cb249fa9c67602c031dc6172a71417d765275de02cf1bb29fff7cf",
+    "restore-day5.log": "31f5867095766c5336505d1fb2a9c828531a22a26f30a57c77e363cb6d4d7c80",
+    "rollback-day4.log": "add3105b0fe648a4840669fd60476a9609b25b3c974161f5cf6390e0aed54067",
+    "rollback-result.txt": "6408fc783ac4a7f76c69c9ef85bfb0423186333b0d223adde0748d1df58fd181",
+    "security-performance.txt": "4da636ebb57d7943fcfc2ae7ec1d53d90e2204f14ddcab24dfadaef7e63792f0"
+  }
+}

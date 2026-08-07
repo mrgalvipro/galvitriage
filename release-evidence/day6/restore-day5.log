@@ -1,0 +1,18 @@
+
+ ⛅️ wrangler 4.120.0
+────────────────────
+Total Upload: 281.23 KiB / gzip: 48.45 KiB
+Your Worker has access to the following bindings:
+Binding                                                                     Resource                  
+env.DB (galvivault-0-5-qa)                                                  D1 Database               
+env.ENVIRONMENT ("qa")                                                      Environment Variable      
+env.FIXTURE_MODE ("true")                                                   Environment Variable      
+env.API_VERSION ("v1")                                                      Environment Variable      
+env.MIN_SCHEMA_VERSION ("0005")                                             Environment Variable      
+env.ALLOWED_ORIGINS ("https://galvipro.com,https://www.galv...")            Environment Variable      
+env.STRIPE_WEBHOOK_SECRET ("(hidden)")                                      Environment Variable      
+
+Uploaded galvivault-p0-day1-qa (1.56 sec)
+Deployed galvivault-p0-day1-qa triggers (0.57 sec)
+  https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
+Current Version ID: 4e6f8834-6205-4952-8310-7ea182d77a7d
