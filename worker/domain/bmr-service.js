@@ -7,36 +7,57 @@ export async function getTimeline(env,bmrId,{limit=100}={}){
   if(!bmr) throw new GVError('GV_NOT_FOUND','BMR was not found.',404);
   const safeLimit=Math.max(1,Math.min(200,Number(limit)||100));
 
-  // Keep each D1 query simple and independently bindable. The previous compound
-  // UNION query passed local SQLite tests but returned GV_INTERNAL from deployed
-  // Cloudflare D1 at H4.14. Merge the bounded typed projections in Worker code so
-  // the canonical timeline remains deterministic without relying on a compound
-  // remote SQL execution path.
-  const [sessions,evidence,observations,hypotheses,findings,governance] = await Promise.all([
-    all(env.DB,`SELECT session_id AS canonical_id,NULL AS version_no,COALESCE(started_at,created_at) AS occurred_at,source,NULL AS correlation_id
-      FROM gv1_assessment_sessions WHERE bmr_id=? ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,safeLimit),
-    all(env.DB,`SELECT evidence_id AS canonical_id,version_no,COALESCE(captured_at,created_at) AS occurred_at,source_type AS source,NULL AS correlation_id
-      FROM gv1_evidence_items WHERE bmr_id=? ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,safeLimit),
-    all(env.DB,`SELECT observation_id AS canonical_id,version_no,created_at AS occurred_at,source_type AS source,correlation_id
-      FROM gv1_observations WHERE bmr_id=? ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,safeLimit),
-    all(env.DB,`SELECT hypothesis_id AS canonical_id,version_no,created_at AS occurred_at,source_type AS source,correlation_id
-      FROM gv1_hypotheses WHERE bmr_id=? ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,safeLimit),
-    all(env.DB,`SELECT finding_id AS canonical_id,version_no,created_at AS occurred_at,source_type AS source,correlation_id
-      FROM gv1_findings WHERE bmr_id=? ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,safeLimit),
-    all(env.DB,`SELECT entity_id AS canonical_id,new_version AS version_no,occurred_at,source,operation AS safe_summary,correlation_id
-      FROM gv1_audit_log
-      WHERE (entity_type='business_medical_record' AND entity_id=?)
-         OR (entity_type='finding' AND entity_id IN (SELECT finding_id FROM gv1_findings WHERE bmr_id=?))
-      ORDER BY occurred_at,canonical_id LIMIT ?`,bmrId,bmrId,safeLimit)
-  ]);
+  // H4.14 is a read-only projection. Keep remote D1 execution deliberately
+  // conservative: sequential, single-table, parameterized reads only. Perform
+  // timestamp fallback, typing, merge, and final ordering in Worker memory.
+  // This avoids coupling acceptance to compound SQL, alias ordering, nested
+  // subqueries, or concurrent multi-statement behavior that local SQLite can
+  // accept while the deployed D1 path rejects.
+  const sessions=await all(env.DB,`SELECT session_id,started_at,created_at,source
+    FROM gv1_assessment_sessions WHERE bmr_id=? LIMIT ?`,bmrId,safeLimit);
+  const evidence=await all(env.DB,`SELECT evidence_id,version_no,captured_at,created_at,source_type
+    FROM gv1_evidence_items WHERE bmr_id=? LIMIT ?`,bmrId,safeLimit);
+  const observations=await all(env.DB,`SELECT observation_id,version_no,created_at,source_type,correlation_id
+    FROM gv1_observations WHERE bmr_id=? LIMIT ?`,bmrId,safeLimit);
+  const hypotheses=await all(env.DB,`SELECT hypothesis_id,version_no,created_at,source_type,correlation_id
+    FROM gv1_hypotheses WHERE bmr_id=? LIMIT ?`,bmrId,safeLimit);
+  const findings=await all(env.DB,`SELECT finding_id,version_no,created_at,source_type,correlation_id
+    FROM gv1_findings WHERE bmr_id=? LIMIT ?`,bmrId,safeLimit);
+  const governance=await all(env.DB,`SELECT journey_event_id,event_name,occurred_at,correlation_id
+    FROM gv1_journey_events
+    WHERE bmr_id=? AND event_name IN ('finding_confirmed','finding_rejected') LIMIT ?`,bmrId,safeLimit);
 
-  const typed = [
-    ...sessions.map(row=>({...row,entry_type:'session',safe_summary:'assessment session'})),
-    ...evidence.map(row=>({...row,entry_type:'evidence',safe_summary:'evidence'})),
-    ...observations.map(row=>({...row,entry_type:'observation',safe_summary:'observation'})),
-    ...hypotheses.map(row=>({...row,entry_type:'hypothesis',safe_summary:'hypothesis'})),
-    ...findings.map(row=>({...row,entry_type:'finding',safe_summary:'finding'})),
-    ...governance.map(row=>({...row,entry_type:'governance',safe_summary:row.safe_summary||'governance'}))
+  const typed=[
+    ...sessions.map(row=>({
+      entry_type:'session',canonical_id:row.session_id,version_no:null,
+      occurred_at:row.started_at||row.created_at,source:row.source||null,
+      safe_summary:'assessment session',correlation_id:null
+    })),
+    ...evidence.map(row=>({
+      entry_type:'evidence',canonical_id:row.evidence_id,version_no:row.version_no??null,
+      occurred_at:row.captured_at||row.created_at,source:row.source_type||null,
+      safe_summary:'evidence',correlation_id:null
+    })),
+    ...observations.map(row=>({
+      entry_type:'observation',canonical_id:row.observation_id,version_no:row.version_no??null,
+      occurred_at:row.created_at,source:row.source_type||null,
+      safe_summary:'observation',correlation_id:row.correlation_id||null
+    })),
+    ...hypotheses.map(row=>({
+      entry_type:'hypothesis',canonical_id:row.hypothesis_id,version_no:row.version_no??null,
+      occurred_at:row.created_at,source:row.source_type||null,
+      safe_summary:'hypothesis',correlation_id:row.correlation_id||null
+    })),
+    ...findings.map(row=>({
+      entry_type:'finding',canonical_id:row.finding_id,version_no:row.version_no??null,
+      occurred_at:row.created_at,source:row.source_type||null,
+      safe_summary:'finding',correlation_id:row.correlation_id||null
+    })),
+    ...governance.map(row=>({
+      entry_type:'governance',canonical_id:row.journey_event_id,version_no:null,
+      occurred_at:row.occurred_at,source:'governance-service',
+      safe_summary:row.event_name,correlation_id:row.correlation_id||null
+    }))
   ];
 
   typed.sort((a,b)=>{
