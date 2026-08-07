@@ -25,7 +25,7 @@ export async function getTimeline(env,bmrId,{limit=100}={}){
     FROM gv1_findings WHERE bmr_id=? LIMIT ?`,bmrId,safeLimit);
   const governance=await all(env.DB,`SELECT journey_event_id,event_name,occurred_at,correlation_id
     FROM gv1_journey_events
-    WHERE bmr_id=? AND event_name IN ('finding_confirmed','finding_rejected') LIMIT ?`,bmrId,safeLimit);
+    WHERE bmr_id=? AND event_name IN ('finding_confirmed','finding_rejected','bmr_assessment_in_progress','bmr_under_review') LIMIT ?`,bmrId,safeLimit);
 
   const typed=[
     ...sessions.map(row=>({
