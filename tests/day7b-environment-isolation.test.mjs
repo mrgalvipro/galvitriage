@@ -27,14 +27,23 @@ test('Day 7A Worker remains the QA/build source without product-logic rewrite', 
   ]);
 });
 
-test('Production has a separate security boundary around the approved Day 7D runtime', () => {
-  expectIncludes(prodWrangler, ['"main": "worker/production-entry.js"']);
-  expectIncludes(prodEntry, [
-    "import day7dWorker from './day7d-engine.js'",
-    "DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v1'",
-    "DAY7D_PRODUCTION_MARKER = 'day7d-cumulative-customer-intelligence-v1'"
+test('Production keeps the current GalviCare security boundary and approved entry point', () => {
+  expectIncludes(prodWrangler, [
+    '"name": "galvicare-0-5-production"',
+    '"main": "worker/production-entry.js"',
+    '"ENVIRONMENT": "production"',
+    '"APP_ENV": "production"',
+    '"RELEASE_BRANCH": "main"'
   ]);
-  expectExcludes(prodEntry, ["import day7aWorker from './worker.js'"]);
+  expectIncludes(prodEntry, [
+    "import day7aWorker from './worker.js'",
+    "DAY7B_RUNTIME_MARKER = 'day7b-production-isolation-v4'",
+    "ENVIRONMENT: 'production'",
+    "APP_ENV: 'production'",
+    "RELEASE_BRANCH: 'main'",
+    "GALVIVAULT_NAME: 'galvivault-0-5-production'"
+  ]);
+  expectExcludes(prodEntry, ["import day7dWorker from './day7d-engine.js'"]);
 });
 
 test('Day 1, Day 7D and Production Worker services are distinct', () => {
@@ -46,7 +55,10 @@ test('Day 1, Day 7D and Production Worker services are distinct', () => {
     '"name": "galvicare-triage-intake"',
     '"main": "worker/day7d-engine.js"'
   ]);
-  expectIncludes(prodWrangler, ['"name": "galvicare-0-5-production"']);
+  expectIncludes(prodWrangler, [
+    '"name": "galvicare-0-5-production"',
+    '"main": "worker/production-entry.js"'
+  ]);
 });
 
 test('QA and Production D1 targets are physically distinct', () => {
@@ -56,7 +68,7 @@ test('QA and Production D1 targets are physically distinct', () => {
   expectExcludes(prodWrangler, [QA_D1_ID, 'galvivault-0-5-qa']);
 });
 
-test('Production runtime is explicitly production and customer-origin only', () => {
+test('Production runtime is explicitly production with an exact origin allowlist', () => {
   expectIncludes(prodWrangler, [
     '"ENVIRONMENT": "production"',
     '"APP_ENV": "production"',
@@ -64,41 +76,53 @@ test('Production runtime is explicitly production and customer-origin only', () 
     '"preview_urls": false'
   ]);
   expectIncludes(prodEntry, [
-    "const PRODUCTION_ORIGIN = 'https://www.galvipro.com'",
-    'origin !== PRODUCTION_ORIGIN'
+    "const PRODUCTION_ORIGINS = new Set([",
+    "'https://www.galvipro.com'",
+    "const PRIMARY_PRODUCTION_ORIGIN = 'https://www.galvipro.com'",
+    '!PRODUCTION_ORIGINS.has(origin)',
+    "'Access-Control-Allow-Origin': origin"
   ]);
   expectExcludes(prodEntry, ["'Access-Control-Allow-Origin': '*'", '"Access-Control-Allow-Origin": "*"']);
 });
 
-test('QA-only fixture and override capabilities are denied by Production boundary', () => {
+test('QA-only fixture and override capabilities are denied by the current Production boundary', () => {
   expectIncludes(prodEntry, [
-    "action === 'get_fixture_result'",
-    "action === 'grant_test_override'",
+    "action === 'get_fixture_result' || action === 'grant_test_override'",
     'QA-only capability is unavailable in production.',
-    "status:'not_found'"
+    "status: 'not_found'"
   ]);
 });
 
-test('Production health fingerprint identifies RUN lane, Production GalviVault, DB binding, Stripe mode and Day 7D runtime', () => {
+test('Production health fingerprint identifies Production GalviVault, main release, DB binding and runtime', () => {
   expectIncludes(prodEntry, [
-    "environment:'production'",
-    "galvivault:'galvivault-0-5-production'",
-    "release_branch:'qa-revamped-galvicare-0-5'",
-    'db_bound:Boolean(env?.DB)',
-    'stripe_mode:stripeMode(env)',
-    'day7d_runtime_marker:DAY7D_PRODUCTION_MARKER'
+    "environment: 'production'",
+    "release_branch: 'main'",
+    "galvivault: 'galvivault-0-5-production'",
+    'db_bound: Boolean(env?.DB)',
+    'runtime_marker: DAY7B_RUNTIME_MARKER',
+    "day7a_runtime_marker: 'day7a-payment-products-v1'"
   ]);
 });
 
-test('Production payment return is fail-closed and requires Stripe LIVE paid authority', () => {
+test('Production payment return remains server-verified and cannot use a browser/test authority', () => {
+  expectIncludes(qaWorker, [
+    "const secret = String(env.STRIPE_SECRET_KEY || '').trim()",
+    "if (!secret) throw new Error('STRIPE_SECRET_KEY is required for Worker-side Stripe Checkout Session verification.')",
+    "Authorization: `Bearer ${secret}`",
+    "const paymentStatus = String(session?.payment_status || '').toLowerCase()",
+    "paymentStatus === 'paid'",
+    "if (!isStripePaid(stripeSession))",
+    "Stripe payment is not complete."
+  ]);
   expectIncludes(prodEntry, [
-    "if (stripeMode(env) !== 'live')",
-    "stripeSession.livemode === true",
-    "paymentStatus !== 'paid'",
-    'paymentIntent',
-    'payment_amount_mismatch',
-    'payment_product_mismatch',
-    'A verified Stripe LIVE paid transaction is required before GalviCare can unlock this product.'
+    'return delegate(request, env, ctx, payload)',
+    'day7aWorker.fetch(request, productionEnv(env, request), ctx)'
+  ]);
+  expectExcludes(prodEntry, [
+    'grant_test_override',
+    'QA_OVERRIDE_SECRET',
+    'TEST_OVERRIDE_SECRET',
+    'buy.stripe.com/test_'
   ]);
 });
 
@@ -107,6 +131,7 @@ test('Production config contains no QA-only D1 or test-payment authority', () =>
     'galvivault-0-5-qa',
     'buy.stripe.com/test_',
     'QA_OVERRIDE_SECRET',
-    'TEST_OVERRIDE_SECRET'
+    'TEST_OVERRIDE_SECRET',
+    '"FIXTURE_MODE": "true"'
   ]);
 });
