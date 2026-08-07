@@ -13,7 +13,6 @@ export async function confirmFinding(env,ctx,actor,key,input){
   const finding=await findFinding(env.DB,findingId);
   if(!finding) throw new GVError('GV_NOT_FOUND','Finding was not found.',404);
   const expected=Number(input.expected_version);
-  if(!Number.isInteger(expected)||expected!==Number(finding.governance_version)) throw new GVError('GV_VERSION_CONFLICT','expected_version does not match the current governance version.',409);
   const decision=enumValue('decision',input.decision,['confirm','reject']);
   const reason=requireText('reason',input.reason,500);
   const fp=await hash('day4:governance:finding',{findingId,expected,decision,reason,actor});
@@ -22,6 +21,7 @@ export async function confirmFinding(env,ctx,actor,key,input){
     if(prior.request_fingerprint!==fp) throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH','The idempotency key was reused with different content.',409);
     return {finding:await findFinding(env.DB,prior.response_entity_id),idempotent_replay:true};
   }
+  if(!Number.isInteger(expected)||expected!==Number(finding.governance_version)) throw new GVError('GV_VERSION_CONFLICT','expected_version does not match the current governance version.',409);
   const timestamp=now(); const nextGovernance=Number(finding.governance_version)+1; const confirmationStatus=decision==='confirm'?'confirmed':'rejected';
   const bmr=await findBmr(env.DB,finding.bmr_id); const sessionId=await sessionForBmr(env.DB,bmr);
   await env.DB.batch([
