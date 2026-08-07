@@ -28,9 +28,12 @@ const assertConfig = (name, cfg, main, schema) => {
   const db = cfg.d1_databases?.find((entry) => entry.binding === 'DB');
   for (const [key, value] of Object.entries(expectedDb)) if (db?.[key] !== value) throw new Error(`${name} DB ${key} changed`);
 };
+
+// Days 1-3 intentionally advance one existing GalviVault QA Worker authority.
+// The entry point and minimum schema advance; the Worker identity and QA D1 do not.
 assertConfig('galvivault-p0-day1-qa', day1, 'worker/day1.js', '0001');
 assertConfig('galvivault-p0-day1-qa', day2, 'worker/day2.js', '0002');
-assertConfig('galvivault-p0-day3-qa', day3, 'worker/day3-entry.js', '0003');
+assertConfig('galvivault-p0-day1-qa', day3, 'worker/day3-entry.js', '0003');
 
 const worker = await readFile('worker/day3.js', 'utf8');
 for (const marker of ['/api/v1/evidence','evidence_accepted','evidence_superseded','GV_EVIDENCE_IMMUTABLE','gv1_import_row_receipts','processed_count','supersedes_evidence_id']) {
@@ -47,4 +50,4 @@ for (const marker of ['trg_gv1_accepted_evidence_no_update','gv1_import_row_rece
 }
 if (migration.includes("('0002', 'day3_evidence_versioning_v1'")) throw new Error('Day 3 migration must not reuse Day 2 ledger ID 0002');
 
-console.log(JSON.stringify({ success: true, gate: 'verify:day3:files', day1_entry: day1.main, day2_entry: day2.main, day3_entry: day3.main, day3_schema: day3.vars.MIN_SCHEMA_VERSION, database_name: expectedDb.database_name }, null, 2));
+console.log(JSON.stringify({ success: true, gate: 'verify:day3:files', worker_name: day3.name, day1_entry: day1.main, day2_entry: day2.main, day3_entry: day3.main, day3_schema: day3.vars.MIN_SCHEMA_VERSION, database_name: expectedDb.database_name }, null, 2));
