@@ -599,7 +599,11 @@ async function createImportBatch(request, cfg, corr, origin) {
   const sourceChecksum = input.source_checksum ? requireText('source_checksum', input.source_checksum, 240) : null;
   const expected = Number(input.expected_count);
   if (!Number.isInteger(expected) || expected < 0) throw new GVError('GV_REQ_SCHEMA', 'expected_count must be a non-negative integer.', 422);
-  const fingerprint = await hash('import-batch-create', { sourceName, sourceChecksum, expected });
+  const eventBmrId = input.bmr_id ? requireId('bmr_id', input.bmr_id) : null;
+  const eventSessionId = input.session_id ? requireId('session_id', input.session_id) : null;
+  if (Boolean(eventBmrId) !== Boolean(eventSessionId)) throw new GVError('GV_REQ_SCHEMA', 'bmr_id and session_id must be supplied together for scoped import evidence.', 422);
+  if (eventBmrId) await loadScope(cfg.db, eventBmrId, eventSessionId);
+  const fingerprint = await hash('import-batch-create', { sourceName, sourceChecksum, expected, eventBmrId, eventSessionId });
   const replay = await checkReplay(cfg.db, 'import:batch:create', key, fingerprint);
   if (replay) {
     const existing = await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, replay.response_entity_id);
@@ -607,27 +611,32 @@ async function createImportBatch(request, cfg, corr, origin) {
   }
   const timestamp = now();
   const batchId = newId('imp');
-  await cfg.db.batch([
+  const statements = [
     cfg.db.prepare(`INSERT INTO gv1_import_batches
-      (import_batch_id,source_type,status,started_at,completed_at,created_at,source_name,source_checksum,environment,expected_count,
+      (import_batch_id,source_system,source_reference,status,started_at,completed_at,created_at,source_name,source_checksum,environment,expected_count,
        processed_count,imported_count,skipped_count,error_count,created_by,updated_at)
-      VALUES (?,'targeted_day3','open',?,NULL,?,?,?,?,?,0,0,0,0,?,?)`).bind(
-      batchId, timestamp, timestamp, sourceName, sourceChecksum, cfg.environment, expected, resolvedActor.id, timestamp
-    ),
-    cfg.db.prepare(`INSERT INTO gv1_journey_events
+      VALUES (?,'targeted_day3',?,'open',?,NULL,?,?,?,?,?,0,0,0,0,?,?)`).bind(
+      batchId, sourceName, timestamp, timestamp, sourceName, sourceChecksum, cfg.environment, expected, resolvedActor.id, timestamp
+    )
+  ];
+  if (eventBmrId && eventSessionId) {
+    statements.push(cfg.db.prepare(`INSERT INTO gv1_journey_events
       (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
-      VALUES (?, ?, NULL, NULL, 'import_batch_created','GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
-      newId('jev'), `day3:import_batch_created:${batchId}`, timestamp, resolvedActor.role,
-      JSON.stringify({ import_batch_id: batchId, expected_count: expected }), fingerprint, corr, cfg.environment, timestamp
-    ),
+      VALUES (?,?,?,?,?,'GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
+      newId('jev'), `day3:import_batch_created:${batchId}`, eventBmrId, eventSessionId, 'import_batch_created', timestamp,
+      resolvedActor.role, JSON.stringify({ import_batch_id: batchId, expected_count: expected }), fingerprint, corr, cfg.environment, timestamp
+    ));
+  }
+  statements.push(
     cfg.db.prepare(`INSERT INTO gv1_audit_log
       (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
       newId('aud'), 'import_batch', batchId, 'create', null, 1, resolvedActor.role, 'targeted_day3',
-      'day3_import_batch_created', JSON.stringify({ expected_count: expected }), corr, cfg.environment, timestamp, timestamp
+      'day3_import_batch_created', JSON.stringify({ expected_count: expected, bmr_id: eventBmrId, session_id: eventSessionId }), corr, cfg.environment, timestamp, timestamp
     ),
     receiptStmt(cfg.db, { scope: 'import:batch:create', key, fingerprint, status: 201, entityType: 'import_batch', entityId: batchId, timestamp })
-  ]);
+  );
+  await cfg.db.batch(statements);
   return ok(cfg, corr, origin, { batch: await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId) }, 201, 'created');
 }
 
@@ -653,16 +662,18 @@ async function importRow(request, cfg, corr, origin, batchId) {
   let resultType;
   let canonicalEntityId = null;
   let errorCode = null;
+  let rowBmrId = null;
+  let rowSessionId = null;
   try {
+    rowBmrId = requireId('bmr_id', command.bmr_id);
+    rowSessionId = command.session_id ? requireId('session_id', command.session_id) : null;
+    await loadScope(cfg.db, rowBmrId, rowSessionId);
     const typed = validateTyped(command);
-    const bmrId = requireId('bmr_id', command.bmr_id);
-    const sessionId = command.session_id ? requireId('session_id', command.session_id) : null;
-    await loadScope(cfg.db, bmrId, sessionId);
     const sourceToken = `import:${batchId}:${sourceRowKey}`;
     const duplicate = await first(cfg.db, `SELECT evidence_id FROM gv1_evidence_items WHERE bmr_id=? AND session_id IS ? AND source_type='imported_reference'
       AND value_type=? AND COALESCE(value_text,'')=COALESCE(?, '') AND COALESCE(value_number,-9.9e307)=COALESCE(?,-9.9e307)
       AND COALESCE(value_boolean,-1)=COALESCE(?,-1) AND COALESCE(value_date,'')=COALESCE(?,'') AND COALESCE(value_json,'')=COALESCE(?,'')
-      ORDER BY version_no DESC LIMIT 1`, bmrId, sessionId, typed.value_type, typed.value_text, typed.value_number, typed.value_boolean, typed.value_date, typed.value_json);
+      ORDER BY version_no DESC LIMIT 1`, rowBmrId, rowSessionId, typed.value_type, typed.value_text, typed.value_number, typed.value_boolean, typed.value_date, typed.value_json);
     if (duplicate) {
       resultType = 'skipped'; canonicalEntityId = duplicate.evidence_id;
       result = { source_row_key: sourceRowKey, result: 'skipped', canonical_entity_id: canonicalEntityId };
@@ -672,7 +683,7 @@ async function importRow(request, cfg, corr, origin, batchId) {
       const groupId = newId('evg');
       const capturedAt = command.captured_at ? validateCapturedAt(command.captured_at) : timestamp;
       const contentHash = await hash('evidence-content', {
-        bmr_id: bmrId, session_id: sessionId, source_type: 'imported_reference', source_ref: sourceToken,
+        bmr_id: rowBmrId, session_id: rowSessionId, source_type: 'imported_reference', source_ref: sourceToken,
         captured_at: capturedAt, consent_status: command.consent_status || null, ...typed
       });
       await cfg.db.batch([
@@ -681,7 +692,7 @@ async function importRow(request, cfg, corr, origin, batchId) {
            evidence_group_id,version_no,supersedes_evidence_id,source_type,source_ref,value_type,value_text,value_number,value_boolean,value_date,value_json,status,
            consent_status,source_actor_type,source_actor_id,captured_at,content_hash,rejection_reason,updated_at)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
-          evidenceId, bmrId, sessionId, typed.value_type, 'GalviVault', sourceToken,
+          evidenceId, rowBmrId, rowSessionId, typed.value_type, 'GalviVault', sourceToken,
           JSON.stringify({ value_type: typed.value_type, value_text: typed.value_text, value_number: typed.value_number,
             value_boolean: typed.value_boolean, value_date: typed.value_date, value_json: typed.value_json }),
           null, 1, timestamp, groupId, 1, null, 'imported_reference', sourceToken, typed.value_type,
@@ -691,7 +702,7 @@ async function importRow(request, cfg, corr, origin, batchId) {
         cfg.db.prepare(`INSERT INTO gv1_journey_events
           (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
           VALUES (?,?,?,?,?,'GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
-          newId('jev'), `day3:row_imported:${batchId}:${sourceRowKey}`, bmrId, sessionId, 'row_imported', timestamp,
+          newId('jev'), `day3:row_imported:${batchId}:${sourceRowKey}`, rowBmrId, rowSessionId, 'row_imported', timestamp,
           resolvedActor.role, JSON.stringify({ import_batch_id: batchId, source_row_key: sourceRowKey, evidence_id: evidenceId }),
           rowFingerprint, corr, cfg.environment, timestamp
         ),
@@ -712,13 +723,34 @@ async function importRow(request, cfg, corr, origin, batchId) {
     const errorId = newId('imp_err');
     const timestamp = now();
     const safePayload = JSON.stringify({ source_row_key: sourceRowKey, value_type: command.value_type || null });
-    await cfg.db.prepare(`INSERT INTO gv1_import_errors
-      (import_error_id,import_batch_id,row_number,error_code,error_message,safe_payload_json,created_at,
-       source_row_key,field_name,quarantined_payload_json,correlation_id)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(
-      errorId, batchId, null, error.code, error.message, safePayload, timestamp,
-      sourceRowKey, null, safePayload, corr
-    ).run();
+    const quarantineStatements = [
+      cfg.db.prepare(`INSERT INTO gv1_import_errors
+        (import_error_id,import_batch_id,source_row_reference,error_code,safe_error_message,safe_error_json,created_at,
+         source_row_key,field_name,quarantined_payload_json,correlation_id)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(
+        errorId, batchId, sourceRowKey, error.code, error.message, safePayload, timestamp,
+        sourceRowKey, null, safePayload, corr
+      )
+    ];
+    if (rowBmrId && rowSessionId) {
+      quarantineStatements.push(
+        cfg.db.prepare(`INSERT INTO gv1_journey_events
+          (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
+          VALUES (?,?,?,?,?,'GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
+          newId('jev'), `day3:row_quarantined:${batchId}:${sourceRowKey}`, rowBmrId, rowSessionId, 'row_quarantined', timestamp,
+          resolvedActor.role, JSON.stringify({ import_batch_id: batchId, source_row_key: sourceRowKey, error_code: error.code }),
+          rowFingerprint, corr, cfg.environment, timestamp
+        ),
+        cfg.db.prepare(`INSERT INTO gv1_audit_log
+          (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+          newId('aud'), 'import_error', errorId, 'quarantine', null, 1, resolvedActor.role, 'targeted_day3',
+          'day3_row_quarantined', JSON.stringify({ import_batch_id: batchId, source_row_key: sourceRowKey, error_code: error.code }),
+          corr, cfg.environment, timestamp, timestamp
+        )
+      );
+    }
+    await cfg.db.batch(quarantineStatements);
     result = { source_row_key: sourceRowKey, result: 'error', error_code: error.code };
   }
 
@@ -736,8 +768,8 @@ async function importRow(request, cfg, corr, origin, batchId) {
 
 async function closeImportBatch(request, cfg, corr, origin, batchId) {
   requireRuntime(cfg);
-  requireImport(request);
-  const input = await jsonBody(request);
+  const resolvedActor = requireImport(request);
+  await jsonBody(request);
   const key = idempotencyKey(request);
   batchId = requireId('import_batch_id', batchId);
   const fingerprint = await hash('import-batch-close', { import_batch_id: batchId });
@@ -753,16 +785,32 @@ async function closeImportBatch(request, cfg, corr, origin, batchId) {
   if (batch.expected_count !== null && Number(batch.expected_count) !== processed) throw new GVError('GV_VERSION_CONFLICT', 'Processed count does not match expected_count.', 409);
   const status = errors > 0 ? 'completed_with_errors' : 'completed';
   const timestamp = now();
-  await cfg.db.batch([
-    cfg.db.prepare(`UPDATE gv1_import_batches SET status=?,completed_at=?,updated_at=? WHERE import_batch_id=? AND status IN ('open','validating','importing')`).bind(status, timestamp, timestamp, batchId),
-    cfg.db.prepare(`INSERT INTO gv1_journey_events
+  const eventScope = await first(cfg.db, `SELECT e.bmr_id,e.session_id
+    FROM gv1_import_row_receipts r
+    JOIN gv1_evidence_items e ON e.evidence_id=r.canonical_entity_id
+    WHERE r.import_batch_id=? AND e.bmr_id IS NOT NULL AND e.session_id IS NOT NULL
+    ORDER BY r.created_at LIMIT 1`, batchId);
+  const statements = [
+    cfg.db.prepare(`UPDATE gv1_import_batches SET status=?,completed_at=?,updated_at=? WHERE import_batch_id=? AND status IN ('open','validating','importing')`).bind(status, timestamp, timestamp, batchId)
+  ];
+  if (eventScope?.bmr_id && eventScope?.session_id) {
+    statements.push(cfg.db.prepare(`INSERT INTO gv1_journey_events
       (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
-      VALUES (?, ?, NULL, NULL, 'batch_reconciled','GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
-      newId('jev'), `day3:batch_reconciled:${batchId}`, timestamp, 'import',
+      VALUES (?,?,?,?,?,'GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
+      newId('jev'), `day3:batch_reconciled:${batchId}`, eventScope.bmr_id, eventScope.session_id, 'batch_reconciled', timestamp, resolvedActor.role,
       JSON.stringify({ import_batch_id: batchId, processed, imported, skipped, errors, status }), fingerprint, corr, cfg.environment, timestamp
+    ));
+  }
+  statements.push(
+    cfg.db.prepare(`INSERT INTO gv1_audit_log
+      (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      newId('aud'), 'import_batch', batchId, 'reconcile', null, 1, resolvedActor.role, 'targeted_day3',
+      'day3_batch_reconciled', JSON.stringify({ processed, imported, skipped, errors, status }), corr, cfg.environment, timestamp, timestamp
     ),
     receiptStmt(cfg.db, { scope: 'import:batch:close', key, fingerprint, status: 200, entityType: 'import_batch', entityId: batchId, timestamp })
-  ]);
+  );
+  await cfg.db.batch(statements);
   return ok(cfg, corr, origin, { batch: await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId), reconciled: true }, 200, status);
 }
 
