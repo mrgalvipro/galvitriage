@@ -1,7 +1,7 @@
 import day1Worker from './day1.js';
 
 const API_VERSION = 'v1';
-const REQUIRED_SCHEMA = '0002';
+const REQUIRED_SCHEMA = '0003';
 const VALUE_TYPES = new Set(['text','number','boolean','date','json','reference','file_reference']);
 const SOURCE_TYPES = new Set(['assessment_answer','facilitator_capture','imported_reference','file_reference','measurement','transcript_excerpt']);
 const OPERATOR_ROLES = new Set(['operator','service','admin']);
@@ -260,430 +260,544 @@ async function loadEvidence(db, evidenceId) {
 async function evidenceView(db, evidence) {
   if (!evidence) return null;
   const successor = await first(db, `SELECT evidence_id FROM gv1_evidence_items WHERE supersedes_evidence_id=? ORDER BY version_no LIMIT 1`, evidence.evidence_id);
-  const relationships = await all(db, `SELECT relationship_id,from_evidence_id,to_evidence_id,relationship_type,rationale,created_at
-    FROM gv1_evidence_relationships WHERE from_evidence_id=? OR to_evidence_id=? ORDER BY created_at`, evidence.evidence_id, evidence.evidence_id);
-  const answer = evidence.source_type === 'assessment_answer'
-    ? await first(db, `SELECT answer_id,answer_group_id,version_no,question_id,question_version,supersedes_answer_id FROM gv1_assessment_answers WHERE answer_id=?`, evidence.source_ref)
-    : null;
+  const relationships = await all(db, `SELECT relationship_id,from_evidence_id,to_evidence_id,relationship_type,rationale,created_at,correlation_id
+    FROM gv1_evidence_relationships WHERE from_evidence_id=? OR to_evidence_id=? ORDER BY created_at,relationship_id`, evidence.evidence_id, evidence.evidence_id);
   return {
     ...evidence,
+    value_boolean: evidence.value_boolean === null || evidence.value_boolean === undefined ? null : Boolean(evidence.value_boolean),
+    value_json: evidence.value_json ? JSON.parse(evidence.value_json) : null,
     is_current: !successor && !['rejected','archived'].includes(evidence.status),
     superseded_by_evidence_id: successor?.evidence_id || null,
-    relationships,
-    answer_trace: answer
+    relationships
   };
 }
 
-function eventStmt(db, { bmrId, sessionId, eventName, corr, cfg, timestamp, metadata }) {
-  if (!sessionId) return null;
-  const eventKey = `day3:${eventName}:${newId('evt')}`;
-  return db.prepare(`INSERT INTO gv1_journey_events
-    (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
-    VALUES (?,?,?,?,?,'GalviVault','Day3',?,'service',?,?,?,?,?)`)
-    .bind(newId('jev'), eventKey, bmrId, sessionId, eventName, timestamp,
-      JSON.stringify(metadata || {}), eventKey, corr, cfg.environment, timestamp);
+async function question(db, questionId, version) {
+  return first(db, `SELECT question_id,product,version,dimension,prompt,response_type,required_flag,minimum_value,maximum_value,weight,score_direction,status,effective_at,retired_at
+    FROM gv1_question_definitions WHERE question_id=? AND version=?`, questionId, version);
 }
 
-function auditStmt(db, { entityType, entityId, operation, priorVersion, newVersion, actorInfo, reason, corr, cfg, timestamp, change }) {
-  return db.prepare(`INSERT INTO gv1_audit_log
-    (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(newId('aud'), entityType, entityId, operation, priorVersion, newVersion,
-      actorInfo.role, 'day3-worker', reason, JSON.stringify(change || {}), corr, cfg.environment, timestamp, timestamp);
+async function answerView(db, answerId) {
+  if (!answerId) return null;
+  return first(db, `SELECT answer_id,session_id,question_id,bmr_id,question_version,answer_group_id,version_no,supersedes_answer_id,
+    raw_value_text,raw_value_number,normalized_value_text,normalized_value_number,confidence_effect,source,captured_at,status,content_hash
+    FROM gv1_assessment_answers WHERE answer_id=?`, answerId);
 }
 
-function evidenceInsertStmt(db, command) {
-  const content = {
-    value_type: command.typed.value_type,
-    value_text: command.typed.value_text,
-    value_number: command.typed.value_number,
-    value_boolean: command.typed.value_boolean,
-    value_date: command.typed.value_date,
-    value_json: command.typed.value_json
-  };
-  return db.prepare(`INSERT INTO gv1_evidence_items
-    (evidence_id,bmr_id,session_id,evidence_type,source_product,source_reference,content_json,confidence,evidence_version,created_at,
-     evidence_group_id,version_no,supersedes_evidence_id,source_type,source_ref,value_type,value_text,value_number,value_boolean,value_date,value_json,
-     status,consent_status,source_actor_type,source_actor_id,captured_at,content_hash,rejection_reason,updated_at)
-    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-    .bind(command.evidenceId, command.bmrId, command.sessionId, command.typed.value_type,
-      'GalviVault', command.sourceRef, JSON.stringify(content), null, command.versionNo, command.timestamp,
-      command.groupId, command.versionNo, command.supersedesEvidenceId, command.sourceType, command.sourceRef,
-      command.typed.value_type, command.typed.value_text, command.typed.value_number, command.typed.value_boolean,
-      command.typed.value_date, command.typed.value_json, command.status, command.consentStatus,
-      command.actorInfo.role, command.actorInfo.id, command.capturedAt, command.contentHash, null, command.timestamp);
-}
-
-async function prepareEvidence(db, body, actorInfo, options = {}) {
-  const bmrId = requireId('bmr_id', body.bmr_id);
-  const sessionId = body.session_id ? requireId('session_id', body.session_id) : null;
-  await loadScope(db, bmrId, sessionId);
-  const sourceType = clean(options.sourceType || body.source_type).toLowerCase();
-  if (!SOURCE_TYPES.has(sourceType)) throw new GVError('GV_REQ_SCHEMA', 'source_type is unsupported.', 422);
-  const sourceRef = requireText('source_ref', options.sourceRef || body.source_ref, 500);
-  const typed = validateTyped(body);
-  const capturedAt = validateCapturedAt(body.captured_at);
-  const consentStatus = clean(body.consent_status || 'not_applicable');
-  const contentHash = await hash('evidence-content', { bmr_id: bmrId, session_id: sessionId, source_type: sourceType, source_ref: sourceRef, captured_at: capturedAt, consent_status: consentStatus, ...typed });
-  return { bmrId, sessionId, sourceType, sourceRef, typed, capturedAt, consentStatus, contentHash, actorInfo };
-}
-
-async function submitEvidence(request, cfg, corr, origin, override = null) {
+async function submitEvidence(request, cfg, corr, origin) {
   requireRuntime(cfg);
-  const key = override?.key || idempotencyKey(request);
-  const body = override?.body || await jsonBody(request);
-  const actorInfo = override?.actorInfo || actor(request);
-  const prepared = await prepareEvidence(cfg.db, body, actorInfo, override || {});
-  const requestFingerprint = await hash('evidence-submit', { ...body, actor: actorInfo, sourceType: prepared.sourceType, sourceRef: prepared.sourceRef });
-  const scope = override?.scope || 'evidence:submit';
-  const replay = await checkReplay(cfg.db, scope, key, requestFingerprint);
-  if (replay) {
-    const existing = await loadEvidence(cfg.db, replay.response_entity_id);
-    return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, existing) }, 200, 'no_change', { idempotent_replay: true });
+  const input = await jsonBody(request);
+  const key = idempotencyKey(request);
+  const typed = validateTyped(input);
+  const bmrId = requireId('bmr_id', input.bmr_id);
+  const sessionId = input.session_id ? requireId('session_id', input.session_id) : null;
+  const sourceType = requireText('source_type', input.source_type, 80).toLowerCase();
+  if (!SOURCE_TYPES.has(sourceType)) throw new GVError('GV_REQ_SCHEMA', 'source_type is unsupported.', 422);
+  const sourceRef = input.source_ref ? requireText('source_ref', input.source_ref, 500) : null;
+  const capturedAt = validateCapturedAt(input.captured_at);
+  const consent = input.consent_status ? requireText('consent_status', input.consent_status, 80) : null;
+  const actorCtx = actor(request);
+  await loadScope(cfg.db, bmrId, sessionId);
+
+  let answerInput = null;
+  let questionDef = null;
+  if (input.assessment_answer) {
+    answerInput = input.assessment_answer;
+    const questionId = requireText('question_id', answerInput.question_id, 180);
+    const questionVersion = requireText('question_version', answerInput.question_version, 80);
+    questionDef = await question(cfg.db, questionId, questionVersion);
+    if (!questionDef || questionDef.status !== 'active') throw new GVError('GV_NOT_FOUND', 'The active question definition was not found.', 404);
+    if (questionDef.response_type === 'number' && typed.value_type !== 'number') throw new GVError('GV_REQ_SCHEMA', 'The question requires numeric evidence.', 422);
+    if (typed.value_type === 'number') {
+      if (questionDef.minimum_value !== null && typed.value_number < Number(questionDef.minimum_value)) throw new GVError('GV_REQ_SCHEMA', 'The numeric value is below the question minimum.', 422);
+      if (questionDef.maximum_value !== null && typed.value_number > Number(questionDef.maximum_value)) throw new GVError('GV_REQ_SCHEMA', 'The numeric value exceeds the question maximum.', 422);
+    }
   }
 
-  let answerStmt = null;
+  const semantic = {
+    bmr_id: bmrId, session_id: sessionId, source_type: sourceType, source_ref: sourceRef,
+    captured_at: capturedAt, consent_status: consent, typed,
+    assessment_answer: answerInput || null
+  };
+  const fingerprint = await hash('evidence-submit', semantic);
+  const replay = await checkReplay(cfg.db, 'evidence:submit', key, fingerprint);
+  if (replay) {
+    const existing = await loadEvidence(cfg.db, replay.response_entity_id);
+    return ok(cfg, corr, origin, {
+      evidence: await evidenceView(cfg.db, existing),
+      answer: existing?.source_type === 'assessment_answer' ? await answerView(cfg.db, existing.source_ref) : null
+    }, 200, 'no_change', { idempotent_replay: true });
+  }
+
+  const timestamp = now();
   let answerId = null;
   let answerGroupId = null;
   let answerVersion = null;
-  let supersedesAnswerId = null;
-  let groupId = newId('evg');
-  let versionNo = 1;
-  let supersedesEvidenceId = null;
-
-  if (prepared.sourceType === 'assessment_answer') {
-    const answer = body.assessment_answer;
-    if (!answer || typeof answer !== 'object') throw new GVError('GV_REQ_SCHEMA', 'assessment_answer is required.', 422);
-    const questionId = requireId('question_id', answer.question_id);
-    const questionVersion = requireText('question_version', answer.question_version, 40);
-    const question = await first(cfg.db, `SELECT * FROM gv1_question_definitions WHERE question_id=? AND version=?`, questionId, questionVersion);
-    if (!question || question.status !== 'active' || Number(question.active) !== 1) throw new GVError('GV_NOT_FOUND', 'The active question version was not found.', 404);
-    if (question.response_type !== prepared.typed.value_type) throw new GVError('GV_REQ_SCHEMA', 'The evidence value type does not match the question.', 422);
-    if (prepared.typed.value_type === 'number') {
-      if (question.minimum_value !== null && prepared.typed.value_number < Number(question.minimum_value)) throw new GVError('GV_REQ_SCHEMA', 'The answer is below the question minimum.', 422);
-      if (question.maximum_value !== null && prepared.typed.value_number > Number(question.maximum_value)) throw new GVError('GV_REQ_SCHEMA', 'The answer exceeds the question maximum.', 422);
-    }
-    const current = await first(cfg.db, `SELECT * FROM gv1_assessment_answers WHERE session_id=? AND question_id=? ORDER BY version_no DESC LIMIT 1`, prepared.sessionId, questionId);
-    const answerHash = await hash('assessment-answer', { question_id: questionId, question_version: questionVersion, raw_value_text: answer.raw_value_text ?? null, raw_value_number: answer.raw_value_number ?? null, normalized_value_text: answer.normalized_value_text ?? null, normalized_value_number: answer.normalized_value_number ?? null, confidence_effect: answer.confidence_effect ?? null });
-    if (current?.content_hash === answerHash) {
-      const linked = await first(cfg.db, `SELECT * FROM gv1_evidence_items WHERE source_type='assessment_answer' AND source_ref=?`, current.answer_id);
-      return ok(cfg, corr, origin, { answer: current, evidence: await evidenceView(cfg.db, linked) }, 200, 'no_change');
-    }
+  let answerStmt = null;
+  if (answerInput) {
     answerId = newId('ans');
-    answerGroupId = current?.answer_group_id || newId('ang');
-    answerVersion = Number(current?.version_no || 0) + 1;
-    supersedesAnswerId = current?.answer_id || null;
-    if (current) {
-      const priorEvidence = await first(cfg.db, `SELECT * FROM gv1_evidence_items WHERE source_type='assessment_answer' AND source_ref=?`, current.answer_id);
-      if (priorEvidence) {
-        groupId = priorEvidence.evidence_group_id;
-        versionNo = Number(priorEvidence.version_no) + 1;
-        supersedesEvidenceId = priorEvidence.evidence_id;
-      }
+    answerGroupId = newId('ang');
+    answerVersion = 1;
+    const rawText = answerInput.raw_value_text ?? null;
+    const rawNumber = answerInput.raw_value_number ?? null;
+    const normalizedText = answerInput.normalized_value_text ?? null;
+    const normalizedNumber = answerInput.normalized_value_number ?? null;
+    const confidenceEffect = answerInput.confidence_effect ?? null;
+    if (typed.value_type === 'number' && (typeof rawNumber !== 'number' || typeof normalizedNumber !== 'number')) {
+      throw new GVError('GV_REQ_SCHEMA', 'Numeric assessment answers require raw_value_number and normalized_value_number.', 422);
     }
-    prepared.sourceRef = answerId;
+    const answerHash = await hash('assessment-answer', {
+      question_id: questionDef.question_id, question_version: questionDef.version,
+      raw_value_text: rawText, raw_value_number: rawNumber,
+      normalized_value_text: normalizedText, normalized_value_number: normalizedNumber,
+      confidence_effect: confidenceEffect
+    });
     answerStmt = cfg.db.prepare(`INSERT INTO gv1_assessment_answers
       (answer_id,session_id,question_id,answer_text,answer_number,answer_json,evidence_version,created_at,updated_at,
        bmr_id,question_version,answer_group_id,version_no,supersedes_answer_id,raw_value_text,raw_value_number,
        normalized_value_text,normalized_value_number,confidence_effect,source,captured_at,status,content_hash)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`)
-      .bind(answerId, prepared.sessionId, questionId, prepared.typed.value_text, prepared.typed.value_number,
-        prepared.typed.value_json, answerVersion, now(), now(), prepared.bmrId, questionVersion, answerGroupId,
-        answerVersion, supersedesAnswerId, answer.raw_value_text ?? null, answer.raw_value_number ?? null,
-        answer.normalized_value_text ?? null, answer.normalized_value_number ?? null, answer.confidence_effect ?? null,
-        'day3-worker', prepared.capturedAt, 'draft', answerHash);
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      answerId, sessionId, questionDef.question_id,
+      typed.value_text, typed.value_number, typed.value_json, 1, timestamp, timestamp,
+      bmrId, questionDef.version, answerGroupId, 1, null, rawText, rawNumber,
+      normalizedText, normalizedNumber, confidenceEffect, sourceType, capturedAt, 'draft', answerHash
+    );
   }
 
-  const timestamp = now();
   const evidenceId = newId('evd');
-  const command = { ...prepared, evidenceId, groupId, versionNo, supersedesEvidenceId, timestamp, status: 'draft' };
+  const evidenceGroupId = newId('evg');
+  const effectiveSourceRef = answerId || sourceRef;
+  const contentHash = await hash('evidence-content', {
+    bmr_id: bmrId, session_id: sessionId, source_type: sourceType, source_ref: effectiveSourceRef,
+    captured_at: capturedAt, consent_status: consent, ...typed
+  });
+  const eventId = newId('jev');
+  const auditId = newId('aud');
+  const eventKey = `day3:evidence_submitted:${evidenceId}`;
+  const evidenceStmt = cfg.db.prepare(`INSERT INTO gv1_evidence_items
+    (evidence_id,bmr_id,session_id,evidence_type,source_product,source_reference,content_json,confidence,evidence_version,created_at,
+     evidence_group_id,version_no,supersedes_evidence_id,source_type,source_ref,value_type,value_text,value_number,value_boolean,value_date,value_json,
+     status,consent_status,source_actor_type,source_actor_id,captured_at,content_hash,rejection_reason,updated_at)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+    evidenceId, bmrId, sessionId, typed.value_type, 'GalviVault', effectiveSourceRef,
+    JSON.stringify({ value_type: typed.value_type, value_text: typed.value_text, value_number: typed.value_number,
+      value_boolean: typed.value_boolean, value_date: typed.value_date, value_json: typed.value_json }),
+    null, 1, timestamp, evidenceGroupId, 1, null, sourceType, effectiveSourceRef,
+    typed.value_type, typed.value_text, typed.value_number, typed.value_boolean, typed.value_date, typed.value_json,
+    'draft', consent, actorCtx.role, actorCtx.id, capturedAt, contentHash, null, timestamp
+  );
+
   const statements = [];
   if (answerStmt) statements.push(answerStmt);
-  statements.push(evidenceInsertStmt(cfg.db, command));
-  if (supersedesEvidenceId) {
-    statements.push(cfg.db.prepare(`INSERT INTO gv1_evidence_relationships
-      (relationship_id,from_evidence_id,to_evidence_id,relationship_type,created_at,rationale,correlation_id)
-      VALUES (?,?,?,'corrects',?,?,?)`)
-      .bind(newId('rel'), evidenceId, supersedesEvidenceId, timestamp, 'Assessment answer correction', corr));
-  }
-  const event = eventStmt(cfg.db, { bmrId: prepared.bmrId, sessionId: prepared.sessionId, eventName: supersedesEvidenceId ? 'evidence_superseded' : 'evidence_submitted', corr, cfg, timestamp, metadata: { evidence_id: evidenceId, version_no: versionNo, source_type: prepared.sourceType } });
-  if (event) statements.push(event);
-  statements.push(auditStmt(cfg.db, { entityType: 'evidence', entityId: evidenceId, operation: 'create', priorVersion: supersedesEvidenceId ? versionNo - 1 : null, newVersion: versionNo, actorInfo, reason: supersedesEvidenceId ? 'DAY3_EVIDENCE_SUPERSEDE' : 'DAY3_EVIDENCE_SUBMIT', corr, cfg, timestamp, change: { bmr_id: prepared.bmrId, source_type: prepared.sourceType, version_no: versionNo } }));
-  statements.push(receiptStmt(cfg.db, { scope, key, fingerprint: requestFingerprint, status: 201, entityType: 'evidence', entityId: evidenceId, timestamp }));
+  statements.push(
+    evidenceStmt,
+    cfg.db.prepare(`INSERT INTO gv1_journey_events
+      (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
+      VALUES (?,?,?,?,?,'GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
+      eventId, eventKey, bmrId, sessionId, 'evidence_submitted', timestamp, actorCtx.role,
+      JSON.stringify({ evidence_id: evidenceId, answer_id: answerId, evidence_group_id: evidenceGroupId }),
+      fingerprint, corr, cfg.environment, timestamp
+    ),
+    cfg.db.prepare(`INSERT INTO gv1_audit_log
+      (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      auditId, 'evidence', evidenceId, 'create', null, 1, actorCtx.role,
+      sourceType, 'day3_evidence_submitted', JSON.stringify({ evidence_group_id: evidenceGroupId, version_no: 1 }),
+      corr, cfg.environment, timestamp, timestamp
+    ),
+    receiptStmt(cfg.db, { scope: 'evidence:submit', key, fingerprint, status: 201, entityType: 'evidence', entityId: evidenceId, timestamp })
+  );
   await cfg.db.batch(statements);
   const created = await loadEvidence(cfg.db, evidenceId);
-  const answerRow = answerId ? await first(cfg.db, `SELECT * FROM gv1_assessment_answers WHERE answer_id=?`, answerId) : null;
-  return ok(cfg, corr, origin, { answer: answerRow, evidence: await evidenceView(cfg.db, created) }, 201, 'created');
+  return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, created), answer: answerId ? await answerView(cfg.db, answerId) : null }, 201, 'created');
 }
 
 async function acceptEvidence(request, cfg, corr, origin, evidenceId) {
   requireRuntime(cfg);
-  const actorInfo = requireOperator(request);
+  const resolvedActor = requireOperator(request);
+  const input = await jsonBody(request);
   const key = idempotencyKey(request);
-  const body = await jsonBody(request);
-  const reason = requireText('reason', body.reason || 'operator_acceptance', 500);
-  const fingerprint = await hash('evidence-accept', { evidenceId, reason, actorInfo });
+  const reason = input.reason ? requireText('reason', input.reason, 500) : 'accepted';
+  const evidence = await loadEvidence(cfg.db, requireId('evidence_id', evidenceId));
+  if (!evidence) throw new GVError('GV_NOT_FOUND', 'The evidence was not found.', 404);
+  const fingerprint = await hash('evidence-accept', { evidence_id: evidence.evidence_id, reason });
   const replay = await checkReplay(cfg.db, 'evidence:accept', key, fingerprint);
-  if (replay) return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, await loadEvidence(cfg.db, evidenceId)) }, 200, 'no_change', { idempotent_replay: true });
-  const current = await loadEvidence(cfg.db, evidenceId);
-  if (!current) throw new GVError('GV_NOT_FOUND', 'Evidence was not found.', 404);
-  if (current.status === 'accepted') return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, current) }, 200, 'no_change');
-  if (current.status !== 'draft') throw new GVError('GV_VERSION_CONFLICT', 'Only draft evidence can be accepted.', 409);
+  if (replay) {
+    return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, await loadEvidence(cfg.db, evidence.evidence_id)) }, 200, 'no_change', { idempotent_replay: true });
+  }
+  if (evidence.status === 'accepted') {
+    return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, evidence) }, 200, 'no_change');
+  }
+  if (evidence.status !== 'draft') throw new GVError('GV_VERSION_CONFLICT', 'Only draft evidence can be accepted.', 409);
   const timestamp = now();
-  const statements = [
-    cfg.db.prepare(`UPDATE gv1_evidence_items SET status='accepted',updated_at=? WHERE evidence_id=? AND status='draft'`).bind(timestamp, evidenceId)
-  ];
-  const event = eventStmt(cfg.db, { bmrId: current.bmr_id, sessionId: current.session_id, eventName: 'evidence_accepted', corr, cfg, timestamp, metadata: { evidence_id: evidenceId, content_hash: current.content_hash } });
-  if (event) statements.push(event);
-  statements.push(auditStmt(cfg.db, { entityType: 'evidence', entityId: evidenceId, operation: 'accept', priorVersion: current.version_no, newVersion: current.version_no, actorInfo, reason, corr, cfg, timestamp, change: { status: 'accepted', content_hash: current.content_hash } }));
-  statements.push(receiptStmt(cfg.db, { scope: 'evidence:accept', key, fingerprint, status: 200, entityType: 'evidence', entityId: evidenceId, timestamp }));
-  await cfg.db.batch(statements);
-  const accepted = await loadEvidence(cfg.db, evidenceId);
-  if (accepted.content_hash !== current.content_hash) throw new GVError('GV_INTERNAL', 'Evidence content changed during acceptance.', 500);
-  return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, accepted) }, 200, 'accepted');
+  const beforeHash = evidence.content_hash;
+  const results = await cfg.db.batch([
+    cfg.db.prepare(`UPDATE gv1_evidence_items SET status='accepted' WHERE evidence_id=? AND status='draft'`).bind(evidence.evidence_id),
+    cfg.db.prepare(`INSERT INTO gv1_journey_events
+      (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
+      VALUES (?,?,?,?,?,'GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
+      newId('jev'), `day3:evidence_accepted:${evidence.evidence_id}`, evidence.bmr_id, evidence.session_id,
+      'evidence_accepted', timestamp, resolvedActor.role, JSON.stringify({ evidence_id: evidence.evidence_id, version_no: evidence.version_no }),
+      fingerprint, corr, cfg.environment, timestamp
+    ),
+    cfg.db.prepare(`INSERT INTO gv1_audit_log
+      (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      newId('aud'), 'evidence', evidence.evidence_id, 'accept', evidence.version_no, evidence.version_no,
+      resolvedActor.role, evidence.source_type, reason, JSON.stringify({ status: 'accepted' }), corr, cfg.environment, timestamp, timestamp
+    ),
+    receiptStmt(cfg.db, { scope: 'evidence:accept', key, fingerprint, status: 200, entityType: 'evidence', entityId: evidence.evidence_id, timestamp })
+  ]);
+  const changed = Number(results?.[0]?.meta?.changes ?? results?.[0]?.changes ?? 0);
+  if (changed !== 1) throw new GVError('GV_VERSION_CONFLICT', 'The evidence acceptance state changed concurrently.', 409);
+  const after = await loadEvidence(cfg.db, evidence.evidence_id);
+  if (after.content_hash !== beforeHash) throw new GVError('GV_INTERNAL', 'Evidence content changed during acceptance.', 500);
+  return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, after) }, 200, 'accepted');
 }
 
 async function rejectEvidence(request, cfg, corr, origin, evidenceId) {
   requireRuntime(cfg);
-  const actorInfo = requireOperator(request);
+  const resolvedActor = requireOperator(request);
+  const input = await jsonBody(request);
   const key = idempotencyKey(request);
-  const body = await jsonBody(request);
-  const reason = requireText('reason', body.reason, 500);
-  const fingerprint = await hash('evidence-reject', { evidenceId, reason, actorInfo });
+  const reason = requireText('reason', input.reason, 500);
+  const evidence = await loadEvidence(cfg.db, requireId('evidence_id', evidenceId));
+  if (!evidence) throw new GVError('GV_NOT_FOUND', 'The evidence was not found.', 404);
+  const fingerprint = await hash('evidence-reject', { evidence_id: evidence.evidence_id, reason });
   const replay = await checkReplay(cfg.db, 'evidence:reject', key, fingerprint);
-  if (replay) return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, await loadEvidence(cfg.db, evidenceId)) }, 200, 'no_change', { idempotent_replay: true });
-  const current = await loadEvidence(cfg.db, evidenceId);
-  if (!current) throw new GVError('GV_NOT_FOUND', 'Evidence was not found.', 404);
-  if (current.status !== 'draft') throw new GVError(current.status === 'accepted' ? 'GV_EVIDENCE_IMMUTABLE' : 'GV_VERSION_CONFLICT', 'Only draft evidence can be rejected.', 409);
+  if (replay) return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, await loadEvidence(cfg.db, evidence.evidence_id)) }, 200, 'no_change', { idempotent_replay: true });
+  if (evidence.status === 'rejected') return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, evidence) }, 200, 'no_change');
+  if (evidence.status !== 'draft') throw new GVError('GV_VERSION_CONFLICT', 'Only draft evidence can be rejected.', 409);
   const timestamp = now();
-  const statements = [cfg.db.prepare(`UPDATE gv1_evidence_items SET status='rejected',rejection_reason=?,updated_at=? WHERE evidence_id=? AND status='draft'`).bind(reason, timestamp, evidenceId)];
-  const event = eventStmt(cfg.db, { bmrId: current.bmr_id, sessionId: current.session_id, eventName: 'evidence_rejected', corr, cfg, timestamp, metadata: { evidence_id: evidenceId } });
-  if (event) statements.push(event);
-  statements.push(auditStmt(cfg.db, { entityType: 'evidence', entityId: evidenceId, operation: 'reject', priorVersion: current.version_no, newVersion: current.version_no, actorInfo, reason, corr, cfg, timestamp, change: { status: 'rejected' } }));
-  statements.push(receiptStmt(cfg.db, { scope: 'evidence:reject', key, fingerprint, status: 200, entityType: 'evidence', entityId: evidenceId, timestamp }));
-  await cfg.db.batch(statements);
-  return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, await loadEvidence(cfg.db, evidenceId)) }, 200, 'updated');
+  const results = await cfg.db.batch([
+    cfg.db.prepare(`UPDATE gv1_evidence_items SET status='rejected',rejection_reason=?,updated_at=? WHERE evidence_id=? AND status='draft'`).bind(reason, timestamp, evidence.evidence_id),
+    cfg.db.prepare(`INSERT INTO gv1_journey_events
+      (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
+      VALUES (?,?,?,?,?,'GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
+      newId('jev'), `day3:evidence_rejected:${evidence.evidence_id}`, evidence.bmr_id, evidence.session_id,
+      'evidence_rejected', timestamp, resolvedActor.role, JSON.stringify({ evidence_id: evidence.evidence_id, reason_code: 'rejected' }),
+      fingerprint, corr, cfg.environment, timestamp
+    ),
+    cfg.db.prepare(`INSERT INTO gv1_audit_log
+      (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      newId('aud'), 'evidence', evidence.evidence_id, 'reject', evidence.version_no, evidence.version_no,
+      resolvedActor.role, evidence.source_type, reason, JSON.stringify({ status: 'rejected' }), corr, cfg.environment, timestamp, timestamp
+    ),
+    receiptStmt(cfg.db, { scope: 'evidence:reject', key, fingerprint, status: 200, entityType: 'evidence', entityId: evidence.evidence_id, timestamp })
+  ]);
+  const changed = Number(results?.[0]?.meta?.changes ?? results?.[0]?.changes ?? 0);
+  if (changed !== 1) throw new GVError('GV_VERSION_CONFLICT', 'The evidence rejection state changed concurrently.', 409);
+  return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, await loadEvidence(cfg.db, evidence.evidence_id)) }, 200, 'rejected');
 }
 
 async function supersedeEvidence(request, cfg, corr, origin, evidenceId) {
   requireRuntime(cfg);
-  const actorInfo = requireOperator(request);
-  const source = await loadEvidence(cfg.db, evidenceId);
-  if (!source) throw new GVError('GV_NOT_FOUND', 'Evidence was not found.', 404);
-  const body = await jsonBody(request);
-  body.bmr_id = source.bmr_id;
-  body.session_id = source.session_id;
-  body.source_type = source.source_type;
-  body.source_ref = source.source_ref;
-  body.captured_at = body.captured_at || now();
+  const resolvedActor = requireOperator(request);
+  const input = await jsonBody(request);
   const key = idempotencyKey(request);
-  const prepared = await prepareEvidence(cfg.db, body, actorInfo);
-  const fingerprint = await hash('evidence-supersede', { evidenceId, body, actorInfo });
+  const reason = requireText('correction_reason', input.correction_reason, 500);
+  const source = await loadEvidence(cfg.db, requireId('evidence_id', evidenceId));
+  if (!source) throw new GVError('GV_NOT_FOUND', 'The evidence was not found.', 404);
+  const latest = await first(cfg.db, `SELECT evidence_id FROM gv1_evidence_items WHERE evidence_group_id=? ORDER BY version_no DESC LIMIT 1`, source.evidence_group_id);
+  if (latest?.evidence_id !== source.evidence_id) throw new GVError('GV_VERSION_CONFLICT', 'Only the current leaf evidence can be superseded.', 409);
+  const typed = validateTyped(input);
+  const capturedAt = validateCapturedAt(input.captured_at);
+  const consent = input.consent_status ? requireText('consent_status', input.consent_status, 80) : source.consent_status;
+  await loadScope(cfg.db, source.bmr_id, source.session_id);
+  const semantic = { evidence_id: source.evidence_id, typed, captured_at: capturedAt, consent_status: consent, correction_reason: reason };
+  const fingerprint = await hash('evidence-supersede', semantic);
   const replay = await checkReplay(cfg.db, 'evidence:supersede', key, fingerprint);
   if (replay) return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, await loadEvidence(cfg.db, replay.response_entity_id)) }, 200, 'no_change', { idempotent_replay: true });
-  const latest = await first(cfg.db, `SELECT * FROM gv1_evidence_items WHERE evidence_group_id=? ORDER BY version_no DESC LIMIT 1`, source.evidence_group_id);
-  if (latest?.evidence_id !== source.evidence_id) throw new GVError('GV_VERSION_CONFLICT', 'Only the current leaf evidence can be superseded.', 409);
-  const reason = requireText('correction_reason', body.correction_reason, 500);
-  const timestamp = now();
+
   const newEvidenceId = newId('evd');
-  const versionNo = Number(source.version_no) + 1;
-  const command = { ...prepared, sourceRef: source.source_ref, evidenceId: newEvidenceId, groupId: source.evidence_group_id, versionNo, supersedesEvidenceId: source.evidence_id, timestamp, status: 'draft' };
+  const nextVersion = Number(source.version_no) + 1;
+  const timestamp = now();
+  const contentHash = await hash('evidence-content', {
+    bmr_id: source.bmr_id, session_id: source.session_id, source_type: source.source_type,
+    source_ref: source.source_ref, captured_at: capturedAt, consent_status: consent, ...typed
+  });
   const statements = [
-    evidenceInsertStmt(cfg.db, command),
+    cfg.db.prepare(`INSERT INTO gv1_evidence_items
+      (evidence_id,bmr_id,session_id,evidence_type,source_product,source_reference,content_json,confidence,evidence_version,created_at,
+       evidence_group_id,version_no,supersedes_evidence_id,source_type,source_ref,value_type,value_text,value_number,value_boolean,value_date,value_json,
+       status,consent_status,source_actor_type,source_actor_id,captured_at,content_hash,rejection_reason,updated_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      newEvidenceId, source.bmr_id, source.session_id, typed.value_type, source.source_product, source.source_reference,
+      JSON.stringify({ value_type: typed.value_type, value_text: typed.value_text, value_number: typed.value_number,
+        value_boolean: typed.value_boolean, value_date: typed.value_date, value_json: typed.value_json }),
+      source.confidence, nextVersion, timestamp, source.evidence_group_id, nextVersion, source.evidence_id,
+      source.source_type, source.source_ref, typed.value_type, typed.value_text, typed.value_number, typed.value_boolean,
+      typed.value_date, typed.value_json, 'draft', consent, resolvedActor.role, resolvedActor.id, capturedAt, contentHash, null, timestamp
+    ),
     cfg.db.prepare(`INSERT INTO gv1_evidence_relationships
       (relationship_id,from_evidence_id,to_evidence_id,relationship_type,created_at,rationale,correlation_id)
-      VALUES (?,?,?,'corrects',?,?,?)`).bind(newId('rel'), newEvidenceId, source.evidence_id, timestamp, reason, corr)
+      VALUES (?,?,?,'corrects',?,?,?)`).bind(newId('rel'), newEvidenceId, source.evidence_id, timestamp, reason, corr),
+    cfg.db.prepare(`INSERT INTO gv1_journey_events
+      (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
+      VALUES (?,?,?,?,?,'GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
+      newId('jev'), `day3:evidence_superseded:${newEvidenceId}`, source.bmr_id, source.session_id,
+      'evidence_superseded', timestamp, resolvedActor.role,
+      JSON.stringify({ evidence_id: newEvidenceId, supersedes_evidence_id: source.evidence_id, version_no: nextVersion }),
+      fingerprint, corr, cfg.environment, timestamp
+    ),
+    cfg.db.prepare(`INSERT INTO gv1_audit_log
+      (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      newId('aud'), 'evidence', newEvidenceId, 'supersede', source.version_no, nextVersion, resolvedActor.role,
+      source.source_type, reason, JSON.stringify({ supersedes_evidence_id: source.evidence_id }), corr, cfg.environment, timestamp, timestamp
+    ),
+    receiptStmt(cfg.db, { scope: 'evidence:supersede', key, fingerprint, status: 201, entityType: 'evidence', entityId: newEvidenceId, timestamp })
   ];
-  const event = eventStmt(cfg.db, { bmrId: source.bmr_id, sessionId: source.session_id, eventName: 'evidence_superseded', corr, cfg, timestamp, metadata: { evidence_id: newEvidenceId, supersedes_evidence_id: source.evidence_id, version_no: versionNo } });
-  if (event) statements.push(event);
-  statements.push(auditStmt(cfg.db, { entityType: 'evidence', entityId: newEvidenceId, operation: 'supersede', priorVersion: source.version_no, newVersion: versionNo, actorInfo, reason, corr, cfg, timestamp, change: { supersedes_evidence_id: source.evidence_id } }));
-  statements.push(receiptStmt(cfg.db, { scope: 'evidence:supersede', key, fingerprint, status: 201, entityType: 'evidence', entityId: newEvidenceId, timestamp }));
   await cfg.db.batch(statements);
-  return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, await loadEvidence(cfg.db, newEvidenceId)), previous: await evidenceView(cfg.db, source) }, 201, 'created');
+  return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, await loadEvidence(cfg.db, newEvidenceId)), previous_evidence_id: source.evidence_id }, 201, 'created');
 }
 
-async function listEvidence(cfg, corr, origin, bmrId, url) {
+async function getEvidence(request, cfg, corr, origin, evidenceId) {
   requireRuntime(cfg);
-  requireId('bmr_id', bmrId);
+  const evidence = await loadEvidence(cfg.db, requireId('evidence_id', evidenceId));
+  if (!evidence) throw new GVError('GV_NOT_FOUND', 'The evidence was not found.', 404);
+  return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, evidence), answer: evidence.source_type === 'assessment_answer' ? await answerView(cfg.db, evidence.source_ref) : null });
+}
+
+async function listEvidence(request, cfg, corr, origin, bmrId) {
+  requireRuntime(cfg);
+  bmrId = requireId('bmr_id', bmrId);
   await loadScope(cfg.db, bmrId);
+  const url = new URL(request.url);
   const view = clean(url.searchParams.get('view') || 'current').toLowerCase();
-  const limit = Math.min(Math.max(Number(url.searchParams.get('limit') || 50), 1), 100);
-  let rows;
-  if (view === 'history') {
-    rows = await all(cfg.db, `SELECT * FROM gv1_evidence_items WHERE bmr_id=? ORDER BY evidence_group_id,version_no LIMIT ?`, bmrId, limit);
-  } else {
-    rows = await all(cfg.db, `SELECT e.* FROM gv1_evidence_items e
-      WHERE e.bmr_id=? AND e.status NOT IN ('rejected','archived')
-      AND NOT EXISTS (SELECT 1 FROM gv1_evidence_items newer WHERE newer.supersedes_evidence_id=e.evidence_id)
-      ORDER BY e.created_at DESC,e.evidence_id DESC LIMIT ?`, bmrId, limit);
+  const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit') || 50)));
+  const filters = [];
+  const params = [bmrId];
+  let sql = `SELECT e.* FROM gv1_evidence_items e WHERE e.bmr_id=?`;
+  if (view === 'current') {
+    sql += ` AND e.status NOT IN ('rejected','archived') AND NOT EXISTS (
+      SELECT 1 FROM gv1_evidence_items newer WHERE newer.supersedes_evidence_id=e.evidence_id
+    )`;
+  } else if (view !== 'history') {
+    throw new GVError('GV_REQ_SCHEMA', 'view must be current or history.', 422);
   }
-  const expanded = [];
-  for (const row of rows) expanded.push(await evidenceView(cfg.db, row));
-  return ok(cfg, corr, origin, { view, evidence: expanded, limit }, 200, 'ok');
+  const sourceType = clean(url.searchParams.get('source_type'));
+  if (sourceType) { filters.push('e.source_type=?'); params.push(sourceType); }
+  const sessionId = clean(url.searchParams.get('session_id'));
+  if (sessionId) { filters.push('e.session_id=?'); params.push(sessionId); }
+  const status = clean(url.searchParams.get('status'));
+  if (status) { filters.push('e.status=?'); params.push(status); }
+  if (filters.length) sql += ` AND ${filters.join(' AND ')}`;
+  sql += ` ORDER BY e.evidence_group_id,e.version_no LIMIT ?`;
+  params.push(limit);
+  const rows = await all(cfg.db, sql, ...params);
+  return ok(cfg, corr, origin, { evidence: await Promise.all(rows.map((row) => evidenceView(cfg.db, row))), view, limit });
 }
 
 async function createImportBatch(request, cfg, corr, origin) {
   requireRuntime(cfg);
-  const actorInfo = requireImport(request);
+  const resolvedActor = requireImport(request);
+  const input = await jsonBody(request);
   const key = idempotencyKey(request);
-  const body = await jsonBody(request);
-  const sourceName = requireText('source_name', body.source_name, 300);
-  const sourceChecksum = requireText('source_checksum', body.source_checksum, 300);
-  const expectedCount = Number(body.expected_count);
-  if (!Number.isInteger(expectedCount) || expectedCount < 0) throw new GVError('GV_REQ_SCHEMA', 'expected_count must be a non-negative integer.', 422);
-  const fingerprint = await hash('import-batch-create', { sourceName, sourceChecksum, expectedCount, actorInfo });
+  const sourceName = requireText('source_name', input.source_name, 240);
+  const sourceChecksum = input.source_checksum ? requireText('source_checksum', input.source_checksum, 240) : null;
+  const expected = Number(input.expected_count);
+  if (!Number.isInteger(expected) || expected < 0) throw new GVError('GV_REQ_SCHEMA', 'expected_count must be a non-negative integer.', 422);
+  const fingerprint = await hash('import-batch-create', { sourceName, sourceChecksum, expected });
   const replay = await checkReplay(cfg.db, 'import:batch:create', key, fingerprint);
-  if (replay) return ok(cfg, corr, origin, { batch: await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, replay.response_entity_id) }, 200, 'no_change', { idempotent_replay: true });
-  const batchId = newId('imp');
+  if (replay) {
+    const existing = await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, replay.response_entity_id);
+    return ok(cfg, corr, origin, { batch: existing }, 200, 'no_change', { idempotent_replay: true });
+  }
   const timestamp = now();
+  const batchId = newId('imp');
   await cfg.db.batch([
     cfg.db.prepare(`INSERT INTO gv1_import_batches
-      (import_batch_id,source_system,source_reference,status,row_count,accepted_count,rejected_count,started_at,completed_at,created_at,
-       source_name,source_checksum,environment,expected_count,processed_count,imported_count,skipped_count,error_count,created_by,updated_at)
-      VALUES (?,'day3',?,'open',0,0,0,?,NULL,?,?,?,?,?,0,0,0,0,?,?)`)
-      .bind(batchId, sourceName, timestamp, timestamp, sourceName, sourceChecksum, cfg.environment, expectedCount, actorInfo.id, timestamp),
-    auditStmt(cfg.db, { entityType: 'import_batch', entityId: batchId, operation: 'create', priorVersion: null, newVersion: 1, actorInfo, reason: 'DAY3_IMPORT_BATCH_CREATE', corr, cfg, timestamp, change: { source_name: sourceName, expected_count: expectedCount } }),
+      (import_batch_id,source_type,status,started_at,completed_at,created_at,source_name,source_checksum,environment,expected_count,
+       processed_count,imported_count,skipped_count,error_count,created_by,updated_at)
+      VALUES (?,'targeted_day3','open',?,NULL,?,?,?,?,?,0,0,0,0,?,?)`).bind(
+      batchId, timestamp, timestamp, sourceName, sourceChecksum, cfg.environment, expected, resolvedActor.id, timestamp
+    ),
+    cfg.db.prepare(`INSERT INTO gv1_journey_events
+      (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
+      VALUES (?, ?, NULL, NULL, 'import_batch_created','GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
+      newId('jev'), `day3:import_batch_created:${batchId}`, timestamp, resolvedActor.role,
+      JSON.stringify({ import_batch_id: batchId, expected_count: expected }), fingerprint, corr, cfg.environment, timestamp
+    ),
+    cfg.db.prepare(`INSERT INTO gv1_audit_log
+      (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      newId('aud'), 'import_batch', batchId, 'create', null, 1, resolvedActor.role, 'targeted_day3',
+      'day3_import_batch_created', JSON.stringify({ expected_count: expected }), corr, cfg.environment, timestamp, timestamp
+    ),
     receiptStmt(cfg.db, { scope: 'import:batch:create', key, fingerprint, status: 201, entityType: 'import_batch', entityId: batchId, timestamp })
   ]);
   return ok(cfg, corr, origin, { batch: await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId) }, 201, 'created');
 }
 
-async function processImportRow(request, cfg, corr, origin, batchId) {
+async function importRow(request, cfg, corr, origin, batchId) {
   requireRuntime(cfg);
-  const actorInfo = requireImport(request);
-  const body = await jsonBody(request);
-  const rowKey = requireId('source_row_key', body.source_row_key);
+  const resolvedActor = requireImport(request);
+  const input = await jsonBody(request);
+  batchId = requireId('import_batch_id', batchId);
+  const sourceRowKey = requireText('source_row_key', input.source_row_key, 180);
+  const command = input.command && typeof input.command === 'object' ? input.command : null;
+  if (!command) throw new GVError('GV_REQ_SCHEMA', 'command is required.', 422);
   const batch = await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId);
   if (!batch) throw new GVError('GV_NOT_FOUND', 'The import batch was not found.', 404);
   if (!['open','validating','importing'].includes(batch.status)) throw new GVError('GV_VERSION_CONFLICT', 'The import batch is closed.', 409);
-  const fingerprint = await hash('import-row', { batchId, rowKey, command: body.command });
-  const existing = await first(cfg.db, `SELECT * FROM gv1_import_row_receipts WHERE import_batch_id=? AND source_row_key=?`, batchId, rowKey);
-  if (existing) {
-    if (existing.request_fingerprint !== fingerprint) throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH', 'The source row key was reused with changed content.', 409);
-    return ok(cfg, corr, origin, { row: JSON.parse(existing.response_json), batch }, 200, 'no_change', { idempotent_replay: true });
+  const rowFingerprint = await hash('import-row', { batch_id: batchId, source_row_key: sourceRowKey, command });
+  const receipt = await first(cfg.db, `SELECT * FROM gv1_import_row_receipts WHERE import_batch_id=? AND source_row_key=?`, batchId, sourceRowKey);
+  if (receipt) {
+    if (receipt.request_fingerprint !== rowFingerprint) throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH', 'The source row key was reused with different content.', 409);
+    return ok(cfg, corr, origin, { row: JSON.parse(receipt.response_json), replay: true }, 200, 'no_change', { idempotent_replay: true });
   }
-  const timestamp = now();
-  let resultType = 'error';
-  let entityId = null;
+
+  let result;
+  let resultType;
+  let canonicalEntityId = null;
   let errorCode = null;
-  let response = null;
   try {
-    const command = body.command;
-    if (!command || typeof command !== 'object') throw new GVError('GV_REQ_SCHEMA', 'command is required.', 422);
-    command.source_type = 'imported_reference';
-    command.source_ref = `${batchId}:${rowKey}`;
-    command.captured_at = command.captured_at || timestamp;
-    const prepared = await prepareEvidence(cfg.db, command, actorInfo, { sourceType: 'imported_reference', sourceRef: command.source_ref });
-    const duplicate = await first(cfg.db, `SELECT evidence_id FROM gv1_evidence_items WHERE bmr_id=? AND content_hash=? AND status NOT IN ('rejected','archived') LIMIT 1`, prepared.bmrId, prepared.contentHash);
+    const typed = validateTyped(command);
+    const bmrId = requireId('bmr_id', command.bmr_id);
+    const sessionId = command.session_id ? requireId('session_id', command.session_id) : null;
+    await loadScope(cfg.db, bmrId, sessionId);
+    const sourceToken = `import:${batchId}:${sourceRowKey}`;
+    const duplicate = await first(cfg.db, `SELECT evidence_id FROM gv1_evidence_items WHERE bmr_id=? AND session_id IS ? AND source_type='imported_reference'
+      AND value_type=? AND COALESCE(value_text,'')=COALESCE(?, '') AND COALESCE(value_number,-9.9e307)=COALESCE(?,-9.9e307)
+      AND COALESCE(value_boolean,-1)=COALESCE(?,-1) AND COALESCE(value_date,'')=COALESCE(?,'') AND COALESCE(value_json,'')=COALESCE(?,'')
+      ORDER BY version_no DESC LIMIT 1`, bmrId, sessionId, typed.value_type, typed.value_text, typed.value_number, typed.value_boolean, typed.value_date, typed.value_json);
     if (duplicate) {
-      resultType = 'skipped';
-      entityId = duplicate.evidence_id;
-      response = { source_row_key: rowKey, result: 'skipped', canonical_entity_id: entityId };
+      resultType = 'skipped'; canonicalEntityId = duplicate.evidence_id;
+      result = { source_row_key: sourceRowKey, result: 'skipped', canonical_entity_id: canonicalEntityId };
     } else {
+      const timestamp = now();
       const evidenceId = newId('evd');
-      const commandInsert = { ...prepared, evidenceId, groupId: newId('evg'), versionNo: 1, supersedesEvidenceId: null, timestamp, status: 'draft' };
-      const event = eventStmt(cfg.db, { bmrId: prepared.bmrId, sessionId: prepared.sessionId, eventName: 'row_imported', corr, cfg, timestamp, metadata: { import_batch_id: batchId, source_row_key: rowKey, evidence_id: evidenceId } });
-      const statements = [evidenceInsertStmt(cfg.db, commandInsert)];
-      if (event) statements.push(event);
-      await cfg.db.batch(statements);
-      resultType = 'imported';
-      entityId = evidenceId;
-      response = { source_row_key: rowKey, result: 'imported', canonical_entity_id: entityId };
+      const groupId = newId('evg');
+      const capturedAt = command.captured_at ? validateCapturedAt(command.captured_at) : timestamp;
+      const contentHash = await hash('evidence-content', {
+        bmr_id: bmrId, session_id: sessionId, source_type: 'imported_reference', source_ref: sourceToken,
+        captured_at: capturedAt, consent_status: command.consent_status || null, ...typed
+      });
+      await cfg.db.batch([
+        cfg.db.prepare(`INSERT INTO gv1_evidence_items
+          (evidence_id,bmr_id,session_id,evidence_type,source_product,source_reference,content_json,confidence,evidence_version,created_at,
+           evidence_group_id,version_no,supersedes_evidence_id,source_type,source_ref,value_type,value_text,value_number,value_boolean,value_date,value_json,status,
+           consent_status,source_actor_type,source_actor_id,captured_at,content_hash,rejection_reason,updated_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+          evidenceId, bmrId, sessionId, typed.value_type, 'GalviVault', sourceToken,
+          JSON.stringify({ value_type: typed.value_type, value_text: typed.value_text, value_number: typed.value_number,
+            value_boolean: typed.value_boolean, value_date: typed.value_date, value_json: typed.value_json }),
+          null, 1, timestamp, groupId, 1, null, 'imported_reference', sourceToken, typed.value_type,
+          typed.value_text, typed.value_number, typed.value_boolean, typed.value_date, typed.value_json, 'draft',
+          command.consent_status || null, resolvedActor.role, resolvedActor.id, capturedAt, contentHash, null, timestamp
+        ),
+        cfg.db.prepare(`INSERT INTO gv1_journey_events
+          (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
+          VALUES (?,?,?,?,?,'GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
+          newId('jev'), `day3:row_imported:${batchId}:${sourceRowKey}`, bmrId, sessionId, 'row_imported', timestamp,
+          resolvedActor.role, JSON.stringify({ import_batch_id: batchId, source_row_key: sourceRowKey, evidence_id: evidenceId }),
+          rowFingerprint, corr, cfg.environment, timestamp
+        ),
+        cfg.db.prepare(`INSERT INTO gv1_audit_log
+          (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+          VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+          newId('aud'), 'evidence', evidenceId, 'import', null, 1, resolvedActor.role, 'targeted_day3',
+          'day3_imported', JSON.stringify({ import_batch_id: batchId, source_row_key: sourceRowKey }),
+          corr, cfg.environment, timestamp, timestamp
+        )
+      ]);
+      resultType = 'imported'; canonicalEntityId = evidenceId;
+      result = { source_row_key: sourceRowKey, result: 'imported', canonical_entity_id: evidenceId };
     }
   } catch (error) {
-    const safe = error instanceof GVError ? error : new GVError('GV_REQ_SCHEMA', 'The import row is invalid.', 422);
-    errorCode = safe.code;
-    response = { source_row_key: rowKey, result: 'error', error_code: errorCode };
+    if (!(error instanceof GVError)) throw error;
+    resultType = 'error'; errorCode = error.code;
+    const errorId = newId('imp_err');
+    const timestamp = now();
+    const safePayload = JSON.stringify({ source_row_key: sourceRowKey, value_type: command.value_type || null });
     await cfg.db.prepare(`INSERT INTO gv1_import_errors
-      (import_error_id,import_batch_id,source_row_reference,error_code,safe_error_message,safe_error_json,created_at,source_row_key,field_name,quarantined_payload_json,correlation_id)
-      VALUES (?,?,?,?,?,?,?,?,'command',?,?)`)
-      .bind(newId('ime'), batchId, rowKey, errorCode, safe.message, JSON.stringify({ code: errorCode }), timestamp, rowKey,
-        JSON.stringify({ source_row_key: rowKey }), corr).run();
+      (import_error_id,import_batch_id,row_number,error_code,error_message,safe_payload_json,created_at,
+       source_row_key,field_name,quarantined_payload_json,correlation_id)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      errorId, batchId, null, error.code, error.message, safePayload, timestamp,
+      sourceRowKey, null, safePayload, corr
+    ).run();
+    result = { source_row_key: sourceRowKey, result: 'error', error_code: error.code };
   }
-  const importedDelta = resultType === 'imported' ? 1 : 0;
-  const skippedDelta = resultType === 'skipped' ? 1 : 0;
-  const errorDelta = resultType === 'error' ? 1 : 0;
+
+  const timestamp = now();
+  const responseJson = JSON.stringify(result);
+  const countColumn = resultType === 'imported' ? 'imported_count' : resultType === 'skipped' ? 'skipped_count' : 'error_count';
   await cfg.db.batch([
     cfg.db.prepare(`INSERT INTO gv1_import_row_receipts
       (import_batch_id,source_row_key,request_fingerprint,result_type,canonical_entity_id,error_code,response_json,created_at)
-      VALUES (?,?,?,?,?,?,?,?)`).bind(batchId, rowKey, fingerprint, resultType, entityId, errorCode, JSON.stringify(response), timestamp),
-    cfg.db.prepare(`UPDATE gv1_import_batches SET status='importing',processed_count=processed_count+1,imported_count=imported_count+?,skipped_count=skipped_count+?,error_count=error_count+?,row_count=row_count+1,accepted_count=accepted_count+?,rejected_count=rejected_count+?,updated_at=? WHERE import_batch_id=?`)
-      .bind(importedDelta, skippedDelta, errorDelta, importedDelta, errorDelta, timestamp, batchId)
+      VALUES (?,?,?,?,?,?,?,?)`).bind(batchId, sourceRowKey, rowFingerprint, resultType, canonicalEntityId, errorCode, responseJson, timestamp),
+    cfg.db.prepare(`UPDATE gv1_import_batches SET status='importing',processed_count=processed_count+1,${countColumn}=${countColumn}+1,updated_at=? WHERE import_batch_id=?`).bind(timestamp, batchId)
   ]);
-  return ok(cfg, corr, origin, { row: response, batch: await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId) }, 200, resultType === 'error' ? 'invalid_request' : 'updated');
+  return ok(cfg, corr, origin, { row: result }, 200, resultType);
 }
 
 async function closeImportBatch(request, cfg, corr, origin, batchId) {
   requireRuntime(cfg);
-  const actorInfo = requireImport(request);
+  requireImport(request);
+  const input = await jsonBody(request);
   const key = idempotencyKey(request);
-  await jsonBody(request);
-  const fingerprint = await hash('import-batch-close', { batchId, actorInfo });
+  batchId = requireId('import_batch_id', batchId);
+  const fingerprint = await hash('import-batch-close', { import_batch_id: batchId });
   const replay = await checkReplay(cfg.db, 'import:batch:close', key, fingerprint);
-  if (replay) return ok(cfg, corr, origin, { batch: await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId) }, 200, 'no_change', { idempotent_replay: true });
+  if (replay) {
+    const existing = await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId);
+    return ok(cfg, corr, origin, { batch: existing, reconciled: true }, 200, 'no_change', { idempotent_replay: true });
+  }
   const batch = await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId);
   if (!batch) throw new GVError('GV_NOT_FOUND', 'The import batch was not found.', 404);
-  const processed = Number(batch.processed_count);
-  const imported = Number(batch.imported_count);
-  const skipped = Number(batch.skipped_count);
-  const errors = Number(batch.error_count);
-  if (processed !== imported + skipped + errors || (batch.expected_count !== null && processed !== Number(batch.expected_count))) {
-    throw new GVError('GV_VERSION_CONFLICT', 'The import batch counts do not reconcile.', 409, { processed, imported, skipped, errors, expected: batch.expected_count });
-  }
+  const processed = Number(batch.processed_count), imported = Number(batch.imported_count), skipped = Number(batch.skipped_count), errors = Number(batch.error_count);
+  if (processed !== imported + skipped + errors) throw new GVError('GV_VERSION_CONFLICT', 'Import counts do not reconcile.', 409);
+  if (batch.expected_count !== null && Number(batch.expected_count) !== processed) throw new GVError('GV_VERSION_CONFLICT', 'Processed count does not match expected_count.', 409);
   const status = errors > 0 ? 'completed_with_errors' : 'completed';
   const timestamp = now();
   await cfg.db.batch([
-    cfg.db.prepare(`UPDATE gv1_import_batches SET status=?,completed_at=?,updated_at=? WHERE import_batch_id=?`).bind(status, timestamp, timestamp, batchId),
-    auditStmt(cfg.db, { entityType: 'import_batch', entityId: batchId, operation: 'reconcile', priorVersion: null, newVersion: null, actorInfo, reason: 'DAY3_IMPORT_BATCH_RECONCILE', corr, cfg, timestamp, change: { processed, imported, skipped, errors, status } }),
+    cfg.db.prepare(`UPDATE gv1_import_batches SET status=?,completed_at=?,updated_at=? WHERE import_batch_id=? AND status IN ('open','validating','importing')`).bind(status, timestamp, timestamp, batchId),
+    cfg.db.prepare(`INSERT INTO gv1_journey_events
+      (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
+      VALUES (?, ?, NULL, NULL, 'batch_reconciled','GalviVault','Day3',?,?,?,?,?,?,?)`).bind(
+      newId('jev'), `day3:batch_reconciled:${batchId}`, timestamp, 'import',
+      JSON.stringify({ import_batch_id: batchId, processed, imported, skipped, errors, status }), fingerprint, corr, cfg.environment, timestamp
+    ),
     receiptStmt(cfg.db, { scope: 'import:batch:close', key, fingerprint, status: 200, entityType: 'import_batch', entityId: batchId, timestamp })
   ]);
-  return ok(cfg, corr, origin, { batch: await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId), reconciled: true }, 200, 'updated');
+  return ok(cfg, corr, origin, { batch: await first(cfg.db, `SELECT * FROM gv1_import_batches WHERE import_batch_id=?`, batchId), reconciled: true }, 200, status);
 }
 
-async function day3Route(request, cfg, corr, origin) {
-  const url = new URL(request.url);
-  const path = url.pathname.replace(/\/+$/, '') || '/';
-  if (request.method === 'OPTIONS' && path.startsWith('/api/v1/')) return new Response(null, { status: 204, headers: responseHeaders(cfg, corr, origin) });
-  if (request.method === 'POST' && path === '/api/v1/evidence') return submitEvidence(request, cfg, corr, origin);
-  const evidenceMatch = path.match(/^\/api\/v1\/evidence\/([^/]+)(?:\/(accept|reject|supersede))?$/);
-  if (evidenceMatch) {
-    const evidenceId = decodeURIComponent(evidenceMatch[1]);
-    const action = evidenceMatch[2];
-    if (request.method === 'GET' && !action) {
-      requireRuntime(cfg);
-      const evidence = await loadEvidence(cfg.db, evidenceId);
-      if (!evidence) throw new GVError('GV_NOT_FOUND', 'Evidence was not found.', 404);
-      return ok(cfg, corr, origin, { evidence: await evidenceView(cfg.db, evidence) });
-    }
-    if (request.method === 'POST' && action === 'accept') return acceptEvidence(request, cfg, corr, origin, evidenceId);
-    if (request.method === 'POST' && action === 'reject') return rejectEvidence(request, cfg, corr, origin, evidenceId);
-    if (request.method === 'POST' && action === 'supersede') return supersedeEvidence(request, cfg, corr, origin, evidenceId);
+async function route(request, env, ctx) {
+  const cfg = config(env);
+  const corr = correlationId(request);
+  const origin = originState(request, cfg);
+  try {
+    requireRuntime(cfg);
+    if (!origin.allowed) throw new GVError('GV_AUTH_FORBIDDEN', 'The request origin is not allowed.', 403);
+    const url = new URL(request.url);
+    const path = url.pathname.replace(/\/+$/, '') || '/';
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: responseHeaders(cfg, corr, origin) });
+
+    if (request.method === 'POST' && path === '/api/v1/evidence') return await submitEvidence(request, cfg, corr, origin);
+    const singleEvidence = path.match(/^\/api\/v1\/evidence\/([^/]+)$/);
+    if (singleEvidence && request.method === 'GET') return await getEvidence(request, cfg, corr, origin, decodeURIComponent(singleEvidence[1]));
+    const acceptMatch = path.match(/^\/api\/v1\/evidence\/([^/]+)\/accept$/);
+    if (acceptMatch && request.method === 'POST') return await acceptEvidence(request, cfg, corr, origin, decodeURIComponent(acceptMatch[1]));
+    const rejectMatch = path.match(/^\/api\/v1\/evidence\/([^/]+)\/reject$/);
+    if (rejectMatch && request.method === 'POST') return await rejectEvidence(request, cfg, corr, origin, decodeURIComponent(rejectMatch[1]));
+    const supersedeMatch = path.match(/^\/api\/v1\/evidence\/([^/]+)\/supersede$/);
+    if (supersedeMatch && request.method === 'POST') return await supersedeEvidence(request, cfg, corr, origin, decodeURIComponent(supersedeMatch[1]));
+    const bmrEvidence = path.match(/^\/api\/v1\/business-medical-records\/([^/]+)\/evidence$/);
+    if (bmrEvidence && request.method === 'GET') return await listEvidence(request, cfg, corr, origin, decodeURIComponent(bmrEvidence[1]));
+    if (request.method === 'POST' && path === '/api/v1/import-batches') return await createImportBatch(request, cfg, corr, origin);
+    const importRows = path.match(/^\/api\/v1\/import-batches\/([^/]+)\/rows$/);
+    if (importRows && request.method === 'POST') return await importRow(request, cfg, corr, origin, decodeURIComponent(importRows[1]));
+    const importClose = path.match(/^\/api\/v1\/import-batches\/([^/]+)\/close$/);
+    if (importClose && request.method === 'POST') return await closeImportBatch(request, cfg, corr, origin, decodeURIComponent(importClose[1]));
+
+    return day1Worker.fetch(request, env, ctx);
+  } catch (error) {
+    return fail(cfg, corr, origin, error);
   }
-  const bmrEvidence = path.match(/^\/api\/v1\/business-medical-records\/([^/]+)\/evidence$/);
-  if (request.method === 'GET' && bmrEvidence) return listEvidence(cfg, corr, origin, decodeURIComponent(bmrEvidence[1]), url);
-  if (request.method === 'POST' && path === '/api/v1/import-batches') return createImportBatch(request, cfg, corr, origin);
-  const importMatch = path.match(/^\/api\/v1\/import-batches\/([^/]+)\/(rows|close)$/);
-  if (request.method === 'POST' && importMatch?.[2] === 'rows') return processImportRow(request, cfg, corr, origin, decodeURIComponent(importMatch[1]));
-  if (request.method === 'POST' && importMatch?.[2] === 'close') return closeImportBatch(request, cfg, corr, origin, decodeURIComponent(importMatch[1]));
-  return null;
 }
 
-const worker = {
-  async fetch(request, env, ctx) {
-    const cfg = config(env);
-    const corr = correlationId(request);
-    const origin = originState(request, cfg);
-    if (!origin.allowed) return fail(cfg, corr, origin, new GVError('GV_CORS_DENIED', 'The request origin is not allowed.', 403));
-    try {
-      const handled = await day3Route(request, cfg, corr, origin);
-      if (handled) return handled;
-      return day1Worker.fetch(request, env, ctx);
-    } catch (error) {
-      const message = clean(error?.message);
-      if (message.includes('GV_EVIDENCE_IMMUTABLE')) error = new GVError('GV_EVIDENCE_IMMUTABLE', 'Accepted evidence cannot be updated in place.', 409);
-      return fail(cfg, corr, origin, error);
-    }
-  }
-};
-
-export default worker;
+export default { fetch: route };
