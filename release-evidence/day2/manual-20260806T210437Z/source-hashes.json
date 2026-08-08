@@ -1,0 +1,5 @@
+{
+  "worker/day2.js": "b4ad12ae39c8408b70a50eba7b4bfc6a9e531b3fce104aa4bcb15cd82f047394",
+  "wrangler.day2.json": "41e774bda9450254e44a5e89800c9475554783326d5bbb813036cff6a7bb308c",
+  "migrations/day1/0002_day2_identity_continuity.sql": "92091a9b65b9bc426b872f5efa06b05c0dc296c8671f6d76bf8b26c8d7cae2a7"
+}

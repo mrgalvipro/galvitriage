@@ -1,0 +1,61 @@
+name: Day 7C Compatibility Gate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvicare-day7c-compatibility-gate
+  cancel-in-progress: true
+
+jobs:
+  compatibility:
+    name: Verify Day 7C preservation in Day 7D candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout QA candidate
+        uses: actions/checkout@v4
+        with:
+          ref: qa-revamped-galvicare-0-5
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Run authoritative cumulative pre-human gate
+        run: npm run day7d:gate
+
+      - name: Verify Day 7C QA integrations remain preserved
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const html=fs.readFileSync('dist-qa/index.html','utf8');
+          const required=[
+            'G-V5ZPM5L19T',
+            'xswd8m446z',
+            'https://calendly.com/galvilpro/galviclinic-day7c-qa',
+            'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
+            'https://galvicare-triage-intake.mrgalvipro.workers.dev'
+          ];
+          const missing=required.filter(token=>!html.includes(token));
+          if(missing.length) throw new Error(`Day 7C compatibility missing: ${missing.join(', ')}`);
+          const forbidden=['G-KXJFKN7RTS','xjsdmprr4z','galvicare-0-5-production.mrgalvipro.workers.dev'];
+          const leaked=forbidden.filter(token=>html.includes(token));
+          if(leaked.length) throw new Error(`Production resource leaked into QA: ${leaked.join(', ')}`);
+          console.log('PASS: Day 7C ecosystem remains preserved and QA-isolated.');
+          NODE
+
+      - name: Compatibility summary
+        run: |
+          echo '## DAY 7C COMPATIBILITY: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Full cumulative Day 7D gate: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- HubSpot/GA4/Clarity/Calendly preservation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA/Production separation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Automatic deployment owner: deploy-galvicare-qa.yml' >> "$GITHUB_STEP_SUMMARY"

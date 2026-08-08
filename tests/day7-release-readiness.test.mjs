@@ -36,9 +36,11 @@ test('Day 7 Worker supports all required paid-return aliases and runtime marker'
   assert.equal(worker.includes("const DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1';"), true);
 });
 
-test('Day 7 approved Stripe TEST links remain unchanged', () => {
-  has("const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_eVq3cw3R63YT6O6ahE53O03';");
-  has("const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_fZu14ofzO9jd8We1L853O05';");
+test('Day 7 Production payment links remain the approved LIVE baseline', () => {
+  has("const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00';");
+  has("const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/00w14odrG1QLdcu9dA53O02';");
+  has("const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03';");
+  lacks('buy.stripe.com/test_');
 });
 
 test('Day 7 canonical customer URL and GalviClinic destination remain unchanged', () => {

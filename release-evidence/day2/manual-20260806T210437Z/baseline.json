@@ -1,0 +1,10 @@
+{
+  "branch": "qa-revamped-galvicare-0-5",
+  "source_guard_sha": "ae41b41892de2e9b88b4e81d5e521c535719bb15",
+  "day1_rollback_sha": "63bcb2a2f0a6829915a30c6c4a78106f96cedf7a",
+  "candidate_sha": "ac514d37c37421e471656c08685b3785d83fd5b6",
+  "worker": "galvivault-p0-day1-qa",
+  "d1": "galvivault-0-5-qa",
+  "origin": "https://galvipro.com",
+  "started_at": "2026-08-06T21:04:37.497Z"
+}

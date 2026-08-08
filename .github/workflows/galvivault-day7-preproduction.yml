@@ -1,0 +1,200 @@
+name: GalviVault Day 7 Pre-Production Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/galvivault-day7-preproduction.yml'
+      - 'worker/day1.js'
+      - 'worker/day2.js'
+      - 'worker/day3*.js'
+      - 'worker/day4*.js'
+      - 'worker/day5*.js'
+      - 'worker/worker.js'
+      - 'worker/domain/**'
+      - 'worker/repositories/**'
+      - 'worker/routes/**'
+      - 'migrations/day1/**'
+      - 'tests/**'
+      - 'scripts/**'
+      - 'wrangler.day2.json'
+      - 'wrangler.day3.json'
+      - 'wrangler.day4.json'
+      - 'wrangler.day5.json'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'release-evidence/day6/**'
+      - 'docs/GalviVault_P0_Day_7_Builder_Guide_CODEX_Implementation_Engineer_Edition_v1_0.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvivault-day7-preproduction-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  preproduction:
+    name: Prove exact Day 7 candidate without Production mutation
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Enforce repository branch and GalviCare preservation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin main qa-revamped-galvicare-0-5 --no-tags
+          test "${{ github.event.pull_request.head.ref || 'qa-revamped-galvicare-0-5' }}" = "qa-revamped-galvicare-0-5"
+          git merge-base --is-ancestor origin/main HEAD
+
+          # The current Production GalviCare baseline must be carried into QA byte-for-byte.
+          git diff --exit-code origin/main HEAD -- \
+            index.html \
+            worker/production-entry.js \
+            wrangler.production.jsonc
+
+          # Do not permit the errant local-workspace branch model to become release truth.
+          test "$(git rev-parse --abbrev-ref HEAD)" != "work" || test -n "${GITHUB_ACTIONS:-}"
+
+          echo "repository=mrgalvipro/galvitriage"
+          echo "candidate_branch=qa-revamped-galvicare-0-5"
+          echo "production_branch=main"
+          echo "candidate_sha=$(git rev-parse HEAD)"
+          echo "production_baseline=$(git rev-parse origin/main)"
+          echo "work_branch_used=NO"
+
+      - name: Static syntax security and no-skip gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/day1.js
+          node --check worker/day5-entry.js
+          node --check worker/day5-common.js
+          node --check worker/domain/care-service.js
+          node --check worker/domain/day5-timeline-service.js
+          node --check worker/repositories/care-repository.js
+          node --check worker/routes/care.js
+
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const required = [
+            'tests/day1-foundation.test.mjs',
+            'tests/galvivault-day2-identity-continuity.test.mjs',
+            'tests/day3-evidence-versioning.test.mjs',
+            'tests/day4-reasoning-timeline.test.mjs',
+            'tests/day4-reasoning-integration.test.mjs',
+            'tests/day5-care.test.mjs',
+            'tests/day7b-environment-isolation.test.mjs'
+          ];
+          for (const file of required) {
+            if (!fs.existsSync(file)) throw new Error(`Missing required regression test: ${file}`);
+            const text = fs.readFileSync(file, 'utf8');
+            if (/\b(?:test|it|describe)\.(?:skip|only|todo)\b|\.(?:skip|only|todo)\s*\(/.test(text)) {
+              throw new Error(`Mandatory skip/only/todo found in ${file}`);
+            }
+          }
+          console.log('mandatory_skip_only_todo=0');
+          NODE
+
+          if git grep -nE -- \
+            '-----BEGIN (RSA|EC|OPENSSH) PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9]{20,}|sk_(live|test)_[A-Za-z0-9]{16,}' \
+            -- ':!release-evidence/**'; then
+            echo "Secret-like value detected in tracked source." >&2
+            exit 1
+          fi
+
+      - name: Run GalviVault Day 1 through Day 6 blocking regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test \
+            tests/day1-foundation.test.mjs \
+            tests/galvivault-day2-identity-continuity.test.mjs \
+            tests/day3-evidence-versioning.test.mjs \
+            tests/day4-reasoning-timeline.test.mjs \
+            tests/day4-reasoning-integration.test.mjs \
+            tests/day5-care.test.mjs \
+            tests/day7b-environment-isolation.test.mjs \
+            | tee /tmp/galvivault-day7-blocking-tests.txt
+          ! grep -E '# (fail|failed) [1-9][0-9]*' /tmp/galvivault-day7-blocking-tests.txt
+          ! grep -E '# skipped [1-9][0-9]*' /tmp/galvivault-day7-blocking-tests.txt
+          ! grep -E '# todo [1-9][0-9]*' /tmp/galvivault-day7-blocking-tests.txt
+
+      - name: Run full repository stabilization regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run stabilization:gate | tee /tmp/galvivault-day7-stabilization.txt
+
+      - name: Prove clean and upgrade migration rehearsal locally only
+        shell: bash
+        run: |
+          set -euo pipefail
+          WRANGLER="npx --yes wrangler@4.120.0"
+          ALL=(
+            migrations/day1/0001_canonical_business_medical_record.sql
+            migrations/day1/0002_day2_identity_continuity.sql
+            migrations/day1/0003_day3_evidence_versioning.sql
+            migrations/day1/0004_day4_governed_reasoning.sql
+            migrations/day1/0005_day5_governed_care.sql
+          )
+          rm -rf /tmp/day7-clean /tmp/day7-upgrade
+          for file in "${ALL[@]}"; do
+            $WRANGLER d1 execute galvivault-0-5-qa --local --persist-to /tmp/day7-clean --file="$file" --config wrangler.day5.json
+          done
+          $WRANGLER d1 execute galvivault-0-5-qa --local --persist-to /tmp/day7-clean \
+            --command="SELECT migration_id FROM gv1_schema_migrations ORDER BY migration_id; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); PRAGMA foreign_key_check;" \
+            --config wrangler.day5.json --json | tee /tmp/galvivault-day7-clean-migration.json
+          grep -q '"migration_id": "0005"' /tmp/galvivault-day7-clean-migration.json
+          grep -q '"duplicate_bmr_ventures": 0' /tmp/galvivault-day7-clean-migration.json
+
+          for file in "${ALL[@]:0:4}"; do
+            $WRANGLER d1 execute galvivault-0-5-qa --local --persist-to /tmp/day7-upgrade --file="$file" --config wrangler.day5.json
+          done
+          $WRANGLER d1 execute galvivault-0-5-qa --local --persist-to /tmp/day7-upgrade --file="${ALL[4]}" --config wrangler.day5.json
+          $WRANGLER d1 execute galvivault-0-5-qa --local --persist-to /tmp/day7-upgrade \
+            --command="SELECT migration_id FROM gv1_schema_migrations ORDER BY migration_id; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); PRAGMA foreign_key_check;" \
+            --config wrangler.day5.json --json | tee /tmp/galvivault-day7-upgrade-migration.json
+          grep -q '"migration_id": "0005"' /tmp/galvivault-day7-upgrade-migration.json
+          grep -q '"duplicate_bmr_ventures": 0' /tmp/galvivault-day7-upgrade-migration.json
+
+      - name: Validate QA and Production configuration isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '"database_name": "galvivault-0-5-qa"' wrangler.day5.json
+          grep -q '"ENVIRONMENT": "qa"' wrangler.day5.json
+          grep -q '"database_name": "galvivault-0-5-production"' wrangler.production.jsonc
+          grep -q '"ENVIRONMENT": "production"' wrangler.production.jsonc
+          grep -q '"RELEASE_BRANCH": "main"' wrangler.production.jsonc
+          ! grep -q '"FIXTURE_MODE": "true"' wrangler.production.jsonc
+
+      - name: Publish pre-production evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: galvivault-day7-preproduction-${{ github.event.pull_request.head.sha || github.sha }}
+          if-no-files-found: warn
+          retention-days: 30
+          path: |
+            /tmp/galvivault-day7-blocking-tests.txt
+            /tmp/galvivault-day7-stabilization.txt
+            /tmp/galvivault-day7-clean-migration.json
+            /tmp/galvivault-day7-upgrade-migration.json

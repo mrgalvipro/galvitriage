@@ -1,0 +1,122 @@
+name: GalviVault Day 5 QA Governed Care
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvivault-qa-exclusive-mutator
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DAY5_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
+
+jobs:
+  day5-gate-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    environment: qa
+    steps:
+      - name: Checkout exact QA candidate
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Generate QA-only Stripe replay key
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "STRIPE_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+
+      - name: Prove QA-only configuration
+        run: |
+          node -e "const w=require('./wrangler.day5.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='0005'||w.d1_databases?.[0]?.binding!=='DB'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
+          test ! -e wrangler.production.day5.json
+
+      - name: Day 5 local contract and regression gate
+        run: npm run day5:gate
+
+      - name: Inspect canonical Day 5 migration ledger
+        run: |
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id='0005';" | tee day5-migration-before.txt
+
+      - name: Apply only Day 5 migration when absent
+        run: |
+          if grep -q "day5_governed_care_v1" day5-migration-before.txt; then
+            echo "Migration 0005 already complete."
+          else
+            npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --file migrations/day1/0005_day5_governed_care.sql
+          fi
+
+      - name: Capture direct remote D1 schema assertions
+        run: |
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id='0005';" | tee day5-d1-migration.txt
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT type,name FROM sqlite_master WHERE name IN ('idx_recommendations_bmr','idx_treatment_plans_bmr','idx_treatment_events_plan','idx_outcomes_bmr','idx_feedback_target','idx_adapter_status','trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete') ORDER BY type,name;" | tee day5-d1-schema.txt
+          grep -q "day5_governed_care_v1" day5-d1-migration.txt
+          grep -q "idx_recommendations_bmr" day5-d1-schema.txt
+          grep -q "idx_treatment_plans_bmr" day5-d1-schema.txt
+          grep -q "idx_treatment_events_plan" day5-d1-schema.txt
+          grep -q "idx_outcomes_bmr" day5-d1-schema.txt
+          grep -q "idx_feedback_target" day5-d1-schema.txt
+          grep -q "idx_adapter_status" day5-d1-schema.txt
+          grep -q "trg_gv1_treatment_events_no_update" day5-d1-schema.txt
+          grep -q "trg_gv1_treatment_events_no_delete" day5-d1-schema.txt
+
+      - name: Deploy cumulative Day 5 QA Worker
+        run: npx --yes wrangler@4.120.0 deploy --config wrangler.day5.json --var STRIPE_WEBHOOK_SECRET:$STRIPE_WEBHOOK_SECRET | tee day5-deploy.txt
+
+      - name: Wait for Worker convergence
+        run: sleep 12
+
+      - name: Verify deployed Day 5 readiness
+        run: |
+          curl --fail --silent --show-error "$DAY5_QA_URL/health" | tee day5-health.json
+          curl --fail --silent --show-error "$DAY5_QA_URL/ready" | tee day5-ready.json
+          curl --fail --silent --show-error "$DAY5_QA_URL/api/v1/day5/readiness" | tee day5-readiness.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const r=JSON.parse(fs.readFileSync('day5-readiness.json','utf8'));
+          if(!r.success||r.environment!=='qa'||!r.data?.ready||r.data?.current_schema_version!=='0005'||r.data?.required_schema_version!=='0005'){
+            console.error(r); process.exit(1);
+          }
+          NODE
+
+      - name: Execute deployed Day 5 BLOCK and Human E2E evidence
+        run: node scripts/day5-deployed-e2e.mjs | tee day5-deployed-e2e-console.txt
+
+      - name: Final Day 1-Day 4 affected regression
+        run: npm run day5:regression
+
+      - name: Prove Production and GalviCare runtime files were not changed by Day 5 evidence harness
+        run: |
+          git diff --exit-code HEAD^ HEAD -- worker/production-entry.js wrangler.production.jsonc index.html day7d-browser-customer-intelligence.js qa-frontend-worker.js || {
+            echo 'Unexpected Production/GalviCare runtime change detected in final Day 5 evidence commit.' >&2
+            exit 1
+          }
+
+      - name: Upload Day 5 hosted evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: galvivault-day5-hosted-evidence-${{ github.sha }}
+          path: |
+            day5-migration-before.txt
+            day5-d1-migration.txt
+            day5-d1-schema.txt
+            day5-deploy.txt
+            day5-health.json
+            day5-ready.json
+            day5-readiness.json
+            day5-deployed-e2e-console.txt
+            release-evidence/day5-runtime/deployed-e2e.json
+            release-evidence/day5-runtime/deployed-e2e.txt
+          if-no-files-found: warn

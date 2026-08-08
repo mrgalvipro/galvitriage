@@ -1,0 +1,19 @@
+access-control-allow-headers: Content-Type, Idempotency-Key, X-Correlation-Id, X-GalviVault-Actor-Id, X-GalviVault-Actor-Type
+access-control-allow-methods: GET, POST, PATCH, OPTIONS
+access-control-allow-origin: https://galvipro.com
+access-control-max-age: 600
+alt-svc: h3=":443"; ma=86400
+cache-control: no-store
+cf-ray: a270ff4ef96f7b0e-EWR
+connection: keep-alive
+content-encoding: br
+content-type: application/json; charset=utf-8
+date: Thu, 06 Aug 2026 21:05:01 GMT
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=L6vG9ANk%2BGXfOzUIFZgkZG0LI2I5SaU58kxtXP7%2BECjlQdkcrV6yLSgqjQUDprRn9ZrB4Dbs7KL6%2BVes5wgNBQrcMpHZawiQND0RcPj89lLED%2BG7uxgTx2ekUMm8uNxgKVQEZPJhZbHNDP1%2BJyutMk2X03PGdYgDyz30GCcBMg%3D%3D"}]}
+server: cloudflare
+transfer-encoding: chunked
+vary: Origin
+x-correlation-id: corr_12a9b25a67f24e07acad3936982b8950
+x-galvivault-api-version: v1
+x-galvivault-environment: qa

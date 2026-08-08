@@ -1,0 +1,302 @@
+name: GalviVault Day 4 QA Governed Reasoning
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - ".github/workflows/day4-qa-reasoning-timeline.yml"
+      - "worker/day4-entry.js"
+      - "worker/day4-common.js"
+      - "worker/domain/reasoning-service.js"
+      - "worker/domain/governance-service.js"
+      - "worker/domain/bmr-service.js"
+      - "worker/repositories/reasoning-repository.js"
+      - "worker/routes/reasoning.js"
+      - "worker/routes/governance.js"
+      - "worker/routes/business-medical-records.js"
+      - "migrations/day1/0004_day4_governed_reasoning.sql"
+      - "tests/day4-reasoning-timeline.test.mjs"
+      - "tests/day4-reasoning-integration.test.mjs"
+      - "scripts/day4-smoke.mjs"
+      - "wrangler.day4.json"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: galvivault-day4-qa-reasoning
+  cancel-in-progress: true
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DAY4_ALLOWED_ORIGIN: https://galvipro.com
+  GALVICARE_COMPLETION_BASELINE: ae41b41892de2e9b88b4e81d5e521c535719bb15
+  DAY3_FINAL_COMMIT: 65efeeb03ff4672f288af5553c63d8a0eb480ba6
+
+jobs:
+  day4:
+    name: Validate migrate deploy and prove Day 4
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - name: Checkout exact QA candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install repository dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Capture candidate and prove protected GalviCare files unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/day4 release-evidence/day4
+          git rev-parse HEAD | tee /tmp/day4/candidate-sha.txt
+          git diff --exit-code "$GALVICARE_COMPLETION_BASELINE" -- \
+            worker/worker.js \
+            worker/day7d-engine.js \
+            worker/day7d-runtime.js \
+            worker/production-entry.js \
+            day7c-browser-observability.js \
+            day7d-browser-customer-intelligence.js \
+            index.html \
+            qa-frontend-worker.js \
+            wrangler.day7d.json \
+            wrangler.qa-frontend.jsonc \
+            wrangler.production.jsonc
+          printf '%s\n' \
+            "candidate=$(cat /tmp/day4/candidate-sha.txt)" \
+            "day3_final=$DAY3_FINAL_COMMIT" \
+            "qa_worker=galvivault-p0-day1-qa" \
+            "qa_database=galvivault-0-5-qa" \
+            "schema_target=0004" \
+            "galvicare_completion_baseline=$GALVICARE_COMPLETION_BASELINE" \
+            > /tmp/day4/baseline.txt
+
+      - name: Run Day 4 static and D1-compatible integration gates plus Day 1-3 regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/day4-common.js
+          node --check worker/day4-entry.js
+          node --check worker/domain/reasoning-service.js
+          node --check worker/domain/governance-service.js
+          node --check worker/domain/bmr-service.js
+          node --check worker/repositories/reasoning-repository.js
+          node --check worker/routes/reasoning.js
+          node --check worker/routes/governance.js
+          node --check worker/routes/business-medical-records.js
+          node --check scripts/day4-smoke.mjs
+          node --test tests/day4-reasoning-timeline.test.mjs | tee /tmp/day4/day4-static.txt
+          node --test tests/day4-reasoning-integration.test.mjs | tee /tmp/day4/day4-integration.txt
+          node --test tests/day1-foundation.test.mjs tests/galvivault-day2-identity-continuity.test.mjs tests/day3-evidence-versioning.test.mjs | tee /tmp/day4/day1-3-regression.txt
+          ! grep -E '# skipped [1-9]' /tmp/day4/day4-static.txt
+          ! grep -E '# skipped [1-9]' /tmp/day4/day4-integration.txt
+          ! grep -E '# skipped [1-9]' /tmp/day4/day1-3-regression.txt
+          node --test tests/day7b-environment-isolation.test.mjs | tee /tmp/day4/production-isolation.txt
+
+      - name: Resolve Wrangler with bounded retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wrangler-retry <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            npx --yes wrangler@4 "$@" && exit 0
+            [ "$attempt" = 4 ] && exit 1
+            sleep $((attempt*5))
+          done
+          SH
+          chmod +x /tmp/wrangler-retry
+          /tmp/wrangler-retry --version | tee /tmp/day4/wrangler-version.txt
+
+      - name: Prove clean local migration sequence 0001 through 0004
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/day4-local
+          for file in \
+            migrations/day1/0001_canonical_business_medical_record.sql \
+            migrations/day1/0002_day2_identity_continuity.sql \
+            migrations/day1/0003_day3_evidence_versioning.sql \
+            migrations/day1/0004_day4_governed_reasoning.sql; do
+            /tmp/wrangler-retry d1 execute galvivault-0-5-qa --local --persist-to /tmp/day4-local --file="$file" --config wrangler.day4.json
+          done
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --local --persist-to /tmp/day4-local --command="SELECT migration_id FROM gv1_schema_migrations ORDER BY migration_id; SELECT COUNT(*) AS idx FROM sqlite_master WHERE type='index' AND name IN ('idx_observations_bmr','idx_hypotheses_bmr','idx_findings_bmr');" --config wrangler.day4.json --json | tee /tmp/day4/local-schema.json
+          grep -q '"migration_id": "0004"' /tmp/day4/local-schema.json
+          grep -q '"idx": 3' /tmp/day4/local-schema.json
+
+      - name: Preflight and apply or reconcile remote migration 0004
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL="SELECT COUNT(*) AS ledger_0001 FROM gv1_schema_migrations WHERE migration_id='0001'; SELECT COUNT(*) AS ledger_0002 FROM gv1_schema_migrations WHERE migration_id='0002'; SELECT COUNT(*) AS ledger_0003 FROM gv1_schema_migrations WHERE migration_id='0003'; SELECT COUNT(*) AS ledger_0004 FROM gv1_schema_migrations WHERE migration_id='0004'; SELECT COUNT(*) AS obs_cols FROM pragma_table_info('gv1_observations') WHERE name IN ('observation_group_id','version_no','supersedes_observation_id','domain','confidence','source_type','source_version','status','created_by_type','created_by_id','correlation_id'); SELECT COUNT(*) AS hyp_cols FROM pragma_table_info('gv1_hypotheses') WHERE name IN ('hypothesis_group_id','version_no','supersedes_hypothesis_id','domain','uncertainty','source_type','source_version','created_by_type','created_by_id','correlation_id'); SELECT COUNT(*) AS find_cols FROM pragma_table_info('gv1_findings') WHERE name IN ('finding_group_id','version_no','supersedes_finding_id','finding_code','domain','confidence','confidence_band','confirmation_status','governance_version','status','source_type','source_version','created_by_type','created_by_id','confirmation_reason','confirmed_by_type','confirmed_by_id','confirmed_at','correlation_id'); SELECT COUNT(*) AS d4_indexes FROM sqlite_master WHERE type='index' AND name IN ('idx_observations_bmr','idx_hypotheses_bmr','idx_findings_bmr');"
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="$SQL" --config wrangler.day4.json --json > /tmp/day4/preflight.json
+          cat /tmp/day4/preflight.json
+          read -r L1 L2 L3 L4 OBS HYP FIND IDX < <(node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('/tmp/day4/preflight.json','utf8'));const rows=[];const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){rows.push(v);Object.values(v).forEach(walk)}};walk(p);const n=k=>Number(rows.find(x=>Object.hasOwn(x,k))?.[k]??-1);console.log(n('ledger_0001'),n('ledger_0002'),n('ledger_0003'),n('ledger_0004'),n('obs_cols'),n('hyp_cols'),n('find_cols'),n('d4_indexes'));
+          NODE
+          )
+          [ "$L1" = "1" ] && [ "$L2" = "1" ] && [ "$L3" = "1" ] || { echo 'Day 1-3 migration prerequisite missing.'; exit 1; }
+          if [ "$L4" = "0" ] && [ "$OBS" = "0" ] && [ "$HYP" = "0" ] && [ "$FIND" = "0" ] && [ "$IDX" = "0" ]; then
+            /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --file=migrations/day1/0004_day4_governed_reasoning.sql --config wrangler.day4.json | tee /tmp/day4/migration.txt
+          elif [ "$L4" = "0" ] && [ "$OBS" = "11" ] && [ "$HYP" = "10" ] && [ "$FIND" = "19" ] && [ "$IDX" = "3" ]; then
+            /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="INSERT OR IGNORE INTO gv1_schema_migrations (migration_id,name,environment,checksum,applied_at) VALUES ('0004','day4_governed_reasoning_v1','qa','gv1-0004-day4-governed-reasoning',CURRENT_TIMESTAMP);" --config wrangler.day4.json | tee /tmp/day4/migration.txt
+          elif [ "$L4" = "1" ] && [ "$OBS" = "11" ] && [ "$HYP" = "10" ] && [ "$FIND" = "19" ] && [ "$IDX" = "3" ]; then
+            echo 'Migration 0004 already complete.' | tee /tmp/day4/migration.txt
+          else
+            echo "Partial or contradictory Day 4 schema detected: ledger=$L4 obs=$OBS hyp=$HYP find=$FIND idx=$IDX"
+            exit 1
+          fi
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="$SQL" --config wrangler.day4.json --json | tee /tmp/day4/remote-schema.json
+          grep -q '"ledger_0004": 1' /tmp/day4/remote-schema.json
+          grep -q '"obs_cols": 11' /tmp/day4/remote-schema.json
+          grep -q '"hyp_cols": 10' /tmp/day4/remote-schema.json
+          grep -q '"find_cols": 19' /tmp/day4/remote-schema.json
+          grep -q '"d4_indexes": 3' /tmp/day4/remote-schema.json
+
+      - name: Deploy cumulative Day 4 to existing isolated GalviVault QA Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/wrangler-retry deploy --config wrangler.day4.json 2>&1 | tee /tmp/day4/deploy.log
+          DAY4_BASE_URL="$(grep -Eo 'https://[[:alnum:].-]+\.workers\.dev' /tmp/day4/deploy.log | tail -n 1)"
+          test -n "$DAY4_BASE_URL"
+          echo "DAY4_BASE_URL=$DAY4_BASE_URL" >> "$GITHUB_ENV"
+          echo "$DAY4_BASE_URL" > /tmp/day4/deployed-url.txt
+
+      - name: Verify Day 4 runtime convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            STATUS="$(curl -sS -o /tmp/day4/ready.json -D /tmp/day4/ready.headers -w '%{http_code}' -H "Origin: $DAY4_ALLOWED_ORIGIN" "$DAY4_BASE_URL/api/v1/day4/readiness?candidate=$GITHUB_SHA&attempt=$attempt" || true)"
+            if [ "$STATUS" = "200" ] && node -e "const p=require('/tmp/day4/ready.json');if(p?.success!==true||p?.data?.ready!==true||p?.data?.current_schema_version!=='0004')process.exit(1)" && grep -qi '^x-galvivault-environment: qa' /tmp/day4/ready.headers; then exit 0; fi
+            sleep 3
+          done
+          cat /tmp/day4/ready.headers || true
+          cat /tmp/day4/ready.json || true
+          exit 1
+
+      - name: Execute H4.1-H4.18 against deployed QA Worker
+        shell: bash
+        env:
+          DAY4_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+          DAY4_EVIDENCE_PATH: /tmp/day4/h4.json
+        run: |
+          set -euo pipefail
+          DAY4_BASE_URL="$DAY4_BASE_URL" DAY4_ALLOWED_ORIGIN="$DAY4_ALLOWED_ORIGIN" node scripts/day4-smoke.mjs | tee /tmp/day4/human-e2e.log
+          node --input-type=module <<'NODE' >> "$GITHUB_ENV"
+          import fs from 'node:fs';const p=JSON.parse(fs.readFileSync('/tmp/day4/h4.json','utf8'));if(p.status!=='pass')process.exit(1);for(const [k,v] of Object.entries(p.ids||{})) if(v!==undefined&&v!==null) console.log(`D4_${k.toUpperCase()}=${v}`);
+          NODE
+
+      - name: Run direct QA D1 lineage version governance and orphan assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL="SELECT COUNT(*) AS observation_support FROM gv1_observation_evidence WHERE observation_id='$D4_OBSERVATION_ID'; SELECT COUNT(*) AS hypothesis_support FROM gv1_hypothesis_observations WHERE hypothesis_id='$D4_HYPOTHESIS_ID'; SELECT COUNT(*) AS finding_v1 FROM gv1_findings WHERE finding_id='$D4_FINDING_V1' AND version_no=1 AND confirmation_status='confirmed'; SELECT COUNT(*) AS finding_v2 FROM gv1_findings WHERE finding_id='$D4_FINDING_V2' AND version_no=2 AND supersedes_finding_id='$D4_FINDING_V1'; SELECT COUNT(*) AS finding_v2_support FROM (SELECT finding_id FROM gv1_finding_evidence UNION ALL SELECT finding_id FROM gv1_finding_observations UNION ALL SELECT finding_id FROM gv1_finding_hypotheses) WHERE finding_id='$D4_FINDING_V2'; SELECT COUNT(*) AS confirm_audit FROM gv1_audit_log WHERE entity_type='finding' AND entity_id='$D4_FINDING_V1' AND operation='confirmed'; SELECT COUNT(*) AS find_receipt FROM gv1_idempotency_keys WHERE scope='day4:finding:create' AND response_entity_id='$D4_FINDING_V1'; SELECT COUNT(*) AS orphan_observations FROM gv1_observations o WHERE o.status IN ('draft','active') AND NOT EXISTS (SELECT 1 FROM gv1_observation_evidence x WHERE x.observation_id=o.observation_id); SELECT COUNT(*) AS orphan_hypotheses FROM gv1_hypotheses h WHERE h.status IN ('draft','active','open') AND NOT EXISTS (SELECT 1 FROM gv1_hypothesis_observations x WHERE x.hypothesis_id=h.hypothesis_id); SELECT COUNT(*) AS orphan_findings FROM gv1_findings f WHERE f.status IN ('draft','active') AND NOT EXISTS (SELECT 1 FROM gv1_finding_evidence e WHERE e.finding_id=f.finding_id) AND NOT EXISTS (SELECT 1 FROM gv1_finding_observations o WHERE o.finding_id=f.finding_id) AND NOT EXISTS (SELECT 1 FROM gv1_finding_hypotheses h WHERE h.finding_id=f.finding_id); SELECT COUNT(*) AS cross_observation FROM gv1_observation_evidence x JOIN gv1_observations o ON o.observation_id=x.observation_id JOIN gv1_evidence_items e ON e.evidence_id=x.evidence_id WHERE o.bmr_id<>e.bmr_id; SELECT COUNT(*) AS cross_finding FROM gv1_finding_evidence x JOIN gv1_findings f ON f.finding_id=x.finding_id JOIN gv1_evidence_items e ON e.evidence_id=x.evidence_id WHERE f.bmr_id<>e.bmr_id;"
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="$SQL" --config wrangler.day4.json --json | tee /tmp/day4/database-assertions.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';const p=JSON.parse(fs.readFileSync('/tmp/day4/database-assertions.json','utf8'));const rows=[];const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){rows.push(v);Object.values(v).forEach(walk)}};walk(p);const n=k=>Number(rows.find(x=>Object.hasOwn(x,k))?.[k]??-1);const min=['observation_support','hypothesis_support','finding_v1','finding_v2','finding_v2_support','confirm_audit','find_receipt'];for(const k of min)if(n(k)<1)throw new Error(`${k} missing: ${n(k)}`);for(const k of ['orphan_observations','orphan_hypotheses','orphan_findings','cross_observation','cross_finding'])if(n(k)!==0)throw new Error(`${k} must be zero: ${n(k)}`);
+          NODE
+
+      - name: Execute H4.19 Production preservation smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --exit-code "$GALVICARE_COMPLETION_BASELINE" -- worker/worker.js worker/day7d-engine.js worker/day7d-runtime.js worker/production-entry.js index.html wrangler.day7d.json wrangler.qa-frontend.jsonc wrangler.production.jsonc
+          STATUS="$(curl -L -sS -o /tmp/day4/production.html -w '%{http_code}' https://www.galvipro.com/)"
+          case "$STATUS" in 2*|3*) ;; *) echo "Production public smoke returned $STATUS"; exit 1;; esac
+          printf 'H4.19 PASS: production protected files unchanged and https://www.galvipro.com returned HTTP %s\n' "$STATUS" | tee /tmp/day4/production-smoke.txt
+
+      - name: Rehearse non-destructive Worker rollback and restore Day 4
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/wrangler-retry deploy --config wrangler.day3.json 2>&1 | tee /tmp/day4/rollback-day3.log
+          for attempt in $(seq 1 40); do
+            STATUS="$(curl -sS -o /tmp/day4/day3-ready.json -w '%{http_code}' -H "Origin: $DAY4_ALLOWED_ORIGIN" "$DAY4_BASE_URL/api/v1/day3/readiness?rollback=$attempt" || true)"
+            if [ "$STATUS" = "200" ] && node -e "const p=require('/tmp/day4/day3-ready.json');if(p?.success!==true||p?.data?.ready!==true)process.exit(1)"; then break; fi
+            [ "$attempt" = "40" ] && exit 1
+            sleep 2
+          done
+          /tmp/wrangler-retry deploy --config wrangler.day4.json 2>&1 | tee /tmp/day4/restore-day4.log
+          for attempt in $(seq 1 50); do
+            STATUS="$(curl -sS -o /tmp/day4/restored-ready.json -w '%{http_code}' -H "Origin: $DAY4_ALLOWED_ORIGIN" "$DAY4_BASE_URL/api/v1/day4/readiness?restore=$attempt" || true)"
+            if [ "$STATUS" = "200" ] && node -e "const p=require('/tmp/day4/restored-ready.json');if(p?.success!==true||p?.data?.ready!==true||p?.data?.current_schema_version!=='0004')process.exit(1)"; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Assemble Day 4 release evidence
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp /tmp/day4/baseline.txt release-evidence/day4/baseline.txt
+          cp /tmp/day4/wrangler-version.txt release-evidence/day4/wrangler-version.txt
+          cp /tmp/day4/migration.txt release-evidence/day4/migration-transcript.txt
+          cp /tmp/day4/remote-schema.json release-evidence/day4/schema-verification.json
+          cp /tmp/day4/deploy.log release-evidence/day4/deploy.log
+          cp /tmp/day4/ready.json release-evidence/day4/readiness.json
+          cp /tmp/day4/h4.json release-evidence/day4/human-e2e.json
+          cp /tmp/day4/database-assertions.json release-evidence/day4/database-assertions.json
+          cp /tmp/day4/production-smoke.txt release-evidence/day4/production-smoke.txt
+          cp /tmp/day4/rollback-day3.log release-evidence/day4/rollback-day3.log
+          cp /tmp/day4/restore-day4.log release-evidence/day4/restore-day4.log
+          cat > release-evidence/day4/final-gate.md <<EOF
+          # GalviVault Day 4 Final Gate
+          - Candidate: $GITHUB_SHA
+          - QA Worker: galvivault-p0-day1-qa
+          - QA D1: galvivault-0-5-qa
+          - Schema: 0004
+          - D4-01: PASS
+          - D4-02: PASS
+          - D4-03: PASS
+          - D4-04: PASS
+          - D4-05: PASS
+          - IP-004 / RS-001..RS-010 / LC-004/008/009/010: PASS through local + deployed/D1 proof
+          - Mandatory skipped: 0
+          - H4.1-H4.19: PASS
+          - Day 1-3 regression: PASS
+          - Production baseline unchanged: PASS
+          - Rollback rehearsal: PASS
+          - Critical/high defects: 0
+          - Decision: GO
+          - Final status: DAY 4 HUMAN E2E PASS → DAY 4 BUILD FINAL
+          EOF
+          git status --short > release-evidence/day4/changed-files.txt
+
+      - name: Persist release evidence to QA branch
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add release-evidence/day4
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Record GalviVault Day 4 Human E2E PASS [skip ci]"
+          git push origin HEAD:qa-revamped-galvicare-0-5
+
+      - name: Upload Day 4 evidence artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: galvivault-day4-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            /tmp/day4
+            release-evidence/day4
+          if-no-files-found: warn

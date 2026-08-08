@@ -1,0 +1,1549 @@
+{
+  "day": 3,
+  "run_suffix": "31182583984-1",
+  "base_url": "https://galvivault-p0-day1-qa.mrgalvipro.workers.dev",
+  "origin": "https://galvipro.com",
+  "started_at": "2026-08-07T13:26:27.435Z",
+  "steps": [
+    {
+      "step": "H3.0_READINESS_PROBE_1",
+      "timestamp": "2026-08-07T13:26:27.596Z",
+      "method": "GET",
+      "path": "/api/v1/day3/readiness?run=31182583984-1&probe=1",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_0_readiness_probe_1",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_0_readiness_probe_1",
+        "data": {
+          "service": "galvivault-p0-day3",
+          "ready": true,
+          "current_schema_version": "0003",
+          "required_schema_version": "0003",
+          "migration": {
+            "migration_id": "0003",
+            "name": "day3_evidence_versioning_v1",
+            "environment": "qa",
+            "checksum": "gv1-0003-day3-evidence-versioning",
+            "applied_at": "2026-08-07 12:24:43"
+          },
+          "immutable_trigger": "trg_gv1_accepted_evidence_no_update",
+          "question_definition": {
+            "question_id": "triage.problem_clarity",
+            "version": "v1",
+            "product": "GalviTriage",
+            "dimension": "Problem",
+            "prompt": "How clearly defined is the problem your venture solves?",
+            "response_type": "number",
+            "required_flag": 1,
+            "minimum_value": 0,
+            "maximum_value": 100,
+            "weight": 1,
+            "score_direction": "higher_is_better",
+            "status": "active",
+            "effective_at": "2026-08-07 12:24:43",
+            "created_at": "2026-08-07 12:24:43"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003"
+        }
+      }
+    },
+    {
+      "step": "H3.0_READINESS_PROBE_2",
+      "timestamp": "2026-08-07T13:26:29.180Z",
+      "method": "GET",
+      "path": "/api/v1/day3/readiness?run=31182583984-1&probe=2",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_0_readiness_probe_2",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_0_readiness_probe_2",
+        "data": {
+          "service": "galvivault-p0-day3",
+          "ready": true,
+          "current_schema_version": "0003",
+          "required_schema_version": "0003",
+          "migration": {
+            "migration_id": "0003",
+            "name": "day3_evidence_versioning_v1",
+            "environment": "qa",
+            "checksum": "gv1-0003-day3-evidence-versioning",
+            "applied_at": "2026-08-07 12:24:43"
+          },
+          "immutable_trigger": "trg_gv1_accepted_evidence_no_update",
+          "question_definition": {
+            "question_id": "triage.problem_clarity",
+            "version": "v1",
+            "product": "GalviTriage",
+            "dimension": "Problem",
+            "prompt": "How clearly defined is the problem your venture solves?",
+            "response_type": "number",
+            "required_flag": 1,
+            "minimum_value": 0,
+            "maximum_value": 100,
+            "weight": 1,
+            "score_direction": "higher_is_better",
+            "status": "active",
+            "effective_at": "2026-08-07 12:24:43",
+            "created_at": "2026-08-07 12:24:43"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003"
+        }
+      }
+    },
+    {
+      "step": "H3.0_READINESS_PROBE_3",
+      "timestamp": "2026-08-07T13:26:30.760Z",
+      "method": "GET",
+      "path": "/api/v1/day3/readiness?run=31182583984-1&probe=3",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_0_readiness_probe_3",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_0_readiness_probe_3",
+        "data": {
+          "service": "galvivault-p0-day3",
+          "ready": true,
+          "current_schema_version": "0003",
+          "required_schema_version": "0003",
+          "migration": {
+            "migration_id": "0003",
+            "name": "day3_evidence_versioning_v1",
+            "environment": "qa",
+            "checksum": "gv1-0003-day3-evidence-versioning",
+            "applied_at": "2026-08-07 12:24:43"
+          },
+          "immutable_trigger": "trg_gv1_accepted_evidence_no_update",
+          "question_definition": {
+            "question_id": "triage.problem_clarity",
+            "version": "v1",
+            "product": "GalviTriage",
+            "dimension": "Problem",
+            "prompt": "How clearly defined is the problem your venture solves?",
+            "response_type": "number",
+            "required_flag": 1,
+            "minimum_value": 0,
+            "maximum_value": 100,
+            "weight": 1,
+            "score_direction": "higher_is_better",
+            "status": "active",
+            "effective_at": "2026-08-07 12:24:43",
+            "created_at": "2026-08-07 12:24:43"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003"
+        }
+      }
+    },
+    {
+      "step": "H3.1_IDENTITY_PRECONDITION",
+      "timestamp": "2026-08-07T13:26:30.951Z",
+      "method": "POST",
+      "path": "/api/v1/sessions",
+      "status": 201,
+      "correlation_id": "corr_d3_31182583984-1_h3_1_identity_precondition",
+      "environment": "qa",
+      "request": {
+        "client_session_key": "d3-session-31182583984-1-01",
+        "source": "galvivault",
+        "current_stage": "GalviTriage",
+        "founder": {
+          "email": "founder.day3.31182583984-1@example.test",
+          "first_name": "Day",
+          "last_name": "Three",
+          "consent_status": "approved"
+        },
+        "venture": {
+          "venture_name": "Day 3 Evidence Venture 31182583984-1",
+          "stage": "validation",
+          "industry": "business-services",
+          "role_code": "founder",
+          "is_primary": true
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_1_identity_precondition",
+        "data": {
+          "identity": {
+            "founder": {
+              "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+              "first_name": "Day",
+              "last_name": "Three",
+              "email": "founder.day3.31182583984-1@example.test",
+              "normalized_email": "founder.day3.31182583984-1@example.test",
+              "phone": null,
+              "consent_status": "approved",
+              "status": "active",
+              "record_version": 1,
+              "profile_json": null,
+              "created_at": "2026-08-07T13:26:30.822Z",
+              "updated_at": "2026-08-07T13:26:30.822Z"
+            },
+            "venture": {
+              "venture_id": "ven_f4ce972aba3b4ca185b724c12ee03301",
+              "venture_name": "Day 3 Evidence Venture 31182583984-1",
+              "stage": "validation",
+              "website": null,
+              "industry": "business-services",
+              "revenue_range": null,
+              "profile_json": null,
+              "status": "active",
+              "record_version": 1,
+              "created_at": "2026-08-07T13:26:30.822Z",
+              "updated_at": "2026-08-07T13:26:30.822Z"
+            },
+            "founder_venture_role": {
+              "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+              "venture_id": "ven_f4ce972aba3b4ca185b724c12ee03301",
+              "role_code": "founder",
+              "is_primary": 1,
+              "status": "active",
+              "created_at": "2026-08-07T13:26:30.822Z",
+              "updated_at": "2026-08-07T13:26:30.822Z"
+            },
+            "business_medical_record": {
+              "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+              "venture_id": "ven_f4ce972aba3b4ca185b724c12ee03301",
+              "status": "active",
+              "record_version": 1,
+              "current_session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+              "opened_at": "2026-08-07T13:26:30.822Z",
+              "closed_at": null,
+              "created_at": "2026-08-07T13:26:30.822Z",
+              "updated_at": "2026-08-07T13:26:30.822Z"
+            },
+            "session": {
+              "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+              "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+              "venture_id": "ven_f4ce972aba3b4ca185b724c12ee03301",
+              "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+              "client_session_key": "d3-session-31182583984-1-01",
+              "source": "galvivault",
+              "current_stage": "GalviTriage",
+              "status": "active",
+              "started_at": "2026-08-07T13:26:30.822Z",
+              "completed_at": null,
+              "created_at": "2026-08-07T13:26:30.822Z",
+              "updated_at": "2026-08-07T13:26:30.822Z"
+            }
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 1,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.1_SUBMIT_ANSWER_EVIDENCE",
+      "timestamp": "2026-08-07T13:26:31.210Z",
+      "method": "POST",
+      "path": "/api/v1/evidence",
+      "status": 201,
+      "correlation_id": "corr_d3_31182583984-1_h3_1_submit_answer_evidence",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+        "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+        "source_type": "assessment_answer",
+        "source_ref": "triage.problem_clarity:v1:31182583984-1",
+        "value_type": "number",
+        "value_number": 72,
+        "consent_status": "approved",
+        "captured_at": "2026-08-07T13:26:30.951Z",
+        "assessment_answer": {
+          "question_id": "triage.problem_clarity",
+          "question_version": "v1",
+          "raw_value_number": 72,
+          "normalized_value_number": 72,
+          "confidence_effect": 0.2
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_1_submit_answer_evidence",
+        "data": {
+          "evidence": {
+            "evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "evidence_type": "number",
+            "source_product": "GalviVault",
+            "source_reference": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":72,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+            "confidence": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T13:26:31.073Z",
+            "evidence_group_id": "evg_5e40e89cfd364e669aa17c665ddc02f8",
+            "version_no": 1,
+            "supersedes_evidence_id": null,
+            "source_type": "assessment_answer",
+            "source_ref": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "value_type": "number",
+            "value_text": null,
+            "value_number": 72,
+            "value_boolean": null,
+            "value_date": null,
+            "value_json": null,
+            "status": "draft",
+            "consent_status": "approved",
+            "source_actor_type": "public",
+            "source_actor_id": "public-session",
+            "captured_at": "2026-08-07T13:26:30.951Z",
+            "content_hash": "e2776c7d722f73cd78766a62559066f441ebe949d8ec358136617c15332154b4",
+            "rejection_reason": null,
+            "updated_at": "2026-08-07T13:26:31.073Z",
+            "is_current": true,
+            "superseded_by_evidence_id": null,
+            "relationships": []
+          },
+          "answer": {
+            "answer_id": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "question_id": "triage.problem_clarity",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "question_version": "v1",
+            "answer_group_id": "ang_c1124a8957de408fad580b7c8f73eb10",
+            "version_no": 1,
+            "supersedes_answer_id": null,
+            "raw_value_text": null,
+            "raw_value_number": 72,
+            "normalized_value_text": null,
+            "normalized_value_number": 72,
+            "confidence_effect": 0.2,
+            "source": "assessment_answer",
+            "captured_at": "2026-08-07T13:26:30.951Z",
+            "status": "draft",
+            "content_hash": "104fb64b510d43234304b1246dc500b7f22aee9bd9c084f235ee4c6688828385"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.2_EXACT_REPLAY",
+      "timestamp": "2026-08-07T13:26:31.364Z",
+      "method": "POST",
+      "path": "/api/v1/evidence",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_2_exact_replay",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+        "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+        "source_type": "assessment_answer",
+        "source_ref": "triage.problem_clarity:v1:31182583984-1",
+        "value_type": "number",
+        "value_number": 72,
+        "consent_status": "approved",
+        "captured_at": "2026-08-07T13:26:30.951Z",
+        "assessment_answer": {
+          "question_id": "triage.problem_clarity",
+          "question_version": "v1",
+          "raw_value_number": 72,
+          "normalized_value_number": 72,
+          "confidence_effect": 0.2
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "no_change",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_2_exact_replay",
+        "data": {
+          "evidence": {
+            "evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "evidence_type": "number",
+            "source_product": "GalviVault",
+            "source_reference": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":72,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+            "confidence": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T13:26:31.073Z",
+            "evidence_group_id": "evg_5e40e89cfd364e669aa17c665ddc02f8",
+            "version_no": 1,
+            "supersedes_evidence_id": null,
+            "source_type": "assessment_answer",
+            "source_ref": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "value_type": "number",
+            "value_text": null,
+            "value_number": 72,
+            "value_boolean": null,
+            "value_date": null,
+            "value_json": null,
+            "status": "draft",
+            "consent_status": "approved",
+            "source_actor_type": "public",
+            "source_actor_id": "public-session",
+            "captured_at": "2026-08-07T13:26:30.951Z",
+            "content_hash": "e2776c7d722f73cd78766a62559066f441ebe949d8ec358136617c15332154b4",
+            "rejection_reason": null,
+            "updated_at": "2026-08-07T13:26:31.073Z",
+            "is_current": true,
+            "superseded_by_evidence_id": null,
+            "relationships": []
+          },
+          "answer": {
+            "answer_id": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "question_id": "triage.problem_clarity",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "question_version": "v1",
+            "answer_group_id": "ang_c1124a8957de408fad580b7c8f73eb10",
+            "version_no": 1,
+            "supersedes_answer_id": null,
+            "raw_value_text": null,
+            "raw_value_number": 72,
+            "normalized_value_text": null,
+            "normalized_value_number": 72,
+            "confidence_effect": 0.2,
+            "source": "assessment_answer",
+            "captured_at": "2026-08-07T13:26:30.951Z",
+            "status": "draft",
+            "content_hash": "104fb64b510d43234304b1246dc500b7f22aee9bd9c084f235ee4c6688828385"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": true
+        }
+      }
+    },
+    {
+      "step": "H3.3_REFRESH_RETRIEVAL",
+      "timestamp": "2026-08-07T13:26:31.450Z",
+      "method": "GET",
+      "path": "/api/v1/evidence/evd_e56233001af044e3b442c5f340bb57ba",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_3_refresh_retrieval",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_3_refresh_retrieval",
+        "data": {
+          "evidence": {
+            "evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "evidence_type": "number",
+            "source_product": "GalviVault",
+            "source_reference": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":72,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+            "confidence": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T13:26:31.073Z",
+            "evidence_group_id": "evg_5e40e89cfd364e669aa17c665ddc02f8",
+            "version_no": 1,
+            "supersedes_evidence_id": null,
+            "source_type": "assessment_answer",
+            "source_ref": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "value_type": "number",
+            "value_text": null,
+            "value_number": 72,
+            "value_boolean": null,
+            "value_date": null,
+            "value_json": null,
+            "status": "draft",
+            "consent_status": "approved",
+            "source_actor_type": "public",
+            "source_actor_id": "public-session",
+            "captured_at": "2026-08-07T13:26:30.951Z",
+            "content_hash": "e2776c7d722f73cd78766a62559066f441ebe949d8ec358136617c15332154b4",
+            "rejection_reason": null,
+            "updated_at": "2026-08-07T13:26:31.073Z",
+            "is_current": true,
+            "superseded_by_evidence_id": null,
+            "relationships": []
+          },
+          "answer": {
+            "answer_id": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "question_id": "triage.problem_clarity",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "question_version": "v1",
+            "answer_group_id": "ang_c1124a8957de408fad580b7c8f73eb10",
+            "version_no": 1,
+            "supersedes_answer_id": null,
+            "raw_value_text": null,
+            "raw_value_number": 72,
+            "normalized_value_text": null,
+            "normalized_value_number": 72,
+            "confidence_effect": 0.2,
+            "source": "assessment_answer",
+            "captured_at": "2026-08-07T13:26:30.951Z",
+            "status": "draft",
+            "content_hash": "104fb64b510d43234304b1246dc500b7f22aee9bd9c084f235ee4c6688828385"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.4_ACCEPT",
+      "timestamp": "2026-08-07T13:26:31.578Z",
+      "method": "POST",
+      "path": "/api/v1/evidence/evd_e56233001af044e3b442c5f340bb57ba/accept",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_4_accept",
+      "environment": "qa",
+      "request": {
+        "reason": "qa_acceptance"
+      },
+      "response": {
+        "success": true,
+        "status": "accepted",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_4_accept",
+        "data": {
+          "evidence": {
+            "evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "evidence_type": "number",
+            "source_product": "GalviVault",
+            "source_reference": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":72,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+            "confidence": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T13:26:31.073Z",
+            "evidence_group_id": "evg_5e40e89cfd364e669aa17c665ddc02f8",
+            "version_no": 1,
+            "supersedes_evidence_id": null,
+            "source_type": "assessment_answer",
+            "source_ref": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "value_type": "number",
+            "value_text": null,
+            "value_number": 72,
+            "value_boolean": null,
+            "value_date": null,
+            "value_json": null,
+            "status": "accepted",
+            "consent_status": "approved",
+            "source_actor_type": "public",
+            "source_actor_id": "public-session",
+            "captured_at": "2026-08-07T13:26:30.951Z",
+            "content_hash": "e2776c7d722f73cd78766a62559066f441ebe949d8ec358136617c15332154b4",
+            "rejection_reason": null,
+            "updated_at": "2026-08-07T13:26:31.073Z",
+            "is_current": true,
+            "superseded_by_evidence_id": null,
+            "relationships": []
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.5_ACCEPTED_MUTATION_REJECTED",
+      "timestamp": "2026-08-07T13:26:31.606Z",
+      "method": "PATCH",
+      "path": "/api/v1/evidence/evd_e56233001af044e3b442c5f340bb57ba",
+      "status": 409,
+      "correlation_id": "corr_d3_31182583984-1_h3_5_accepted_mutation_rejected",
+      "environment": "qa",
+      "request": {
+        "value_number": 99
+      },
+      "response": {
+        "success": false,
+        "status": "conflict",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_5_accepted_mutation_rejected",
+        "error": {
+          "code": "GV_EVIDENCE_IMMUTABLE",
+          "message": "Accepted evidence cannot be updated in place.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003"
+        }
+      }
+    },
+    {
+      "step": "H3.6_SUPERSEDE",
+      "timestamp": "2026-08-07T13:26:31.795Z",
+      "method": "POST",
+      "path": "/api/v1/evidence/evd_e56233001af044e3b442c5f340bb57ba/supersede",
+      "status": 201,
+      "correlation_id": "corr_d3_31182583984-1_h3_6_supersede",
+      "environment": "qa",
+      "request": {
+        "value_type": "number",
+        "value_number": 81,
+        "captured_at": "2026-08-07T13:26:31.606Z",
+        "consent_status": "approved",
+        "correction_reason": "Founder clarified quantified evidence.",
+        "assessment_answer": {
+          "raw_value_number": 81,
+          "normalized_value_number": 81,
+          "confidence_effect": 0.3
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_6_supersede",
+        "data": {
+          "evidence": {
+            "evidence_id": "evd_9a171900bc904d6c89b0685853f4d68d",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "evidence_type": "number",
+            "source_product": "GalviVault",
+            "source_reference": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+            "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":81,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+            "confidence": null,
+            "evidence_version": 2,
+            "created_at": "2026-08-07T13:26:31.701Z",
+            "evidence_group_id": "evg_5e40e89cfd364e669aa17c665ddc02f8",
+            "version_no": 2,
+            "supersedes_evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+            "source_type": "assessment_answer",
+            "source_ref": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+            "value_type": "number",
+            "value_text": null,
+            "value_number": 81,
+            "value_boolean": null,
+            "value_date": null,
+            "value_json": null,
+            "status": "draft",
+            "consent_status": "approved",
+            "source_actor_type": "operator",
+            "source_actor_id": "day3_qa_operator",
+            "captured_at": "2026-08-07T13:26:31.606Z",
+            "content_hash": "d0908e93160709a3dafd555545545681652e796847cd1a179364392e49eccfe8",
+            "rejection_reason": null,
+            "updated_at": "2026-08-07T13:26:31.701Z"
+          },
+          "answer": {
+            "answer_id": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "question_id": "triage.problem_clarity",
+            "answer_text": null,
+            "answer_number": 81,
+            "answer_json": null,
+            "evidence_version": 2,
+            "created_at": "2026-08-07T13:26:31.701Z",
+            "updated_at": "2026-08-07T13:26:31.701Z",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "question_version": "v1",
+            "answer_group_id": "ang_c1124a8957de408fad580b7c8f73eb10",
+            "version_no": 2,
+            "supersedes_answer_id": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+            "raw_value_text": null,
+            "raw_value_number": 81,
+            "normalized_value_text": null,
+            "normalized_value_number": 81,
+            "confidence_effect": 0.3,
+            "source": "day3-entry",
+            "captured_at": "2026-08-07T13:26:31.606Z",
+            "status": "draft",
+            "content_hash": "c4997fa725be5bda003029bddee02f2c2438db1b15670f9ab0f99027209bc472"
+          },
+          "previous_evidence_id": "evd_e56233001af044e3b442c5f340bb57ba"
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003"
+        }
+      }
+    },
+    {
+      "step": "H3.7_CURRENT",
+      "timestamp": "2026-08-07T13:26:31.882Z",
+      "method": "GET",
+      "path": "/api/v1/business-medical-records/bmr_731c5908446a454197f18b5618acc62c/evidence?view=current",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_7_current",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_7_current",
+        "data": {
+          "evidence": [
+            {
+              "evidence_id": "evd_9a171900bc904d6c89b0685853f4d68d",
+              "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+              "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+              "evidence_type": "number",
+              "source_product": "GalviVault",
+              "source_reference": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+              "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":81,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+              "confidence": null,
+              "evidence_version": 2,
+              "created_at": "2026-08-07T13:26:31.701Z",
+              "evidence_group_id": "evg_5e40e89cfd364e669aa17c665ddc02f8",
+              "version_no": 2,
+              "supersedes_evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+              "source_type": "assessment_answer",
+              "source_ref": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+              "value_type": "number",
+              "value_text": null,
+              "value_number": 81,
+              "value_boolean": null,
+              "value_date": null,
+              "value_json": null,
+              "status": "draft",
+              "consent_status": "approved",
+              "source_actor_type": "operator",
+              "source_actor_id": "day3_qa_operator",
+              "captured_at": "2026-08-07T13:26:31.606Z",
+              "content_hash": "d0908e93160709a3dafd555545545681652e796847cd1a179364392e49eccfe8",
+              "rejection_reason": null,
+              "updated_at": "2026-08-07T13:26:31.701Z",
+              "is_current": true,
+              "superseded_by_evidence_id": null,
+              "relationships": [
+                {
+                  "relationship_id": "rel_571c113e36f74fe2be4b1ab30e73959d",
+                  "from_evidence_id": "evd_9a171900bc904d6c89b0685853f4d68d",
+                  "to_evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+                  "relationship_type": "corrects",
+                  "rationale": "Founder clarified quantified evidence.",
+                  "created_at": "2026-08-07T13:26:31.701Z",
+                  "correlation_id": "corr_d3_31182583984-1_h3_6_supersede"
+                }
+              ]
+            }
+          ],
+          "view": "current",
+          "limit": 50
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.7_HISTORY",
+      "timestamp": "2026-08-07T13:26:31.963Z",
+      "method": "GET",
+      "path": "/api/v1/business-medical-records/bmr_731c5908446a454197f18b5618acc62c/evidence?view=history",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_7_history",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_7_history",
+        "data": {
+          "evidence": [
+            {
+              "evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+              "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+              "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+              "evidence_type": "number",
+              "source_product": "GalviVault",
+              "source_reference": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+              "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":72,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+              "confidence": null,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T13:26:31.073Z",
+              "evidence_group_id": "evg_5e40e89cfd364e669aa17c665ddc02f8",
+              "version_no": 1,
+              "supersedes_evidence_id": null,
+              "source_type": "assessment_answer",
+              "source_ref": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+              "value_type": "number",
+              "value_text": null,
+              "value_number": 72,
+              "value_boolean": null,
+              "value_date": null,
+              "value_json": null,
+              "status": "accepted",
+              "consent_status": "approved",
+              "source_actor_type": "public",
+              "source_actor_id": "public-session",
+              "captured_at": "2026-08-07T13:26:30.951Z",
+              "content_hash": "e2776c7d722f73cd78766a62559066f441ebe949d8ec358136617c15332154b4",
+              "rejection_reason": null,
+              "updated_at": "2026-08-07T13:26:31.073Z",
+              "is_current": false,
+              "superseded_by_evidence_id": "evd_9a171900bc904d6c89b0685853f4d68d",
+              "relationships": [
+                {
+                  "relationship_id": "rel_571c113e36f74fe2be4b1ab30e73959d",
+                  "from_evidence_id": "evd_9a171900bc904d6c89b0685853f4d68d",
+                  "to_evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+                  "relationship_type": "corrects",
+                  "rationale": "Founder clarified quantified evidence.",
+                  "created_at": "2026-08-07T13:26:31.701Z",
+                  "correlation_id": "corr_d3_31182583984-1_h3_6_supersede"
+                }
+              ]
+            },
+            {
+              "evidence_id": "evd_9a171900bc904d6c89b0685853f4d68d",
+              "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+              "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+              "evidence_type": "number",
+              "source_product": "GalviVault",
+              "source_reference": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+              "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":81,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+              "confidence": null,
+              "evidence_version": 2,
+              "created_at": "2026-08-07T13:26:31.701Z",
+              "evidence_group_id": "evg_5e40e89cfd364e669aa17c665ddc02f8",
+              "version_no": 2,
+              "supersedes_evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+              "source_type": "assessment_answer",
+              "source_ref": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+              "value_type": "number",
+              "value_text": null,
+              "value_number": 81,
+              "value_boolean": null,
+              "value_date": null,
+              "value_json": null,
+              "status": "draft",
+              "consent_status": "approved",
+              "source_actor_type": "operator",
+              "source_actor_id": "day3_qa_operator",
+              "captured_at": "2026-08-07T13:26:31.606Z",
+              "content_hash": "d0908e93160709a3dafd555545545681652e796847cd1a179364392e49eccfe8",
+              "rejection_reason": null,
+              "updated_at": "2026-08-07T13:26:31.701Z",
+              "is_current": true,
+              "superseded_by_evidence_id": null,
+              "relationships": [
+                {
+                  "relationship_id": "rel_571c113e36f74fe2be4b1ab30e73959d",
+                  "from_evidence_id": "evd_9a171900bc904d6c89b0685853f4d68d",
+                  "to_evidence_id": "evd_e56233001af044e3b442c5f340bb57ba",
+                  "relationship_type": "corrects",
+                  "rationale": "Founder clarified quantified evidence.",
+                  "created_at": "2026-08-07T13:26:31.701Z",
+                  "correlation_id": "corr_d3_31182583984-1_h3_6_supersede"
+                }
+              ]
+            }
+          ],
+          "view": "history",
+          "limit": 50
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.8_CREATE_REJECTABLE_DRAFT",
+      "timestamp": "2026-08-07T13:26:32.104Z",
+      "method": "POST",
+      "path": "/api/v1/evidence",
+      "status": 201,
+      "correlation_id": "corr_d3_31182583984-1_h3_8_create_rejectable_draft",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+        "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+        "source_type": "facilitator_capture",
+        "source_ref": "reject:31182583984-1",
+        "value_type": "text",
+        "value_text": "Synthetic draft evidence for rejection.",
+        "consent_status": "approved",
+        "captured_at": "2026-08-07T13:26:31.963Z"
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_8_create_rejectable_draft",
+        "data": {
+          "evidence": {
+            "evidence_id": "evd_6b6fe1f262164faa870b3a3e5e04c8e5",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "evidence_type": "text",
+            "source_product": "GalviVault",
+            "source_reference": "reject:31182583984-1",
+            "content_json": "{\"value_type\":\"text\",\"value_text\":\"Synthetic draft evidence for rejection.\",\"value_number\":null,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+            "confidence": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T13:26:32.017Z",
+            "evidence_group_id": "evg_8bdd51848274475f96126250fc1ec436",
+            "version_no": 1,
+            "supersedes_evidence_id": null,
+            "source_type": "facilitator_capture",
+            "source_ref": "reject:31182583984-1",
+            "value_type": "text",
+            "value_text": "Synthetic draft evidence for rejection.",
+            "value_number": null,
+            "value_boolean": null,
+            "value_date": null,
+            "value_json": null,
+            "status": "draft",
+            "consent_status": "approved",
+            "source_actor_type": "public",
+            "source_actor_id": "public-session",
+            "captured_at": "2026-08-07T13:26:31.963Z",
+            "content_hash": "76c4a90597bfd9758b7bcdd0da664d4ea4a14e29a8047d56804e76bfb8f16e7a",
+            "rejection_reason": null,
+            "updated_at": "2026-08-07T13:26:32.017Z",
+            "is_current": true,
+            "superseded_by_evidence_id": null,
+            "relationships": []
+          },
+          "answer": null
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.8_REJECT_DRAFT",
+      "timestamp": "2026-08-07T13:26:32.244Z",
+      "method": "POST",
+      "path": "/api/v1/evidence/evd_6b6fe1f262164faa870b3a3e5e04c8e5/reject",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_8_reject_draft",
+      "environment": "qa",
+      "request": {
+        "reason": "Synthetic QA rejection"
+      },
+      "response": {
+        "success": true,
+        "status": "rejected",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_8_reject_draft",
+        "data": {
+          "evidence": {
+            "evidence_id": "evd_6b6fe1f262164faa870b3a3e5e04c8e5",
+            "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+            "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+            "evidence_type": "text",
+            "source_product": "GalviVault",
+            "source_reference": "reject:31182583984-1",
+            "content_json": "{\"value_type\":\"text\",\"value_text\":\"Synthetic draft evidence for rejection.\",\"value_number\":null,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+            "confidence": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T13:26:32.017Z",
+            "evidence_group_id": "evg_8bdd51848274475f96126250fc1ec436",
+            "version_no": 1,
+            "supersedes_evidence_id": null,
+            "source_type": "facilitator_capture",
+            "source_ref": "reject:31182583984-1",
+            "value_type": "text",
+            "value_text": "Synthetic draft evidence for rejection.",
+            "value_number": null,
+            "value_boolean": null,
+            "value_date": null,
+            "value_json": null,
+            "status": "rejected",
+            "consent_status": "approved",
+            "source_actor_type": "public",
+            "source_actor_id": "public-session",
+            "captured_at": "2026-08-07T13:26:31.963Z",
+            "content_hash": "76c4a90597bfd9758b7bcdd0da664d4ea4a14e29a8047d56804e76bfb8f16e7a",
+            "rejection_reason": "Synthetic QA rejection",
+            "updated_at": "2026-08-07T13:26:32.144Z",
+            "is_current": false,
+            "superseded_by_evidence_id": null,
+            "relationships": []
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.9_CREATE_SECOND_SCOPE",
+      "timestamp": "2026-08-07T13:26:32.393Z",
+      "method": "POST",
+      "path": "/api/v1/sessions",
+      "status": 201,
+      "correlation_id": "corr_d3_31182583984-1_h3_9_create_second_scope",
+      "environment": "qa",
+      "request": {
+        "client_session_key": "d3-session-31182583984-1-02",
+        "source": "galvivault",
+        "current_stage": "GalviTriage",
+        "founder": {
+          "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+          "email": "founder.day3.31182583984-1@example.test"
+        },
+        "venture": {
+          "venture_name": "Day 3 Second Venture 31182583984-1",
+          "stage": "ideation",
+          "role_code": "founder",
+          "is_primary": true
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_9_create_second_scope",
+        "data": {
+          "identity": {
+            "founder": {
+              "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+              "first_name": "Day",
+              "last_name": "Three",
+              "email": "founder.day3.31182583984-1@example.test",
+              "normalized_email": "founder.day3.31182583984-1@example.test",
+              "phone": null,
+              "consent_status": "approved",
+              "status": "active",
+              "record_version": 1,
+              "profile_json": null,
+              "created_at": "2026-08-07T13:26:30.822Z",
+              "updated_at": "2026-08-07T13:26:30.822Z"
+            },
+            "venture": {
+              "venture_id": "ven_32a553666d824d7eba75de3ee351a7be",
+              "venture_name": "Day 3 Second Venture 31182583984-1",
+              "stage": "ideation",
+              "website": null,
+              "industry": null,
+              "revenue_range": null,
+              "profile_json": null,
+              "status": "active",
+              "record_version": 1,
+              "created_at": "2026-08-07T13:26:32.302Z",
+              "updated_at": "2026-08-07T13:26:32.302Z"
+            },
+            "founder_venture_role": {
+              "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+              "venture_id": "ven_32a553666d824d7eba75de3ee351a7be",
+              "role_code": "founder",
+              "is_primary": 1,
+              "status": "active",
+              "created_at": "2026-08-07T13:26:32.302Z",
+              "updated_at": "2026-08-07T13:26:32.302Z"
+            },
+            "business_medical_record": {
+              "bmr_id": "bmr_6f1e4d3c007b4678b2bd9d1b2bd67824",
+              "venture_id": "ven_32a553666d824d7eba75de3ee351a7be",
+              "status": "active",
+              "record_version": 1,
+              "current_session_id": "ses_e554289d210f4103abf3fec42c1dedbe",
+              "opened_at": "2026-08-07T13:26:32.302Z",
+              "closed_at": null,
+              "created_at": "2026-08-07T13:26:32.302Z",
+              "updated_at": "2026-08-07T13:26:32.302Z"
+            },
+            "session": {
+              "session_id": "ses_e554289d210f4103abf3fec42c1dedbe",
+              "bmr_id": "bmr_6f1e4d3c007b4678b2bd9d1b2bd67824",
+              "venture_id": "ven_32a553666d824d7eba75de3ee351a7be",
+              "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+              "client_session_key": "d3-session-31182583984-1-02",
+              "source": "galvivault",
+              "current_stage": "GalviTriage",
+              "status": "active",
+              "started_at": "2026-08-07T13:26:32.302Z",
+              "completed_at": null,
+              "created_at": "2026-08-07T13:26:32.302Z",
+              "updated_at": "2026-08-07T13:26:32.302Z"
+            }
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 1,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.9_CROSS_SCOPE_REJECTED",
+      "timestamp": "2026-08-07T13:26:32.442Z",
+      "method": "POST",
+      "path": "/api/v1/evidence",
+      "status": 403,
+      "correlation_id": "corr_d3_31182583984-1_h3_9_cross_scope_rejected",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+        "session_id": "ses_e554289d210f4103abf3fec42c1dedbe",
+        "source_type": "facilitator_capture",
+        "source_ref": "cross:31182583984-1",
+        "value_type": "text",
+        "value_text": "Synthetic draft evidence for rejection.",
+        "consent_status": "approved",
+        "captured_at": "2026-08-07T13:26:31.963Z"
+      },
+      "response": {
+        "success": false,
+        "status": "forbidden",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_9_cross_scope_rejected",
+        "error": {
+          "code": "GV_AUTH_FORBIDDEN",
+          "message": "The session is outside the requested BMR scope.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003"
+        }
+      }
+    },
+    {
+      "step": "H3.10_UNAUTHORIZED_ACCEPT",
+      "timestamp": "2026-08-07T13:26:32.452Z",
+      "method": "POST",
+      "path": "/api/v1/evidence/evd_9a171900bc904d6c89b0685853f4d68d/accept",
+      "status": 403,
+      "correlation_id": "corr_d3_31182583984-1_h3_10_unauthorized_accept",
+      "environment": "qa",
+      "request": {
+        "reason": "unauthorized"
+      },
+      "response": {
+        "success": false,
+        "status": "forbidden",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_10_unauthorized_accept",
+        "error": {
+          "code": "GV_AUTH_FORBIDDEN",
+          "message": "Authorized operator scope is required.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003"
+        }
+      }
+    },
+    {
+      "step": "H3.11_IDEMPOTENCY_MISMATCH",
+      "timestamp": "2026-08-07T13:26:32.532Z",
+      "method": "POST",
+      "path": "/api/v1/evidence",
+      "status": 409,
+      "correlation_id": "corr_d3_31182583984-1_h3_11_idempotency_mismatch",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+        "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+        "source_type": "assessment_answer",
+        "source_ref": "triage.problem_clarity:v1:31182583984-1",
+        "value_type": "number",
+        "value_number": 73,
+        "consent_status": "approved",
+        "captured_at": "2026-08-07T13:26:30.951Z",
+        "assessment_answer": {
+          "question_id": "triage.problem_clarity",
+          "question_version": "v1",
+          "raw_value_number": 73,
+          "normalized_value_number": 73,
+          "confidence_effect": 0.2
+        }
+      },
+      "response": {
+        "success": false,
+        "status": "conflict",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_11_idempotency_mismatch",
+        "error": {
+          "code": "GV_IDEMPOTENCY_REUSE_MISMATCH",
+          "message": "The idempotency key was reused with different content.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003"
+        }
+      }
+    },
+    {
+      "step": "H3.12_IMPORT_BATCH",
+      "timestamp": "2026-08-07T13:26:32.711Z",
+      "method": "POST",
+      "path": "/api/v1/import-batches",
+      "status": 201,
+      "correlation_id": "corr_d3_31182583984-1_h3_12_import_batch",
+      "environment": "qa",
+      "request": {
+        "source_name": "day3-fixture-31182583984-1.json",
+        "source_checksum": "sha256:31182583984-1",
+        "expected_count": 3
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_12_import_batch",
+        "data": {
+          "batch": {
+            "import_batch_id": "imp_2bd2db76b8cd49169851691692c83394",
+            "source_system": "targeted_day3",
+            "source_reference": "day3-fixture-31182583984-1.json",
+            "status": "open",
+            "row_count": 0,
+            "accepted_count": 0,
+            "rejected_count": 0,
+            "started_at": "2026-08-07T13:26:32.554Z",
+            "completed_at": null,
+            "created_at": "2026-08-07T13:26:32.554Z",
+            "source_name": "day3-fixture-31182583984-1.json",
+            "source_checksum": "sha256:31182583984-1",
+            "environment": "qa",
+            "expected_count": 3,
+            "processed_count": 0,
+            "imported_count": 0,
+            "skipped_count": 0,
+            "error_count": 0,
+            "created_by": "day3_qa_importer",
+            "updated_at": "2026-08-07T13:26:32.554Z"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.12_IMPORT_VALID",
+      "timestamp": "2026-08-07T13:26:32.865Z",
+      "method": "POST",
+      "path": "/api/v1/import-batches/imp_2bd2db76b8cd49169851691692c83394/rows",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_12_import_valid",
+      "environment": "qa",
+      "request": {
+        "source_row_key": "R1",
+        "command": {
+          "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+          "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+          "value_type": "text",
+          "value_text": "Synthetic imported evidence.",
+          "consent_status": "approved",
+          "captured_at": "2026-08-07T13:26:32.711Z"
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "imported",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_12_import_valid",
+        "data": {
+          "row": {
+            "source_row_key": "R1",
+            "result": "imported",
+            "canonical_entity_id": "evd_f47b081172424d03a6b16ead83412a56"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.12_IMPORT_DUPLICATE",
+      "timestamp": "2026-08-07T13:26:32.982Z",
+      "method": "POST",
+      "path": "/api/v1/import-batches/imp_2bd2db76b8cd49169851691692c83394/rows",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_12_import_duplicate",
+      "environment": "qa",
+      "request": {
+        "source_row_key": "R2",
+        "command": {
+          "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+          "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+          "value_type": "text",
+          "value_text": "Synthetic imported evidence.",
+          "consent_status": "approved",
+          "captured_at": "2026-08-07T13:26:32.711Z"
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "skipped",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_12_import_duplicate",
+        "data": {
+          "row": {
+            "source_row_key": "R2",
+            "result": "skipped",
+            "canonical_entity_id": "evd_f47b081172424d03a6b16ead83412a56"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.12_IMPORT_INVALID",
+      "timestamp": "2026-08-07T13:26:33.140Z",
+      "method": "POST",
+      "path": "/api/v1/import-batches/imp_2bd2db76b8cd49169851691692c83394/rows",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_12_import_invalid",
+      "environment": "qa",
+      "request": {
+        "source_row_key": "R3",
+        "command": {
+          "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+          "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+          "value_type": "number",
+          "value_text": "not-a-number"
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "error",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_12_import_invalid",
+        "data": {
+          "row": {
+            "source_row_key": "R3",
+            "result": "error",
+            "error_code": "GV_REQ_SCHEMA"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.12_IMPORT_RECONCILE",
+      "timestamp": "2026-08-07T13:26:33.244Z",
+      "method": "POST",
+      "path": "/api/v1/import-batches/imp_2bd2db76b8cd49169851691692c83394/close",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_12_import_reconcile",
+      "environment": "qa",
+      "request": {},
+      "response": {
+        "success": true,
+        "status": "completed_with_errors",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_12_import_reconcile",
+        "data": {
+          "batch": {
+            "import_batch_id": "imp_2bd2db76b8cd49169851691692c83394",
+            "source_system": "targeted_day3",
+            "source_reference": "day3-fixture-31182583984-1.json",
+            "status": "completed_with_errors",
+            "row_count": 0,
+            "accepted_count": 0,
+            "rejected_count": 0,
+            "started_at": "2026-08-07T13:26:32.554Z",
+            "completed_at": "2026-08-07T13:26:33.174Z",
+            "created_at": "2026-08-07T13:26:32.554Z",
+            "source_name": "day3-fixture-31182583984-1.json",
+            "source_checksum": "sha256:31182583984-1",
+            "environment": "qa",
+            "expected_count": 3,
+            "processed_count": 3,
+            "imported_count": 1,
+            "skipped_count": 1,
+            "error_count": 1,
+            "created_by": "day3_qa_importer",
+            "updated_at": "2026-08-07T13:26:33.174Z"
+          },
+          "reconciled": true
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H3.13_FINAL_READINESS_PROBE_1",
+      "timestamp": "2026-08-07T13:26:33.307Z",
+      "method": "GET",
+      "path": "/api/v1/day3/readiness?run=31182583984-1&probe=1",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_13_final_readiness_probe_1",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_13_final_readiness_probe_1",
+        "data": {
+          "service": "galvivault-p0-day3",
+          "ready": true,
+          "current_schema_version": "0003",
+          "required_schema_version": "0003",
+          "migration": {
+            "migration_id": "0003",
+            "name": "day3_evidence_versioning_v1",
+            "environment": "qa",
+            "checksum": "gv1-0003-day3-evidence-versioning",
+            "applied_at": "2026-08-07 12:24:43"
+          },
+          "immutable_trigger": "trg_gv1_accepted_evidence_no_update",
+          "question_definition": {
+            "question_id": "triage.problem_clarity",
+            "version": "v1",
+            "product": "GalviTriage",
+            "dimension": "Problem",
+            "prompt": "How clearly defined is the problem your venture solves?",
+            "response_type": "number",
+            "required_flag": 1,
+            "minimum_value": 0,
+            "maximum_value": 100,
+            "weight": 1,
+            "score_direction": "higher_is_better",
+            "status": "active",
+            "effective_at": "2026-08-07 12:24:43",
+            "created_at": "2026-08-07 12:24:43"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003"
+        }
+      }
+    },
+    {
+      "step": "H3.13_FINAL_READINESS_PROBE_2",
+      "timestamp": "2026-08-07T13:26:34.876Z",
+      "method": "GET",
+      "path": "/api/v1/day3/readiness?run=31182583984-1&probe=2",
+      "status": 200,
+      "correlation_id": "corr_d3_31182583984-1_h3_13_final_readiness_probe_2",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d3_31182583984-1_h3_13_final_readiness_probe_2",
+        "data": {
+          "service": "galvivault-p0-day3",
+          "ready": true,
+          "current_schema_version": "0003",
+          "required_schema_version": "0003",
+          "migration": {
+            "migration_id": "0003",
+            "name": "day3_evidence_versioning_v1",
+            "environment": "qa",
+            "checksum": "gv1-0003-day3-evidence-versioning",
+            "applied_at": "2026-08-07 12:24:43"
+          },
+          "immutable_trigger": "trg_gv1_accepted_evidence_no_update",
+          "question_definition": {
+            "question_id": "triage.problem_clarity",
+            "version": "v1",
+            "product": "GalviTriage",
+            "dimension": "Problem",
+            "prompt": "How clearly defined is the problem your venture solves?",
+            "response_type": "number",
+            "required_flag": 1,
+            "minimum_value": 0,
+            "maximum_value": 100,
+            "weight": 1,
+            "score_direction": "higher_is_better",
+            "status": "active",
+            "effective_at": "2026-08-07 12:24:43",
+            "created_at": "2026-08-07 12:24:43"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003"
+        }
+      }
+    }
+  ],
+  "canonical_ids": {
+    "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+    "venture_id": "ven_f4ce972aba3b4ca185b724c12ee03301",
+    "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+    "session_id": "ses_fcb5e5e2ad4f424eabed4932dceb1e3c",
+    "answer_v1_id": "ans_554a7fe2171d47d183088bb3ebbcaa9a",
+    "answer_v2_id": "ans_8e15a2d9e75f4089ae7b8aab5ac8d2a6",
+    "evidence_v1_id": "evd_e56233001af044e3b442c5f340bb57ba",
+    "evidence_v2_id": "evd_9a171900bc904d6c89b0685853f4d68d",
+    "rejected_evidence_id": "evd_6b6fe1f262164faa870b3a3e5e04c8e5",
+    "import_batch_id": "imp_2bd2db76b8cd49169851691692c83394"
+  },
+  "hashes": {
+    "evidence_v1": "e2776c7d722f73cd78766a62559066f441ebe949d8ec358136617c15332154b4",
+    "accepted_v1": "e2776c7d722f73cd78766a62559066f441ebe949d8ec358136617c15332154b4",
+    "evidence_v2": "d0908e93160709a3dafd555545545681652e796847cd1a179364392e49eccfe8"
+  },
+  "import_reconciliation": {
+    "processed": 3,
+    "imported": 1,
+    "skipped": 1,
+    "errors": 1,
+    "status": "completed_with_errors",
+    "reconciled": true
+  },
+  "h3_1_through_h3_13": "PASS",
+  "production_regression": "WORKFLOW_SOURCE_AND_HTTP_PROOF_REQUIRED",
+  "completed_at": "2026-08-07T13:26:34.876Z"
+}

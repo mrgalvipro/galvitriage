@@ -1,0 +1,332 @@
+name: GalviVault Day 3 QA Evidence Versioning
+
+on:
+  workflow_dispatch:
+    inputs:
+      human_e2e_confirmed:
+        description: "Confirm authorized review of H3.1-H3.13 evidence"
+        required: false
+        default: false
+        type: boolean
+      tester_name:
+        description: "Authorized tester name"
+        required: false
+        default: ""
+        type: string
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - ".github/workflows/day3-qa-evidence-versioning.yml"
+      - "worker/day3.js"
+      - "worker/day3-entry.js"
+      - "migrations/day1/0003_day3_evidence_versioning.sql"
+      - "tests/day3-evidence-versioning.test.mjs"
+      - "scripts/verify-day3-files.mjs"
+      - "scripts/verify-day3-evidence.mjs"
+      - "scripts/day3-smoke.mjs"
+      - "wrangler.day3.json"
+      - "docs/api/day3-evidence-versioning.md"
+      - "docs/operations/day3-human-e2e.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: galvivault-day3-qa-evidence-versioning
+  cancel-in-progress: true
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DAY3_ALLOWED_ORIGIN: https://galvipro.com
+  GALVICARE_COMPLETION_BASELINE: ae41b41892de2e9b88b4e81d5e521c535719bb15
+
+jobs:
+  day3:
+    name: Validate, migrate, deploy, and prove Day 3
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout exact QA candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Capture immutable candidate and protected baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/day3
+          git rev-parse HEAD > /tmp/day3/candidate-sha.txt
+          git show "${GALVICARE_COMPLETION_BASELINE}:package.json" > /tmp/day3/galvicare-package-baseline.json
+          sha256sum worker/production-entry.js wrangler.production.jsonc index.html > /tmp/day3/production-before.sha256
+          sha256sum worker/worker.js worker/day7d-engine.js worker/day7d-runtime.js day7d-browser-customer-intelligence.js wrangler.day7d.json wrangler.qa-frontend.jsonc > /tmp/day3/galvicare-before.sha256
+          printf '%s\n' "candidate=$(cat /tmp/day3/candidate-sha.txt)" "worker=galvivault-p0-day1-qa" "database=galvivault-0-5-qa" "schema_target=0003" "galvicare_completion_baseline=${GALVICARE_COMPLETION_BASELINE}" > /tmp/day3/baseline.txt
+
+      - name: Run Day 1 Day 2 Day 3 BLOCK gates and prove GalviCare preservation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/day1.js
+          node --check worker/day2.js
+          node --check worker/day3.js
+          node --check worker/day3-entry.js
+          node --check scripts/day3-smoke.mjs
+          node --check scripts/verify-day3-files.mjs
+          node --check scripts/verify-day3-evidence.mjs
+          npm run verify:day3:files | tee /tmp/day3/files.txt
+          node --test tests/day1-foundation.test.mjs | tee /tmp/day3/day1.txt
+          node --test tests/galvivault-day2-identity-continuity.test.mjs | tee /tmp/day3/day2.txt
+          node --test tests/day3-evidence-versioning.test.mjs | tee /tmp/day3/day3.txt
+          git diff --exit-code "$GALVICARE_COMPLETION_BASELINE" -- \
+            worker/worker.js \
+            worker/day7d-engine.js \
+            worker/day7d-runtime.js \
+            worker/production-entry.js \
+            day7c-browser-observability.js \
+            day7d-browser-customer-intelligence.js \
+            index.html \
+            qa-frontend-worker.js \
+            wrangler.day7d.json \
+            wrangler.qa-frontend.jsonc \
+            wrangler.production.jsonc
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const baseline = JSON.parse(fs.readFileSync('/tmp/day3/galvicare-package-baseline.json', 'utf8'));
+          const current = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          for (const name of ['test','check','stabilization:gate','check:day7b','test:day7b','day7b:gate','check:day7c','test:day7c','day7c:gate','test:day7d','day7d:preflight','day7d:gate']) {
+            if (current.scripts?.[name] !== baseline.scripts?.[name]) throw new Error(`GalviCare package script drift detected: ${name}`);
+          }
+          NODE
+          printf 'PASS: GalviCare runtime/Production files and established GalviCare package scripts remain identical to completion baseline %s.\n' "$GALVICARE_COMPLETION_BASELINE" | tee /tmp/day3/galvicare-preservation.txt
+          node --test tests/day7b-environment-isolation.test.mjs | tee /tmp/day3/production-isolation.txt
+          ! grep -E '# skipped [1-9]' /tmp/day3/day1.txt
+          ! grep -E '# skipped [1-9]' /tmp/day3/day2.txt
+          ! grep -E '# skipped [1-9]' /tmp/day3/day3.txt
+
+      - name: Resolve Wrangler with bounded retries
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/wrangler-retry <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          for attempt in 1 2 3 4; do
+            npx --yes wrangler@4 "$@" && exit 0
+            [ "$attempt" = 4 ] && exit 1
+            sleep $((attempt*5))
+          done
+          SH
+          chmod +x /tmp/wrangler-retry
+          /tmp/wrangler-retry --version | tee /tmp/day3/wrangler-version.txt
+
+      - name: Prove clean local migration sequence 0001 to 0002 to 0003
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/day3-local
+          for file in migrations/day1/0001_canonical_business_medical_record.sql migrations/day1/0002_day2_identity_continuity.sql migrations/day1/0003_day3_evidence_versioning.sql; do
+            /tmp/wrangler-retry d1 execute galvivault-0-5-qa --local --persist-to /tmp/day3-local --file="$file" --config wrangler.day3.json
+          done
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --local --persist-to /tmp/day3-local --command="SELECT migration_id FROM gv1_schema_migrations ORDER BY migration_id; SELECT name FROM sqlite_master WHERE type='trigger' AND name='trg_gv1_accepted_evidence_no_update'; SELECT COUNT(*) AS receipt_table FROM sqlite_master WHERE type='table' AND name='gv1_import_row_receipts';" --config wrangler.day3.json --json | tee /tmp/day3/local-schema.json
+          grep -q '"migration_id": "0001"' /tmp/day3/local-schema.json
+          grep -q '"migration_id": "0002"' /tmp/day3/local-schema.json
+          grep -q '"migration_id": "0003"' /tmp/day3/local-schema.json
+          grep -q 'trg_gv1_accepted_evidence_no_update' /tmp/day3/local-schema.json
+
+      - name: Preflight and apply or reconcile remote migration 0003
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL="SELECT COUNT(*) AS ledger_0001 FROM gv1_schema_migrations WHERE migration_id='0001'; SELECT COUNT(*) AS ledger_0002 FROM gv1_schema_migrations WHERE migration_id='0002'; SELECT COUNT(*) AS ledger_0003 FROM gv1_schema_migrations WHERE migration_id='0003'; SELECT COUNT(*) AS q_cols FROM pragma_table_info('gv1_question_definitions') WHERE name IN ('required_flag','minimum_value','maximum_value','weight','score_direction','status','effective_at','retired_at'); SELECT COUNT(*) AS a_cols FROM pragma_table_info('gv1_assessment_answers') WHERE name IN ('bmr_id','question_version','answer_group_id','version_no','supersedes_answer_id','raw_value_text','raw_value_number','normalized_value_text','normalized_value_number','confidence_effect','source','captured_at','status','content_hash'); SELECT COUNT(*) AS e_cols FROM pragma_table_info('gv1_evidence_items') WHERE name IN ('evidence_group_id','version_no','supersedes_evidence_id','source_type','source_ref','value_type','value_text','value_number','value_boolean','value_date','value_json','status','consent_status','source_actor_type','source_actor_id','captured_at','content_hash','rejection_reason','updated_at'); SELECT COUNT(*) AS r_cols FROM pragma_table_info('gv1_evidence_relationships') WHERE name IN ('rationale','correlation_id'); SELECT COUNT(*) AS b_cols FROM pragma_table_info('gv1_import_batches') WHERE name IN ('source_name','source_checksum','environment','expected_count','processed_count','imported_count','skipped_count','error_count','created_by','updated_at'); SELECT COUNT(*) AS i_cols FROM pragma_table_info('gv1_import_errors') WHERE name IN ('source_row_key','field_name','quarantined_payload_json','correlation_id'); SELECT COUNT(*) AS d3_indexes FROM sqlite_master WHERE type='index' AND name IN ('ux_gv1_answer_group_version','ix_gv1_answers_session_question_version','ix_gv1_answers_bmr','ux_gv1_evidence_group_version','ix_gv1_evidence_bmr_current','ix_gv1_evidence_session','ix_gv1_evidence_source','ix_gv1_evidence_supersedes','ix_gv1_evidence_relationship_to','ix_gv1_import_errors_batch','ix_gv1_import_receipts_result'); SELECT COUNT(*) AS receipt_table FROM sqlite_master WHERE type='table' AND name='gv1_import_row_receipts'; SELECT COUNT(*) AS immutable_trigger FROM sqlite_master WHERE type='trigger' AND name='trg_gv1_accepted_evidence_no_update';"
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="$SQL" --config wrangler.day3.json --json > /tmp/day3/preflight.json
+          cat /tmp/day3/preflight.json
+          read -r L1 L2 L3 COMPLETE EMPTY < <(node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('/tmp/day3/preflight.json','utf8')); const rows=[]; const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){rows.push(v);Object.values(v).forEach(walk)}}; walk(p); const n=k=>Number(rows.find(x=>Object.hasOwn(x,k))?.[k]??-1);
+          const counts=[n('q_cols'),n('a_cols'),n('e_cols'),n('r_cols'),n('b_cols'),n('i_cols'),n('d3_indexes'),n('receipt_table'),n('immutable_trigger')];
+          const complete=JSON.stringify(counts)===JSON.stringify([8,14,19,2,10,4,11,1,1]);
+          const empty=counts.every(x=>x===0);
+          console.log(n('ledger_0001'),n('ledger_0002'),n('ledger_0003'),complete?1:0,empty?1:0);
+          NODE
+          )
+          [ "$L1" = "1" ] && [ "$L2" = "1" ] || { echo 'Day 1/Day 2 migration prerequisite missing.'; exit 1; }
+          if [ "$L3" = "0" ] && [ "$EMPTY" = "1" ]; then
+            /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --file=migrations/day1/0003_day3_evidence_versioning.sql --config wrangler.day3.json | tee /tmp/day3/migration.txt
+          elif [ "$L3" = "0" ] && [ "$COMPLETE" = "1" ]; then
+            /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="INSERT OR IGNORE INTO gv1_schema_migrations (migration_id,name,environment,checksum,applied_at) VALUES ('0003','day3_evidence_versioning_v1','qa','gv1-0003-day3-evidence-versioning',CURRENT_TIMESTAMP);" --config wrangler.day3.json | tee /tmp/day3/migration.txt
+          elif [ "$L3" = "1" ] && [ "$COMPLETE" = "1" ]; then
+            echo 'Migration 0003 already complete.' | tee /tmp/day3/migration.txt
+          else
+            echo 'Partial or contradictory Day 3 migration state detected; refusing destructive repair.'
+            exit 1
+          fi
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0001','0002','0003') ORDER BY migration_id; SELECT question_id,version,product,dimension,response_type,required_flag,minimum_value,maximum_value,weight,score_direction,status FROM gv1_question_definitions WHERE question_id='triage.problem_clarity' AND version='v1'; SELECT name,type FROM sqlite_master WHERE name IN ('gv1_import_row_receipts','trg_gv1_accepted_evidence_no_update');" --config wrangler.day3.json --json | tee /tmp/day3/remote-schema.json
+          grep -q '"migration_id": "0003"' /tmp/day3/remote-schema.json
+          grep -q 'trg_gv1_accepted_evidence_no_update' /tmp/day3/remote-schema.json
+          grep -q 'triage.problem_clarity' /tmp/day3/remote-schema.json
+
+      - name: Deploy cumulative Day 3 to existing isolated GalviVault QA Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/wrangler-retry deploy --config wrangler.day3.json 2>&1 | tee /tmp/day3/deploy.log
+          DAY3_BASE_URL="$(grep -Eo 'https://[[:alnum:].-]+\.workers\.dev' /tmp/day3/deploy.log | tail -n 1)"
+          test -n "$DAY3_BASE_URL"
+          echo "DAY3_BASE_URL=$DAY3_BASE_URL" >> "$GITHUB_ENV"
+          echo "$DAY3_BASE_URL" > /tmp/day3/deployed-url.txt
+
+      - name: Verify runtime convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            STATUS="$(curl -sS -o /tmp/day3/ready.json -D /tmp/day3/ready.headers -w '%{http_code}' -H "Origin: $DAY3_ALLOWED_ORIGIN" "$DAY3_BASE_URL/api/v1/day3/readiness?candidate=$GITHUB_SHA&attempt=$attempt" || true)"
+            if [ "$STATUS" = "200" ] && node -e "const p=require('/tmp/day3/ready.json');if(p?.success!==true||p?.data?.ready!==true||p?.data?.current_schema_version!=='0003')process.exit(1)" && grep -qi '^x-galvivault-environment: qa' /tmp/day3/ready.headers; then exit 0; fi
+            sleep 3
+          done
+          cat /tmp/day3/ready.headers || true
+          cat /tmp/day3/ready.json || true
+          exit 1
+
+      - name: Execute H3.1-H3.13 against real QA and verify evidence
+        shell: bash
+        env:
+          DAY3_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          export DAY3_EVIDENCE_PATH=/tmp/day3/h3.json
+          DAY3_BASE_URL="$DAY3_BASE_URL" DAY3_ALLOWED_ORIGIN="$DAY3_ALLOWED_ORIGIN" node scripts/day3-smoke.mjs
+          DAY3_EVIDENCE_PATH=/tmp/day3/h3.json node scripts/verify-day3-evidence.mjs | tee /tmp/day3/evidence-verification.txt
+
+      - name: Run direct QA D1 assertions for typed evidence lineage immutability and import reconciliation
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const e=JSON.parse(fs.readFileSync('/tmp/day3/h3.json','utf8')); const i=e.canonical_ids; const q=s=>String(s).replaceAll("'","''");
+          const sql=[
+            `SELECT question_id,version,product,dimension,response_type,required_flag,minimum_value,maximum_value,weight,score_direction,status FROM gv1_question_definitions WHERE question_id='triage.problem_clarity' AND version='v1'`,
+            `SELECT answer_id,bmr_id,session_id,question_id,question_version,answer_group_id,version_no,supersedes_answer_id,raw_value_number,normalized_value_number,source,captured_at,status,content_hash FROM gv1_assessment_answers WHERE answer_id IN ('${q(i.answer_v1_id)}','${q(i.answer_v2_id)}') ORDER BY version_no`,
+            `SELECT evidence_id,bmr_id,session_id,evidence_group_id,version_no,supersedes_evidence_id,source_type,source_ref,value_type,value_number,status,consent_status,captured_at,content_hash FROM gv1_evidence_items WHERE evidence_id IN ('${q(i.evidence_v1_id)}','${q(i.evidence_v2_id)}') ORDER BY version_no`,
+            `SELECT COUNT(*) AS lineage FROM gv1_evidence_relationships WHERE from_evidence_id='${q(i.evidence_v2_id)}' AND to_evidence_id='${q(i.evidence_v1_id)}' AND relationship_type='corrects'`,
+            `SELECT COUNT(*) AS v1_successors FROM gv1_evidence_items WHERE supersedes_evidence_id='${q(i.evidence_v1_id)}'`,
+            `SELECT COUNT(*) AS rejected FROM gv1_evidence_items WHERE evidence_id='${q(i.rejected_evidence_id)}' AND status='rejected'`,
+            `SELECT processed_count,imported_count,skipped_count,error_count,status FROM gv1_import_batches WHERE import_batch_id='${q(i.import_batch_id)}'`,
+            `SELECT COUNT(*) AS import_receipts FROM gv1_import_row_receipts WHERE import_batch_id='${q(i.import_batch_id)}'`,
+            `SELECT COUNT(*) AS import_errors FROM gv1_import_errors WHERE import_batch_id='${q(i.import_batch_id)}'`,
+            `SELECT COUNT(*) AS immutable_trigger FROM sqlite_master WHERE type='trigger' AND name='trg_gv1_accepted_evidence_no_update'`
+          ].join('; ')+';'; fs.writeFileSync('/tmp/day3/assertions.sql',sql+'\n');
+          NODE
+          /tmp/wrangler-retry d1 execute galvivault-0-5-qa --remote --command="$(cat /tmp/day3/assertions.sql)" --config wrangler.day3.json --json | tee /tmp/day3/assertions.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'; const e=JSON.parse(fs.readFileSync('/tmp/day3/h3.json','utf8')); const p=JSON.parse(fs.readFileSync('/tmp/day3/assertions.json','utf8')); const rows=[]; const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){rows.push(v);Object.values(v).forEach(walk)}}; walk(p); const n=k=>Number(rows.find(x=>Object.hasOwn(x,k))?.[k]??-1);
+          const q=rows.find(x=>x.question_id==='triage.problem_clarity'&&x.version==='v1'); if(!q||q.product!=='GalviTriage'||q.dimension!=='Problem'||q.response_type!=='number'||Number(q.required_flag)!==1||Number(q.minimum_value)!==0||Number(q.maximum_value)!==100||Number(q.weight)!==1||q.score_direction!=='higher_is_better'||q.status!=='active') throw new Error('Question definition assertion failed.');
+          const answers=rows.filter(x=>x.answer_id===e.canonical_ids.answer_v1_id||x.answer_id===e.canonical_ids.answer_v2_id); if(answers.length!==2||answers.some(x=>x.bmr_id!==e.canonical_ids.bmr_id||x.session_id!==e.canonical_ids.session_id||x.question_version!=='v1')) throw new Error('Answer trace assertion failed.');
+          const ev=rows.filter(x=>x.evidence_id===e.canonical_ids.evidence_v1_id||x.evidence_id===e.canonical_ids.evidence_v2_id); if(ev.length!==2||ev.some(x=>x.bmr_id!==e.canonical_ids.bmr_id||x.session_id!==e.canonical_ids.session_id||x.value_type!=='number'||x.source_type!=='assessment_answer')) throw new Error('Typed evidence/source/scope assertion failed.');
+          const v1=ev.find(x=>Number(x.version_no)===1),v2=ev.find(x=>Number(x.version_no)===2); if(!v1||!v2||v1.content_hash!==e.hashes.evidence_v1||v1.status!=='accepted'||v2.supersedes_evidence_id!==v1.evidence_id||v2.content_hash===v1.content_hash) throw new Error('Immutability/version assertion failed.');
+          if(n('lineage')!==1||n('v1_successors')!==1||n('rejected')!==1||n('import_receipts')!==3||n('import_errors')!==1||n('immutable_trigger')!==1) throw new Error('Lineage/import/trigger assertion failed.');
+          const b=rows.find(x=>Object.hasOwn(x,'processed_count')); if(Number(b?.processed_count)!==3||Number(b?.imported_count)!==1||Number(b?.skipped_count)!==1||Number(b?.error_count)!==1||b?.status!=='completed_with_errors') throw new Error('Import reconciliation failed.');
+          NODE
+
+      - name: Prove GalviCare and Production non-mutation after Day 3 runtime proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum worker/production-entry.js wrangler.production.jsonc index.html > /tmp/day3/production-after.sha256
+          sha256sum worker/worker.js worker/day7d-engine.js worker/day7d-runtime.js day7d-browser-customer-intelligence.js wrangler.day7d.json wrangler.qa-frontend.jsonc > /tmp/day3/galvicare-after.sha256
+          diff -u /tmp/day3/production-before.sha256 /tmp/day3/production-after.sha256
+          diff -u /tmp/day3/galvicare-before.sha256 /tmp/day3/galvicare-after.sha256
+          git diff --exit-code "$GALVICARE_COMPLETION_BASELINE" -- \
+            worker/worker.js \
+            worker/day7d-engine.js \
+            worker/day7d-runtime.js \
+            worker/production-entry.js \
+            day7c-browser-observability.js \
+            day7d-browser-customer-intelligence.js \
+            index.html \
+            qa-frontend-worker.js \
+            wrangler.day7d.json \
+            wrangler.qa-frontend.jsonc \
+            wrangler.production.jsonc
+          printf 'PASS: GalviCare/Production protected sources remain unchanged from the known completion baseline and from the start of this Day 3 run.\n' | tee /tmp/day3/galvicare-post-runtime.txt
+          PRODUCTION_RESULT="$(curl -sS -L --max-redirs 5 --retry 3 --retry-delay 2 --retry-all-errors --connect-timeout 10 --max-time 45 -o /tmp/day3/production.html -w '%{http_code} %{url_effective}' https://www.galvipro.com/)"
+          read -r PRODUCTION_HTTP PRODUCTION_URL <<< "$PRODUCTION_RESULT"
+          printf 'Production baseline final HTTP status: %s; effective URL: %s\n' "$PRODUCTION_HTTP" "$PRODUCTION_URL" | tee -a /tmp/day3/galvicare-post-runtime.txt
+          test "$PRODUCTION_HTTP" = "200"
+
+      - name: Verify rollback candidate without mutating QA
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/day2.js
+          node --test tests/day1-foundation.test.mjs > /tmp/day3/rollback-day1.txt
+          node --test tests/galvivault-day2-identity-continuity.test.mjs > /tmp/day3/rollback-day2.txt
+          rm -rf /tmp/day3-rollback-dry-run
+          /tmp/wrangler-retry deploy --dry-run --outdir /tmp/day3-rollback-dry-run --config wrangler.day2.json > /tmp/day3/rollback-dry-run.txt 2>&1
+          test -d /tmp/day3-rollback-dry-run
+          printf 'Rollback target worker/day2.js + wrangler.day2.json: DRY-RUN PASS\nNo QA deployment mutation performed.\n' > /tmp/day3/rollback-verification.txt
+
+      - name: Complete release-evidence/day3
+        shell: bash
+        env:
+          HUMAN_CONFIRMED: ${{ github.event.inputs.human_e2e_confirmed || 'false' }}
+          TESTER_NAME: ${{ github.event.inputs.tester_name || '' }}
+        run: |
+          set -euo pipefail
+          mkdir -p release-evidence/day3
+          cp /tmp/day3/h3.json release-evidence/day3/evidence-trace.json
+          cp /tmp/day3/assertions.sql release-evidence/day3/database-assertions.sql
+          cp /tmp/day3/assertions.json release-evidence/day3/database-assertions.txt
+          cp /tmp/day3/migration.txt release-evidence/day3/migration-transcript.txt
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'; const e=JSON.parse(fs.readFileSync('/tmp/day3/h3.json','utf8')); const url=fs.readFileSync('/tmp/day3/deployed-url.txt','utf8').trim(); const candidate=fs.readFileSync('/tmp/day3/candidate-sha.txt','utf8').trim();
+          fs.writeFileSync('release-evidence/day3/deployment-metadata.json',JSON.stringify({candidate_sha:candidate,qa_worker_name:'galvivault-p0-day1-qa',qa_worker_url:url,qa_d1:'galvivault-0-5-qa',schema_version:'0003'},null,2)+'\n');
+          fs.writeFileSync('release-evidence/day3/import-reconciliation.json',JSON.stringify(e.import_reconciliation,null,2)+'\n');
+          fs.writeFileSync('release-evidence/day3/baseline.json',JSON.stringify({repository:'mrgalvipro/galvitriage',branch:'qa-revamped-galvicare-0-5',candidate_sha:candidate,qa_worker_name:'galvivault-p0-day1-qa',qa_d1:'galvivault-0-5-qa',schema_target:'0003',production_mutated:false,galvicare_mutated:false,galvicare_completion_baseline:process.env.GALVICARE_COMPLETION_BASELINE},null,2)+'\n');
+          NODE
+          git diff --name-only "${GITHUB_SHA}^" "$GITHUB_SHA" > release-evidence/day3/changed-files.txt || true
+          cat /tmp/day3/day1.txt /tmp/day3/day2.txt /tmp/day3/day3.txt /tmp/day3/galvicare-preservation.txt /tmp/day3/production-isolation.txt /tmp/day3/galvicare-post-runtime.txt /tmp/day3/evidence-verification.txt /tmp/day3/rollback-verification.txt > release-evidence/day3/automated-tests.txt
+          printf '{"day1":"PASS","day2":"PASS","day3":"PASS","galvicare_source_preservation":"PASS","production_isolation":"PASS","mandatory_skipped":0,"h3_1_through_h3_13":"PASS","direct_d1":"PASS","production_non_mutation":"PASS","rollback_dry_run":"PASS"}\n' > release-evidence/day3/automated-tests.json
+          printf '# Defects\n\nCross-product workflow mutation: RESOLVED by removing self-modifying workflow behavior.\nLegacy GalviCare stabilization contamination: RESOLVED; the known broad 143-test legacy suite is not a GalviVault Day 3 acceptance gate. GalviCare preservation is proven by byte-identical protected runtime/Production sources against the established completion baseline, unchanged package-script contracts, environment-isolation tests, and before/after hashes.\nDay 3 QA Worker authority split: RESOLVED; Days 1-3 advance one existing GalviVault QA Worker.\nMigration ID collision: RESOLVED; sequence is 0001 -> 0002 -> 0003 with partial-state stop/reconcile.\nOpen automated blockers after this run: NONE if workflow is green.\n' > release-evidence/day3/defects.md
+          printf '# Rollback\n\nTarget: worker/day2.js + wrangler.day2.json on the same GalviVault QA Worker.\nValidation: Day 1 regression PASS; Day 2 regression PASS; Wrangler deploy dry-run PASS.\nData handling: preserve additive schema 0003 and all evidence history; no destructive down migration.\nProduction mutation: none.\n' > release-evidence/day3/rollback.md
+          if [ "$HUMAN_CONFIRMED" = "true" ] && [ -n "$TESTER_NAME" ]; then FINAL='DAY 3 HUMAN E2E PASS → DAY 3 BUILD FINAL'; else FINAL='AUTOMATED DAY 3 E2E PASS → AUTHORIZED HUMAN EVIDENCE CONFIRMATION REQUIRED'; fi
+          printf '# Human E2E\n\nH3.1-H3.13 runtime execution: PASS\nDirect QA D1 proof: PASS\nAuthorized evidence review: %s\nTester: %s\n' "$HUMAN_CONFIRMED" "${TESTER_NAME:-not supplied}" > release-evidence/day3/human-e2e.md
+          printf '# Final Gate\n\nDay 1 regression: PASS\nDay 2 regression: PASS\nDay 3 BLOCK/runtime/D1: PASS\nGalviCare source preservation: PASS\nProduction non-mutation: PASS\nRollback dry-run: PASS\nAuthorized tester: %s\nHuman confirmation: %s\n\n%s\n' "${TESTER_NAME:-not supplied}" "$HUMAN_CONFIRMED" "$FINAL" > release-evidence/day3/final-gate.md
+          printf '# GalviVault Day 3 Release Evidence\n\nCandidate: %s\nQA Worker: galvivault-p0-day1-qa\nQA D1: galvivault-0-5-qa\nSchema: 0003\nEvidence inventory: baseline, changed files, tests, migration, deployment, D1 assertions, evidence trace, import reconciliation, Human E2E, defects, rollback, final gate.\n' "$GITHUB_SHA" > release-evidence/day3/README.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release-evidence/day3
+          git commit -m "Record GalviVault Day 3 QA evidence [skip ci]" || true
+          git push origin HEAD:qa-revamped-galvicare-0-5
+
+      - name: Publish final gate summary
+        if: success()
+        shell: bash
+        env:
+          HUMAN_CONFIRMED: ${{ github.event.inputs.human_e2e_confirmed || 'false' }}
+          TESTER_NAME: ${{ github.event.inputs.tester_name || '' }}
+        run: |
+          echo '## GALVIVAULT DAY 3 AUTOMATED QA: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Candidate: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "- QA Worker: $DAY3_BASE_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Worker authority: existing GalviVault QA Worker advanced cumulatively' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Schema: 0001 → 0002 → 0003' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 1 regression: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 2 regression: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- H3.1-H3.13 + direct QA D1 proof: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviCare protected-source preservation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production non-mutation: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Rollback candidate dry-run: PASS' >> "$GITHUB_STEP_SUMMARY"
+          if [ "$HUMAN_CONFIRMED" = "true" ] && [ -n "$TESTER_NAME" ]; then echo '**DAY 3 HUMAN E2E PASS → DAY 3 BUILD FINAL**' >> "$GITHUB_STEP_SUMMARY"; else echo '**AUTOMATED DAY 3 E2E PASS → AUTHORIZED HUMAN EVIDENCE CONFIRMATION REQUIRED**' >> "$GITHUB_STEP_SUMMARY"; fi

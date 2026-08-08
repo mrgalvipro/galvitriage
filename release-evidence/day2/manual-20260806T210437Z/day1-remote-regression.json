@@ -1,0 +1,14 @@
+{
+  "status": "pass",
+  "expected_schema_version": "0002",
+  "health_status": 200,
+  "readiness_status": 200,
+  "schema_status": 200,
+  "session_id": "ses_day1_day2_20260806T210437Z",
+  "founder_id": "fdr_day1_day2_20260806T210437Z",
+  "venture_id": "ven_day1_day2_20260806T210437Z",
+  "bmr_id": "bmr_day1_day2_20260806T210437Z",
+  "session_idempotency_key": "day1-session-day2_20260806T210437Z",
+  "event_key": "day1:ses_day1_day2_20260806T210437Z:triage_opened:001",
+  "event_idempotency_key": "day1-event-day2_20260806T210437Z"
+}

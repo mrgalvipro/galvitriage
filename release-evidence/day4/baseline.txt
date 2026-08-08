@@ -1,0 +1,6 @@
+candidate=e6058ef6ef21f9e4bde2c665d75407d53a042b1d
+day3_final=65efeeb03ff4672f288af5553c63d8a0eb480ba6
+qa_worker=galvivault-p0-day1-qa
+qa_database=galvivault-0-5-qa
+schema_target=0004
+galvicare_completion_baseline=ae41b41892de2e9b88b4e81d5e521c535719bb15

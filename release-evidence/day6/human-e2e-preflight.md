@@ -1,0 +1,16 @@
+# GalviVault Day 7 Human E2E Preflight
+- Candidate source: exact Day 6 GO candidate recorded in `candidate.json`.
+- Environment: Production only after explicit Day 7 GO; QA fault evidence remains Day 6 evidence.
+- Test identity: F12_PROD_SAFE — clearly marked release-test founder/venture created through normal supported Production routes; fixture mode is prohibited.
+- Tester records UTC timestamp, correlation IDs, founder/venture/BMR/session IDs, Worker deployment, schema version, and defects.
+- Step 1: verify Production health/readiness, environment=production, fixture mode unavailable, and approved Production DB binding before writes.
+- Step 2: create/resume one supported founder/venture/session through normal API/UI flow; capture canonical IDs.
+- Step 3: submit evidence, retrieve after refresh, and prove idempotent replay does not duplicate state.
+- Step 4: complete the governed evidence → finding → recommendation → treatment → outcome path supported by the approved release.
+- Step 5: retrieve current/history/timeline views and reconcile UI/API state to committed D1 IDs.
+- Step 6: run Production-safe negative checks only: unauthorized protected route, idempotent replay, fixture route unavailable, refresh/retrieval continuity.
+- Step 7: query D1 for one BMR per venture, separated record classes, version/lineage, care links, append-only event/audit evidence, and zero duplicate/orphan/partial state.
+- Step 8: distinguish canonical success from downstream adapter delivery status; adapter failure cannot invalidate committed canonical state.
+- Rollback reference: prior approved Production Worker deployment/commit captured before cutover. No destructive down migration.
+- Cleanup/retention: keep or soft-archive the clearly marked release-test record per release evidence policy; do not delete it to hide evidence.
+- Prohibited in Production: destructive failure injection, ad hoc canonical SQL repair, fixture mode, first-time migration/lifecycle discovery.

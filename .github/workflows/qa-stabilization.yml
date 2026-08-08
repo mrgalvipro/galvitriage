@@ -1,43 +1,79 @@
 name: GalviCare QA Stabilization
 
 on:
+  workflow_dispatch:
   pull_request:
     branches:
       - qa-revamped-galvicare-0-5
+    paths:
+      - "worker/worker.js"
+      - "worker/day7d-engine.js"
+      - "worker/day7d-runtime.js"
+      - "worker/production-entry.js"
+      - "day7c-browser-observability.js"
+      - "day7d-browser-customer-intelligence.js"
+      - "index.html"
+      - "qa-frontend-worker.js"
+      - "wrangler.day7d.json"
+      - "wrangler.qa-frontend.jsonc"
+      - "wrangler.production.jsonc"
+      - "tests/day3-worker.test.mjs"
+      - "tests/day3-security-gate.test.mjs"
+      - "tests/day4-worker.test.mjs"
+      - "tests/session-continuity.test.mjs"
+      - "tests/day6-*.test.mjs"
+      - "tests/day7*.test.mjs"
   push:
     branches:
       - qa-revamped-galvicare-0-5
+    paths:
+      - "worker/worker.js"
+      - "worker/day7d-engine.js"
+      - "worker/day7d-runtime.js"
+      - "worker/production-entry.js"
+      - "day7c-browser-observability.js"
+      - "day7d-browser-customer-intelligence.js"
+      - "index.html"
+      - "qa-frontend-worker.js"
+      - "wrangler.day7d.json"
+      - "wrangler.qa-frontend.jsonc"
+      - "wrangler.production.jsonc"
+      - "tests/day3-worker.test.mjs"
+      - "tests/day3-security-gate.test.mjs"
+      - "tests/day4-worker.test.mjs"
+      - "tests/session-continuity.test.mjs"
+      - "tests/day6-*.test.mjs"
+      - "tests/day7*.test.mjs"
 
 permissions:
   contents: read
+
+concurrency:
+  group: galvicare-qa-stabilization
+  cancel-in-progress: true
 
 jobs:
   stabilization:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
-      - name: Checkout repository
+      - name: Checkout exact GalviCare candidate
         uses: actions/checkout@v4
-
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
       - name: Install dependencies
-        run: npm install --ignore-scripts
-
-      - name: Run Worker syntax and QA tests
-        # Authoritative gate: test the committed QA source directly; never mutate source here.
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+      - name: Run GalviCare syntax and QA tests
         run: npm run stabilization:gate
-
       - name: Reject committed secret files
         shell: bash
         run: |
-          if find . -type f \
-            \( -name ".env" -o -name ".dev.vars" -o -name "*.pem" -o -name "*.key" \) \
-            -not -path "./node_modules/*" | grep -q .; then
+          if find . -type f \( -name ".env" -o -name ".dev.vars" -o -name "*.pem" -o -name "*.key" \) -not -path "./node_modules/*" | grep -q .; then
             echo "Sensitive configuration file detected."
             exit 1
           fi

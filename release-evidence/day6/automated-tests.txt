@@ -1,0 +1,440 @@
+TAP version 13
+# (node:2228) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: required Day 1 files exist at exact canonical paths
+ok 1 - required Day 1 files exist at exact canonical paths
+  ---
+  duration_ms: 1.096035
+  type: 'test'
+  ...
+# Subtest: package and Wrangler configuration are QA-only and executable
+ok 2 - package and Wrangler configuration are QA-only and executable
+  ---
+  duration_ms: 0.445961
+  type: 'test'
+  ...
+# Subtest: Production protection keeps Day 1 out of the Production entry and database
+ok 3 - Production protection keeps Day 1 out of the Production entry and database
+  ---
+  duration_ms: 0.270804
+  type: 'test'
+  ...
+# Subtest: migration is additive, namespaced, repeatable, and complete
+ok 4 - migration is additive, namespaced, repeatable, and complete
+  ---
+  duration_ms: 6.359082
+  type: 'test'
+  ...
+# Subtest: migration coexists with incompatible legacy GalviCare table names and data
+ok 5 - migration coexists with incompatible legacy GalviCare table names and data
+  ---
+  duration_ms: 2.26048
+  type: 'test'
+  ...
+# Subtest: health is canonical, QA-only, and does not expose database identity
+ok 6 - health is canonical, QA-only, and does not expose database identity
+  ---
+  duration_ms: 24.690297
+  type: 'test'
+  ...
+# Subtest: readiness and schema version agree with the namespaced migration ledger
+ok 7 - readiness and schema version agree with the namespaced migration ledger
+  ---
+  duration_ms: 10.645441
+  type: 'test'
+  ...
+# Subtest: CORS grants only exact approved origins
+ok 8 - CORS grants only exact approved origins
+  ---
+  duration_ms: 5.376428
+  type: 'test'
+  ...
+# Subtest: missing database binding fails closed with safe JSON
+ok 9 - missing database binding fails closed with safe JSON
+  ---
+  duration_ms: 3.74661
+  type: 'test'
+  ...
+# Subtest: session create, replay, get, audit, and actual idempotency key persist correctly
+ok 10 - session create, replay, get, audit, and actual idempotency key persist correctly
+  ---
+  duration_ms: 19.523159
+  type: 'test'
+  ...
+# Subtest: journey event create, replay, and mismatch are idempotent
+ok 11 - journey event create, replay, and mismatch are idempotent
+  ---
+  duration_ms: 7.320751
+  type: 'test'
+  ...
+# Subtest: fixture is deterministic in QA and unavailable under Production policy
+ok 12 - fixture is deterministic in QA and unavailable under Production policy
+  ---
+  duration_ms: 6.873261
+  type: 'test'
+  ...
+# Subtest: invalid route, payload, and unknown session return safe canonical errors
+ok 13 - invalid route, payload, and unknown session return safe canonical errors
+  ---
+  duration_ms: 3.22574
+  type: 'test'
+  ...
+# Subtest: OPTIONS returns no body and approved CORS metadata
+ok 14 - OPTIONS returns no body and approved CORS metadata
+  ---
+  duration_ms: 2.575413
+  type: 'test'
+  ...
+# Subtest: D3-A01 Days 1-3 advance one GalviVault QA Worker authority while preserving GalviCare and Production separation
+ok 15 - D3-A01 Days 1-3 advance one GalviVault QA Worker authority while preserving GalviCare and Production separation
+  ---
+  duration_ms: 0.919848
+  type: 'test'
+  ...
+# Subtest: D3-A02 additive migration supplies Day 3 version, import, and immutable evidence objects
+ok 16 - D3-A02 additive migration supplies Day 3 version, import, and immutable evidence objects
+  ---
+  duration_ms: 0.265633
+  type: 'test'
+  ...
+# Subtest: D3-A03 cumulative entry routes Day 3 to evidence runtime and preserves Day 2/Day 1 fallback
+ok 17 - D3-A03 cumulative entry routes Day 3 to evidence runtime and preserves Day 2/Day 1 fallback
+  ---
+  duration_ms: 0.201586
+  type: 'test'
+  ...
+# Subtest: EV-001/002 typed evidence contract is explicit and exactly-one validation is present
+ok 18 - EV-001/002 typed evidence contract is explicit and exactly-one validation is present
+  ---
+  duration_ms: 0.138829
+  type: 'test'
+  ...
+# Subtest: EV-004 acceptance and immutable correction paths are separated
+ok 19 - EV-004 acceptance and immutable correction paths are separated
+  ---
+  duration_ms: 1.455916
+  type: 'test'
+  ...
+# Subtest: EV-005 current selection derives from supersession lineage
+ok 20 - EV-005 current selection derives from supersession lineage
+  ---
+  duration_ms: 0.148599
+  type: 'test'
+  ...
+# Subtest: IP-003 exact replay and changed-key reuse are implemented
+ok 21 - IP-003 exact replay and changed-key reuse are implemented
+  ---
+  duration_ms: 0.206237
+  type: 'test'
+  ...
+# Subtest: IM-001 import rows use receipts, quarantine, and reconciled counts
+ok 22 - IM-001 import rows use receipts, quarantine, and reconciled counts
+  ---
+  duration_ms: 0.210384
+  type: 'test'
+  ...
+# Subtest: Day 1 health remains available through the cumulative Day 3 entry
+ok 23 - Day 1 health remains available through the cumulative Day 3 entry
+  ---
+  duration_ms: 30.693657
+  type: 'test'
+  ...
+# (node:2235) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Day4 readiness proves schema 0004
+ok 24 - Day4 readiness proves schema 0004
+  ---
+  duration_ms: 91.335021
+  type: 'test'
+  ...
+# GalviVault Day 4 error GV_LINEAGE_REQUIRED An observation requires at least one evidence link.
+# GalviVault Day 4 error GV_LINEAGE_REQUIRED A finding requires explicit support lineage.
+# Subtest: RS-001..006 support lineage and uncertainty execute through cumulative Worker+D1
+ok 25 - RS-001..006 support lineage and uncertainty execute through cumulative Worker+D1
+  ---
+  duration_ms: 89.794415
+  type: 'test'
+  ...
+# GalviVault Day 4 error GV_AUTH_FORBIDDEN Authorized operator scope is required.
+# Subtest: IP-004 governance supersession current/history and view boundary are proven in D1
+ok 26 - IP-004 governance supersession current/history and view boundary are proven in D1
+  ---
+  duration_ms: 73.718905
+  type: 'test'
+  ...
+# GalviVault Day 4 error GV_VERSION_CONFLICT expected_version does not match the current BMR version.
+# Subtest: LC-004/008/009/010 lifecycle and timeline preserve replay and typed history
+ok 27 - LC-004/008/009/010 lifecycle and timeline preserve replay and typed history
+  ---
+  duration_ms: 60.366356
+  type: 'test'
+  ...
+# Subtest: D4-FILES critical path files exist
+ok 28 - D4-FILES critical path files exist
+  ---
+  duration_ms: 2.354295
+  type: 'test'
+  ...
+# Subtest: D4-CONFIG advances only isolated GalviVault QA worker to schema 0004
+ok 29 - D4-CONFIG advances only isolated GalviVault QA worker to schema 0004
+  ---
+  duration_ms: 0.198482
+  type: 'test'
+  ...
+# Subtest: D4-MIGRATION is additive and supplies governed reasoning versioning
+ok 30 - D4-MIGRATION is additive and supplies governed reasoning versioning
+  ---
+  duration_ms: 0.26593
+  type: 'test'
+  ...
+# Subtest: D4-01 lineage is mandatory for observations and findings
+ok 31 - D4-01 lineage is mandatory for observations and findings
+  ---
+  duration_ms: 0.139519
+  type: 'test'
+  ...
+# Subtest: D4-02 hypothesis uncertainty remains separate from finding confirmation
+ok 32 - D4-02 hypothesis uncertainty remains separate from finding confirmation
+  ---
+  duration_ms: 0.193845
+  type: 'test'
+  ...
+# Subtest: D4-03 material finding revision preserves version and supersession lineage
+ok 33 - D4-03 material finding revision preserves version and supersession lineage
+  ---
+  duration_ms: 0.202483
+  type: 'test'
+  ...
+# Subtest: IP-004 exact finding replay and changed key mismatch are explicit
+ok 34 - IP-004 exact finding replay and changed key mismatch are explicit
+  ---
+  duration_ms: 0.27032
+  type: 'test'
+  ...
+# Subtest: RS-007 governance is privileged and cannot rewrite finding content
+ok 35 - RS-007 governance is privileged and cannot rewrite finding content
+  ---
+  duration_ms: 0.129296
+  type: 'test'
+  ...
+# Subtest: LC-004/008/009 Day 4 BMR transition uses versioned idempotent lifecycle
+ok 36 - LC-004/008/009 Day 4 BMR transition uses versioned idempotent lifecycle
+  ---
+  duration_ms: 0.331529
+  type: 'test'
+  ...
+# Subtest: D4-04 timeline reconstructs typed identity evidence reasoning governance
+ok 37 - D4-04 timeline reconstructs typed identity evidence reasoning governance
+  ---
+  duration_ms: 0.434376
+  type: 'test'
+  ...
+# Subtest: D4-05 customer projection excludes internal reasoning and returns confirmed current findings only
+ok 38 - D4-05 customer projection excludes internal reasoning and returns confirmed current findings only
+  ---
+  duration_ms: 0.196271
+  type: 'test'
+  ...
+# Subtest: Day 4 entry remains cumulative and falls through to Day 3
+ok 39 - Day 4 entry remains cumulative and falls through to Day 3
+  ---
+  duration_ms: 0.09504
+  type: 'test'
+  ...
+# Subtest: D5-01 recommendation requires finding lineage and version history
+ok 40 - D5-01 recommendation requires finding lineage and version history
+  ---
+  duration_ms: 0.708326
+  type: 'test'
+  ...
+# Subtest: D5-02 treatment authorization, same-BMR context, and atomic plan/items are wired
+ok 41 - D5-02 treatment authorization, same-BMR context, and atomic plan/items are wired
+  ---
+  duration_ms: 0.144678
+  type: 'test'
+  ...
+# Subtest: D5-03 plan revisions and treatment events preserve history and events are DB append-only
+ok 42 - D5-03 plan revisions and treatment events preserve history and events are DB append-only
+  ---
+  duration_ms: 0.14332
+  type: 'test'
+  ...
+# Subtest: D5-04 outcome requires source/time/relation and feedback is separate
+ok 43 - D5-04 outcome requires source/time/relation and feedback is separate
+  ---
+  duration_ms: 0.175556
+  type: 'test'
+  ...
+# Subtest: D5-05 learning remains a candidate and does not update active knowledge
+ok 44 - D5-05 learning remains a candidate and does not update active knowledge
+  ---
+  duration_ms: 0.191831
+  type: 'test'
+  ...
+# Subtest: D5-06 adapter failures are isolated in delivery ledger
+ok 45 - D5-06 adapter failures are isolated in delivery ledger
+  ---
+  duration_ms: 0.091079
+  type: 'test'
+  ...
+# Subtest: MG-011 append-only treatment event guards exist
+ok 46 - MG-011 append-only treatment event guards exist
+  ---
+  duration_ms: 0.184663
+  type: 'test'
+  ...
+# Subtest: SC-009 future service can propose but privileged learning review requires operator
+ok 47 - SC-009 future service can propose but privileged learning review requires operator
+  ---
+  duration_ms: 0.107717
+  type: 'test'
+  ...
+# Subtest: SC-010 Stripe webhook validates signature before provider-event persistence
+ok 48 - SC-010 Stripe webhook validates signature before provider-event persistence
+  ---
+  duration_ms: 0.264488
+  type: 'test'
+  ...
+# Subtest: CR-012 care and timeline use bounded typed remote-D1-safe reads
+ok 49 - CR-012 care and timeline use bounded typed remote-D1-safe reads
+  ---
+  duration_ms: 0.349482
+  type: 'test'
+  ...
+# Subtest: Day 5 cumulative Worker preserves isolated QA authority
+ok 50 - Day 5 cumulative Worker preserves isolated QA authority
+  ---
+  duration_ms: 0.15623
+  type: 'test'
+  ...
+# Subtest: Production and GalviCare entry/config are not Day 5 implementation targets
+ok 51 - Production and GalviCare entry/config are not Day 5 implementation targets
+  ---
+  duration_ms: 0.197475
+  type: 'test'
+  ...
+# Subtest: Day 7A Worker remains the QA/build source without product-logic rewrite
+ok 52 - Day 7A Worker remains the QA/build source without product-logic rewrite
+  ---
+  duration_ms: 0.870951
+  type: 'test'
+  ...
+# Subtest: Production keeps the current GalviCare security boundary and approved entry point
+ok 53 - Production keeps the current GalviCare security boundary and approved entry point
+  ---
+  duration_ms: 1.220995
+  type: 'test'
+  ...
+# Subtest: Day 1, Day 7D and Production Worker services are distinct
+ok 54 - Day 1, Day 7D and Production Worker services are distinct
+  ---
+  duration_ms: 0.160924
+  type: 'test'
+  ...
+# Subtest: QA and Production D1 targets are physically distinct
+ok 55 - QA and Production D1 targets are physically distinct
+  ---
+  duration_ms: 0.177139
+  type: 'test'
+  ...
+# Subtest: Production runtime is explicitly production with an exact origin allowlist
+ok 56 - Production runtime is explicitly production with an exact origin allowlist
+  ---
+  duration_ms: 0.245708
+  type: 'test'
+  ...
+# Subtest: QA-only fixture and override capabilities are denied by the current Production boundary
+ok 57 - QA-only fixture and override capabilities are denied by the current Production boundary
+  ---
+  duration_ms: 0.111826
+  type: 'test'
+  ...
+# Subtest: Production health fingerprint identifies Production GalviVault, main release, DB binding and runtime
+ok 58 - Production health fingerprint identifies Production GalviVault, main release, DB binding and runtime
+  ---
+  duration_ms: 0.210609
+  type: 'test'
+  ...
+# Subtest: Production payment return remains server-verified and cannot use a browser/test authority
+ok 59 - Production payment return remains server-verified and cannot use a browser/test authority
+  ---
+  duration_ms: 0.204849
+  type: 'test'
+  ...
+# Subtest: Production config contains no QA-only D1 or test-payment authority
+ok 60 - Production config contains no QA-only D1 or test-payment authority
+  ---
+  duration_ms: 0.431106
+  type: 'test'
+  ...
+# (node:2281) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Day 2 migration is additive and enforces identity continuity constraints
+ok 61 - Day 2 migration is additive and enforces identity continuity constraints
+  ---
+  duration_ms: 4.532532
+  type: 'test'
+  ...
+# Subtest: Day 2 readiness proves migration 0002 and required constraints
+ok 62 - Day 2 readiness proves migration 0002 and required constraints
+  ---
+  duration_ms: 35.933818
+  type: 'test'
+  ...
+# Subtest: new identity, exact replay, and refresh retrieval preserve one canonical identity set
+ok 63 - new identity, exact replay, and refresh retrieval preserve one canonical identity set
+  ---
+  duration_ms: 24.555407
+  type: 'test'
+  ...
+# Subtest: email case and whitespace variation resolve the same Founder
+ok 64 - email case and whitespace variation resolve the same Founder
+  ---
+  duration_ms: 11.034042
+  type: 'test'
+  ...
+# Subtest: new session reuses Founder, Venture, and BMR while changing only session_id
+ok 65 - new session reuses Founder, Venture, and BMR while changing only session_id
+  ---
+  duration_ms: 13.729186
+  type: 'test'
+  ...
+# Subtest: same Founder can create a second Venture with its own BMR and Session
+ok 66 - same Founder can create a second Venture with its own BMR and Session
+  ---
+  duration_ms: 11.630279
+  type: 'test'
+  ...
+# Subtest: Venture update is versioned, no-op safe, and stale-version safe
+ok 67 - Venture update is versioned, no-op safe, and stale-version safe
+  ---
+  duration_ms: 16.688006
+  type: 'test'
+  ...
+# Subtest: idempotency-key reuse, privilege injection, and cross-scope mismatch produce no mutation
+ok 68 - idempotency-key reuse, privilege injection, and cross-scope mismatch produce no mutation
+  ---
+  duration_ms: 14.125967
+  type: 'test'
+  ...
+# Subtest: one BMR per Venture is enforced independently of idempotency key
+ok 69 - one BMR per Venture is enforced independently of idempotency key
+  ---
+  duration_ms: 16.714589
+  type: 'test'
+  ...
+# Subtest: Day 2 CORS and missing DB failures remain safe JSON
+ok 70 - Day 2 CORS and missing DB failures remain safe JSON
+  ---
+  duration_ms: 10.478331
+  type: 'test'
+  ...
+1..70
+# tests 70
+# suites 0
+# pass 70
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 433.794544

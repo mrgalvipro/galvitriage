@@ -47,6 +47,8 @@ const PAYMENT_PRODUCT_ALIASES = Object.freeze({
 });
 
 const DAY7A_RUNTIME_MARKER = 'day7a-payment-products-v1';
+const DAY7C_HUBSPOT_ADAPTER_VERSION = 'day7c-hubspot-direct-v1';
+const DAY7C_HUBSPOT_TIMEOUT_MS = 5000;
 
 const DAY1_ACTIONS = new Set([
   'health_check',
@@ -689,7 +691,35 @@ async function handleDay1Action(env, payload, action) {
 async function handleDay2Action(env, payload, action) {
   const db = requireDb(env); const sid = getPayloadSessionId(payload);
   if (action === 'triage_completeness') return jsonResponse({ success: true, action, session_id: sid, ...calculateCompleteness(payload) }, 200, env);
-  if (action === 'submit_triage') { const completeness = calculateCompleteness(payload); if (!completeness.complete) return jsonResponse({ success: false, action, message: 'GalviTriage intake is incomplete or invalid.', ...completeness }, 422, env); const session_id = await persistTriage(db, payload); const vitals = await writeProductResult(db, session_id, 'GalviVitals', buildVitalsResult(payload)); const score = await writeProductResult(db, session_id, 'GalviScore', calculateDeterministicScore(payload)); return jsonResponse({ success: true, action, session_id, next_screen: 'GalviVitals', triage: { session_id, question_contract_version: DAY2_QUESTION_CONTRACT_VERSION }, vitals, score }, 200, env); }
+  if (action === 'submit_triage') {
+    const completeness = calculateCompleteness(payload);
+    if (!completeness.complete) return jsonResponse({ success: false, action, message: 'GalviTriage intake is incomplete or invalid.', ...completeness }, 422, env);
+    const session_id = await persistTriage(db, payload);
+    const vitals = await writeProductResult(db, session_id, 'GalviVitals', buildVitalsResult(payload));
+    const score = await writeProductResult(db, session_id, 'GalviScore', calculateDeterministicScore(payload));
+    if (!isQaEnvironment(env)) {
+      return jsonResponse({
+        success: true,
+        action,
+        session_id,
+        next_screen: 'GalviVitals',
+        triage: { session_id, question_contract_version: DAY2_QUESTION_CONTRACT_VERSION },
+        vitals,
+        score
+      }, 200, env);
+    }
+    const hubspot = await upsertHubSpotContact(env, payload, session_id);
+    return jsonResponse({
+      success: true,
+      action,
+      session_id,
+      next_screen: 'GalviVitals',
+      triage: { session_id, question_contract_version: DAY2_QUESTION_CONTRACT_VERSION },
+      vitals,
+      score,
+      day7c: { adapter: DAY7C_HUBSPOT_ADAPTER_VERSION, hubspot }
+    }, 200, env, { 'X-GalviCare-Day7C-Adapter': DAY7C_HUBSPOT_ADAPTER_VERSION });
+  }
   if (!required(sid)) return jsonResponse({ success: false, action, message: 'Missing session_id' }, 400, env);
   if (action === 'get_triage') { const triage = await getStoredTriage(db, sid); if (!triage) return jsonResponse({ success: false, action, message: 'GalviTriage session not found', session_id: sid }, 404, env); return jsonResponse({ success: true, action, session_id: sid, triage }, 200, env); }
   const product = action === 'get_or_create_vitals' ? 'GalviVitals' : 'GalviScore';
@@ -861,25 +891,26 @@ async function airtableRequest(
     `${encodeURIComponent(tableName)}` +
     query;
 
-  const response = await fetch(
-    url,
-    {
-      method,
+  const response =
+    await fetch(
+      url,
+      {
+        method,
 
-      headers: {
-        Authorization:
-          `Bearer ${env.AIRTABLE_TOKEN}`,
+        headers: {
+          Authorization:
+            `Bearer ${env.AIRTABLE_TOKEN}`,
 
-        'Content-Type':
-          'application/json'
-      },
+          'Content-Type':
+            'application/json'
+        },
 
-      body:
-        body !== null
-          ? JSON.stringify(body)
-          : undefined
-    }
-  );
+        body:
+          body !== null
+            ? JSON.stringify(body)
+            : undefined
+      }
+    );
 
   const text =
     await response.text();
@@ -1502,123 +1533,133 @@ function buildJourneyFields(payload) {
   };
 }
 
-function buildHubSpotContactProperties(
-  payload
-) {
-  return {
-    email: safe(
-      payload,
-      'founder.email'
-    ),
-
-    firstname: safe(
-      payload,
-      'founder.first_name'
-    ),
-
-    lastname: safe(
-      payload,
-      'founder.last_name'
-    ),
-
-    phone: safe(
-      payload,
-      'founder.phone'
-    ),
-
-    company: safe(
-      payload,
-      'venture.venture_name'
-    ),
-
-    website: safe(
-      payload,
-      'venture.website'
-    )
+function buildHubSpotContactProperties(payload) {
+  const properties = {
+    email: normalizeFounderEmail(safe(payload, 'founder.email')),
+    firstname: safe(payload, 'founder.first_name'),
+    lastname: safe(payload, 'founder.last_name'),
+    phone: safe(payload, 'founder.phone'),
+    company: safe(payload, 'venture.venture_name'),
+    website: safe(payload, 'venture.website'),
+    galvicare_environment: 'qa',
+    galvicare_test_record: 'true'
   };
+  return Object.fromEntries(
+    Object.entries(properties).filter(([, value]) => String(value || '').trim() !== '')
+  );
 }
 
-async function hubspotRequest(
-  env,
-  path,
-  method = 'POST',
-  body = null
-) {
-  if (
-    env.HUBSPOT_ENABLED !== 'true' ||
-    !env.HUBSPOT_PRIVATE_APP_TOKEN
-  ) {
-    return {
-      skipped: true,
-
-      reason:
-        'HubSpot disabled or ' +
-        'HUBSPOT_PRIVATE_APP_TOKEN missing'
-    };
+async function hubspotRequest(env, path, method = 'POST', body = null) {
+  if (env.HUBSPOT_ENABLED !== 'true' || !env.HUBSPOT_PRIVATE_APP_TOKEN) {
+    return { skipped: true, reason: 'HubSpot disabled or HUBSPOT_PRIVATE_APP_TOKEN missing' };
   }
 
-  const response =
-    await fetch(
-      `https://api.hubapi.com${path}`,
-      {
-        method,
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DAY7C_HUBSPOT_TIMEOUT_MS);
+  try {
+    const response = await fetch(`https://api.hubapi.com${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${env.HUBSPOT_PRIVATE_APP_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: body !== null ? JSON.stringify(body) : undefined,
+      signal: controller.signal
+    });
 
-        headers: {
-          Authorization:
-            `Bearer ` +
-            `${env.HUBSPOT_PRIVATE_APP_TOKEN}`,
-          'Content-Type':
-            'application/json'
-        },
+    let data = {};
+    try { data = await response.json(); } catch { data = {}; }
 
-        body:
-          body !== null
-            ? JSON.stringify(body)
-            : undefined
-      }
-    );
+    if (!response.ok) {
+      const error = new Error(
+        `HubSpot ${method} ${path} failed (${response.status}): ${String(data.message || data.category || 'unknown error').slice(0, 500)}`
+      );
+      error.httpStatus = response.status;
+      throw error;
+    }
+    return data;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-  const text =
-    await response.text();
+async function recordDay7CIntegrationTrace(env, sessionId, status, externalId = null) {
+  if (!env.DB || !sessionId) return;
+  try {
+    await env.DB.prepare(
+      `INSERT INTO integration_trace(session_id,integration,event_name,status,environment,external_id,created_at)
+       VALUES(?,?,?,?,?,?,CURRENT_TIMESTAMP)`
+    ).bind(sessionId, 'hubspot', 'contact_upsert', status, 'qa', externalId).run();
+  } catch (error) {
+    console.error('Day 7C integration trace write failed', error?.message || error);
+  }
+}
 
-  let data;
+async function upsertHubSpotContact(env, payload, sessionId = getPayloadSessionId(payload)) {
+  if (env.HUBSPOT_ENABLED !== 'true' || !env.HUBSPOT_PRIVATE_APP_TOKEN) {
+    await recordDay7CIntegrationTrace(env, sessionId, 'skipped');
+    return { attempted: false, success: false, status: 'skipped' };
+  }
+
+  const properties = buildHubSpotContactProperties(payload);
+  const email = normalizeFounderEmail(properties.email);
+  if (!email) {
+    await recordDay7CIntegrationTrace(env, sessionId, 'missing_email');
+    return { attempted: false, success: false, status: 'missing_email' };
+  }
 
   try {
-    data = JSON.parse(text);
-  } catch {
-    data = {
-      raw: text
+    let existing = null;
+    try {
+      existing = await hubspotRequest(
+        env,
+        `/crm/v3/objects/contacts/${encodeURIComponent(email)}?idProperty=email&properties=email`,
+        'GET'
+      );
+    } catch (lookupError) {
+      if (lookupError.httpStatus !== 404) throw lookupError;
+    }
+
+    let response;
+    let operation;
+    if (existing?.id) {
+      operation = 'update';
+      response = await hubspotRequest(
+        env,
+        `/crm/v3/objects/contacts/${encodeURIComponent(existing.id)}`,
+        'PATCH',
+        { properties }
+      );
+    } else {
+      operation = 'create';
+      response = await hubspotRequest(
+        env,
+        '/crm/v3/objects/contacts',
+        'POST',
+        { properties }
+      );
+    }
+
+    const externalId = String(response?.id || existing?.id || '');
+    await recordDay7CIntegrationTrace(env, sessionId, 'delivered', externalId || null);
+    return {
+      attempted: true,
+      success: true,
+      status: 'delivered',
+      operation,
+      contact_id: externalId
+    };
+  } catch (error) {
+    const status = error?.name === 'AbortError' ? 'timeout' : 'failed';
+    await recordDay7CIntegrationTrace(env, sessionId, status);
+    console.error('Day 7C HubSpot sync failed', error?.message || error);
+    return {
+      attempted: true,
+      success: false,
+      status,
+      error: String(error?.message || error).slice(0, 500)
     };
   }
-
-  if (!response.ok) {
-    throw new Error(
-      `HubSpot ${path} failed: ` +
-      `${response.status} ` +
-      `${JSON.stringify(data)}`
-    );
-  }
-
-  return data;
-}
-
-async function upsertHubSpotContact(
-  env,
-  payload
-) {
-  const properties =
-    buildHubSpotContactProperties(
-      payload
-    );
-
-  return hubspotRequest(
-    env,
-    '/crm/v3/objects/contacts',
-    'POST',
-    {
-      properties
-    }
-  );
 }
 
 /*
@@ -2007,7 +2048,7 @@ async function writeDay4Result(db, sessionId, product, result) {
   );
 }
 async function getPaidGalviShotForDay4(db, env, payload, sessionId) {
-  const entitled = await hasGalviShotEntitlement(db, sessionId) || hasQaOverride(env, payload);
+  const entitled = await hasProductEntitlement(db, sessionId) || hasQaOverride(env, payload);
   if (!entitled) return { locked:true, response:{ success:false, status:'locked', message:'GalviShot is locked until server-side entitlement is verified.', session_id:sessionId, payment_required:true } };
   const stored = await storedGalviShot(db, sessionId);
   if (!stored) return { missing:true, response:{ success:false, status:'not_found', message:'Generate GalviShot before requesting Day 4.', session_id:sessionId } };

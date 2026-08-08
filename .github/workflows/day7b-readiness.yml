@@ -1,34 +1,45 @@
 name: GalviCare Day 7B Readiness
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - qa-revamped-galvicare-0-5
-  workflow_dispatch:
+    paths:
+      - "worker/worker.js"
+      - "worker/production-entry.js"
+      - "wrangler.production.jsonc"
+      - "index.html"
+      - "scripts/day7b-build-production-frontend.mjs"
+      - "tests/day7b-environment-isolation.test.mjs"
+      - "tests/day7bc-payment-return-ordering.test.mjs"
+      - "tests/payment-return.test.mjs"
 
 permissions:
   contents: read
+
+concurrency:
+  group: galvicare-day7b-readiness
+  cancel-in-progress: true
 
 jobs:
   day7b-readiness:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-
     steps:
-      - name: Checkout current Day 7A branch
+      - name: Checkout exact GalviCare candidate
         uses: actions/checkout@v4
-
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: 22
-
       - name: Install dependencies
-        run: npm install --ignore-scripts
-
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
       - name: Preserve Day 7A and prove Day 7B source isolation
         run: npm run day7b:gate
-
       - name: Reject QA D1 binding in Production config
         shell: bash
         run: |
@@ -39,4 +50,3 @@ jobs:
           fi
           grep -q 'galvivault-0-5-production' wrangler.production.jsonc
           grep -q 'worker/production-entry.js' wrangler.production.jsonc
-          echo 'PASS: Production runtime is independently targeted.'

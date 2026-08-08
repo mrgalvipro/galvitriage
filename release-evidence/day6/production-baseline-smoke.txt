@@ -1,0 +1,1 @@
+RG-006 PASS: protected GalviCare runtime unchanged; https://www.galvipro.com returned HTTP 200

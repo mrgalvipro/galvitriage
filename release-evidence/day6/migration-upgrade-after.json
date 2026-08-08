@@ -1,0 +1,43 @@
+[
+  {
+    "results": [
+      {
+        "migration_id": "0001"
+      },
+      {
+        "migration_id": "0002"
+      },
+      {
+        "migration_id": "0003"
+      },
+      {
+        "migration_id": "0004"
+      },
+      {
+        "migration_id": "0005"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [
+      {
+        "duplicate_bmr_ventures": 0
+      }
+    ],
+    "success": true,
+    "meta": {
+      "duration": 0
+    }
+  },
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "duration": 1
+    }
+  }
+]

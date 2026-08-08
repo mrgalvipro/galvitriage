@@ -1,0 +1,2 @@
+scripts/galvivault-day2-e2e.mjs
+scripts/galvivault-day2-qa-operator.mjs

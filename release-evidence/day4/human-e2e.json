@@ -1,0 +1,2708 @@
+{
+  "day": 4,
+  "run_suffix": "31193811042-1",
+  "base_url": "https://galvivault-p0-day1-qa.mrgalvipro.workers.dev",
+  "origin": "https://galvipro.com",
+  "started_at": "2026-08-07T15:41:18.599Z",
+  "steps": [
+    {
+      "step": "H4.0_READINESS_1",
+      "timestamp": "2026-08-07T15:41:18.881Z",
+      "method": "GET",
+      "path": "/api/v1/day4/readiness?probe=1",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_0_readiness_1",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_0_readiness_1",
+        "data": {
+          "service": "galvivault-p0-day4",
+          "ready": true,
+          "current_schema_version": "0004",
+          "required_schema_version": "0004",
+          "migration": {
+            "migration_id": "0004",
+            "name": "day4_governed_reasoning_v1",
+            "environment": "qa",
+            "checksum": "gv1-0004-day4-governed-reasoning",
+            "applied_at": "2026-08-07 14:49:26"
+          },
+          "reasoning_tables": {
+            "gv1_observations": 1,
+            "gv1_observation_evidence": 1,
+            "gv1_hypotheses": 1,
+            "gv1_hypothesis_observations": 1,
+            "gv1_findings": 1,
+            "gv1_finding_evidence": 1,
+            "gv1_finding_observations": 1,
+            "gv1_finding_hypotheses": 1
+          },
+          "contracted_index_count": 3
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.0_READINESS_2",
+      "timestamp": "2026-08-07T15:41:20.610Z",
+      "method": "GET",
+      "path": "/api/v1/day4/readiness?probe=2",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_0_readiness_2",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_0_readiness_2",
+        "data": {
+          "service": "galvivault-p0-day4",
+          "ready": true,
+          "current_schema_version": "0004",
+          "required_schema_version": "0004",
+          "migration": {
+            "migration_id": "0004",
+            "name": "day4_governed_reasoning_v1",
+            "environment": "qa",
+            "checksum": "gv1-0004-day4-governed-reasoning",
+            "applied_at": "2026-08-07 14:49:26"
+          },
+          "reasoning_tables": {
+            "gv1_observations": 1,
+            "gv1_observation_evidence": 1,
+            "gv1_hypotheses": 1,
+            "gv1_hypothesis_observations": 1,
+            "gv1_findings": 1,
+            "gv1_finding_evidence": 1,
+            "gv1_finding_observations": 1,
+            "gv1_finding_hypotheses": 1
+          },
+          "contracted_index_count": 3
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.0_READINESS_3",
+      "timestamp": "2026-08-07T15:41:22.312Z",
+      "method": "GET",
+      "path": "/api/v1/day4/readiness?probe=3",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_0_readiness_3",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_0_readiness_3",
+        "data": {
+          "service": "galvivault-p0-day4",
+          "ready": true,
+          "current_schema_version": "0004",
+          "required_schema_version": "0004",
+          "migration": {
+            "migration_id": "0004",
+            "name": "day4_governed_reasoning_v1",
+            "environment": "qa",
+            "checksum": "gv1-0004-day4-governed-reasoning",
+            "applied_at": "2026-08-07 14:49:26"
+          },
+          "reasoning_tables": {
+            "gv1_observations": 1,
+            "gv1_observation_evidence": 1,
+            "gv1_hypotheses": 1,
+            "gv1_hypothesis_observations": 1,
+            "gv1_findings": 1,
+            "gv1_finding_evidence": 1,
+            "gv1_finding_observations": 1,
+            "gv1_finding_hypotheses": 1
+          },
+          "contracted_index_count": 3
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.1_IDENTITY",
+      "timestamp": "2026-08-07T15:41:22.498Z",
+      "method": "POST",
+      "path": "/api/v1/sessions",
+      "status": 201,
+      "correlation_id": "corr_d4_31193811042-1_h4_1_identity",
+      "environment": "qa",
+      "request": {
+        "client_session_key": "d4-session-31193811042-1-01",
+        "source": "galvivault",
+        "current_stage": "GalviTriage",
+        "founder": {
+          "email": "founder.day4.31193811042-1@example.test",
+          "first_name": "Day",
+          "last_name": "Four",
+          "consent_status": "approved"
+        },
+        "venture": {
+          "venture_name": "Day 4 Reasoning Venture 31193811042-1",
+          "stage": "validation",
+          "industry": "business-services",
+          "role_code": "founder",
+          "is_primary": true
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_1_identity",
+        "data": {
+          "identity": {
+            "founder": {
+              "founder_id": "fdr_c53f523a4aa4480e91c7be3c26e9862a",
+              "first_name": "Day",
+              "last_name": "Four",
+              "email": "founder.day4.31193811042-1@example.test",
+              "normalized_email": "founder.day4.31193811042-1@example.test",
+              "phone": null,
+              "consent_status": "approved",
+              "status": "active",
+              "record_version": 1,
+              "profile_json": null,
+              "created_at": "2026-08-07T15:41:22.379Z",
+              "updated_at": "2026-08-07T15:41:22.379Z"
+            },
+            "venture": {
+              "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+              "venture_name": "Day 4 Reasoning Venture 31193811042-1",
+              "stage": "validation",
+              "website": null,
+              "industry": "business-services",
+              "revenue_range": null,
+              "profile_json": null,
+              "status": "active",
+              "record_version": 1,
+              "created_at": "2026-08-07T15:41:22.379Z",
+              "updated_at": "2026-08-07T15:41:22.379Z"
+            },
+            "founder_venture_role": {
+              "founder_id": "fdr_c53f523a4aa4480e91c7be3c26e9862a",
+              "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+              "role_code": "founder",
+              "is_primary": 1,
+              "status": "active",
+              "created_at": "2026-08-07T15:41:22.379Z",
+              "updated_at": "2026-08-07T15:41:22.379Z"
+            },
+            "business_medical_record": {
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+              "status": "active",
+              "record_version": 1,
+              "current_session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+              "opened_at": "2026-08-07T15:41:22.379Z",
+              "closed_at": null,
+              "created_at": "2026-08-07T15:41:22.379Z",
+              "updated_at": "2026-08-07T15:41:22.379Z"
+            },
+            "session": {
+              "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+              "founder_id": "fdr_c53f523a4aa4480e91c7be3c26e9862a",
+              "client_session_key": "d4-session-31193811042-1-01",
+              "source": "galvivault",
+              "current_stage": "GalviTriage",
+              "status": "active",
+              "started_at": "2026-08-07T15:41:22.379Z",
+              "completed_at": null,
+              "created_at": "2026-08-07T15:41:22.379Z",
+              "updated_at": "2026-08-07T15:41:22.379Z"
+            }
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 1,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.1_EVIDENCE",
+      "timestamp": "2026-08-07T15:41:22.775Z",
+      "method": "POST",
+      "path": "/api/v1/evidence",
+      "status": 201,
+      "correlation_id": "corr_d4_31193811042-1_h4_1_evidence",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+        "source_type": "assessment_answer",
+        "source_ref": "triage.problem_clarity:v1:31193811042-1",
+        "value_type": "number",
+        "value_number": 72,
+        "consent_status": "approved",
+        "captured_at": "2026-08-07T15:41:22.499Z",
+        "assessment_answer": {
+          "question_id": "triage.problem_clarity",
+          "question_version": "v1",
+          "raw_value_number": 72,
+          "normalized_value_number": 72,
+          "confidence_effect": 0.2
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_1_evidence",
+        "data": {
+          "evidence": {
+            "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+            "evidence_type": "number",
+            "source_product": "GalviVault",
+            "source_reference": "ans_e92afe466a594d95b3b4234da25d330e",
+            "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":72,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+            "confidence": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T15:41:22.633Z",
+            "evidence_group_id": "evg_bce067bdfd5341b8af51703bc461d0eb",
+            "version_no": 1,
+            "supersedes_evidence_id": null,
+            "source_type": "assessment_answer",
+            "source_ref": "ans_e92afe466a594d95b3b4234da25d330e",
+            "value_type": "number",
+            "value_text": null,
+            "value_number": 72,
+            "value_boolean": null,
+            "value_date": null,
+            "value_json": null,
+            "status": "draft",
+            "consent_status": "approved",
+            "source_actor_type": "public",
+            "source_actor_id": "public-session",
+            "captured_at": "2026-08-07T15:41:22.499Z",
+            "content_hash": "78fea9b047c0adfda4165d9bd20e4c0bd49be589669ba88e502f958352599b5b",
+            "rejection_reason": null,
+            "updated_at": "2026-08-07T15:41:22.633Z",
+            "is_current": true,
+            "superseded_by_evidence_id": null,
+            "relationships": []
+          },
+          "answer": {
+            "answer_id": "ans_e92afe466a594d95b3b4234da25d330e",
+            "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+            "question_id": "triage.problem_clarity",
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "question_version": "v1",
+            "answer_group_id": "ang_9868cd3a678b4a6fa19ee598ca61a95e",
+            "version_no": 1,
+            "supersedes_answer_id": null,
+            "raw_value_text": null,
+            "raw_value_number": 72,
+            "normalized_value_text": null,
+            "normalized_value_number": 72,
+            "confidence_effect": 0.2,
+            "source": "assessment_answer",
+            "captured_at": "2026-08-07T15:41:22.499Z",
+            "status": "draft",
+            "content_hash": "104fb64b510d43234304b1246dc500b7f22aee9bd9c084f235ee4c6688828385"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.1_ACCEPT",
+      "timestamp": "2026-08-07T15:41:23.315Z",
+      "method": "POST",
+      "path": "/api/v1/evidence/evd_e01ca4737aa742a5922db698e4348215/accept",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_1_accept",
+      "environment": "qa",
+      "request": {
+        "reason": "day4_precondition"
+      },
+      "response": {
+        "success": true,
+        "status": "accepted",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_1_accept",
+        "data": {
+          "evidence": {
+            "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+            "evidence_type": "number",
+            "source_product": "GalviVault",
+            "source_reference": "ans_e92afe466a594d95b3b4234da25d330e",
+            "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":72,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+            "confidence": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T15:41:22.633Z",
+            "evidence_group_id": "evg_bce067bdfd5341b8af51703bc461d0eb",
+            "version_no": 1,
+            "supersedes_evidence_id": null,
+            "source_type": "assessment_answer",
+            "source_ref": "ans_e92afe466a594d95b3b4234da25d330e",
+            "value_type": "number",
+            "value_text": null,
+            "value_number": 72,
+            "value_boolean": null,
+            "value_date": null,
+            "value_json": null,
+            "status": "accepted",
+            "consent_status": "approved",
+            "source_actor_type": "public",
+            "source_actor_id": "public-session",
+            "captured_at": "2026-08-07T15:41:22.499Z",
+            "content_hash": "78fea9b047c0adfda4165d9bd20e4c0bd49be589669ba88e502f958352599b5b",
+            "rejection_reason": null,
+            "updated_at": "2026-08-07T15:41:22.633Z",
+            "is_current": true,
+            "superseded_by_evidence_id": null,
+            "relationships": []
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.1_BASELINE",
+      "timestamp": "2026-08-07T15:41:23.414Z",
+      "method": "GET",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/evidence?view=history",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_1_baseline",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_1_baseline",
+        "data": {
+          "evidence": [
+            {
+              "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+              "evidence_type": "number",
+              "source_product": "GalviVault",
+              "source_reference": "ans_e92afe466a594d95b3b4234da25d330e",
+              "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":72,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+              "confidence": null,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:22.633Z",
+              "evidence_group_id": "evg_bce067bdfd5341b8af51703bc461d0eb",
+              "version_no": 1,
+              "supersedes_evidence_id": null,
+              "source_type": "assessment_answer",
+              "source_ref": "ans_e92afe466a594d95b3b4234da25d330e",
+              "value_type": "number",
+              "value_text": null,
+              "value_number": 72,
+              "value_boolean": null,
+              "value_date": null,
+              "value_json": null,
+              "status": "accepted",
+              "consent_status": "approved",
+              "source_actor_type": "public",
+              "source_actor_id": "public-session",
+              "captured_at": "2026-08-07T15:41:22.499Z",
+              "content_hash": "78fea9b047c0adfda4165d9bd20e4c0bd49be589669ba88e502f958352599b5b",
+              "rejection_reason": null,
+              "updated_at": "2026-08-07T15:41:22.633Z",
+              "is_current": true,
+              "superseded_by_evidence_id": null,
+              "relationships": []
+            }
+          ],
+          "view": "history",
+          "limit": 50
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.2_SUPPORTED_OBSERVATION",
+      "timestamp": "2026-08-07T15:41:23.556Z",
+      "method": "POST",
+      "path": "/api/v1/observations",
+      "status": 201,
+      "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "statement": "Observed quantified problem clarity signal from accepted assessment evidence.",
+        "domain": "problem_clarity",
+        "confidence": 90,
+        "source_type": "deterministic_rule",
+        "source_version": "day4_qa_v1",
+        "evidence": [
+          {
+            "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+            "support_type": "supports"
+          }
+        ]
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation",
+        "data": {
+          "observation": {
+            "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+            "observation_type": "reasoning",
+            "dimension": "problem_clarity",
+            "statement": "Observed quantified problem clarity signal from accepted assessment evidence.",
+            "severity": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T15:41:23.466Z",
+            "updated_at": "2026-08-07T15:41:23.466Z",
+            "observation_group_id": "obg_55ed5d4579c84838afe507f9383f4e31",
+            "version_no": 1,
+            "supersedes_observation_id": null,
+            "domain": "problem_clarity",
+            "confidence": 90,
+            "source_type": "deterministic_rule",
+            "source_version": "day4_qa_v1",
+            "status": "active",
+            "created_by_type": "public",
+            "created_by_id": "public-session",
+            "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation"
+          },
+          "links": [
+            {
+              "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+              "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+              "support_type": "supports",
+              "created_at": "2026-08-07T15:41:23.466Z",
+              "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation"
+            }
+          ],
+          "idempotent_replay": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.3_UNSUPPORTED_OBSERVATION",
+      "timestamp": "2026-08-07T15:41:23.596Z",
+      "method": "POST",
+      "path": "/api/v1/observations",
+      "status": 422,
+      "correlation_id": "corr_d4_31193811042-1_h4_3_unsupported_observation",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "statement": "Observed quantified problem clarity signal from accepted assessment evidence.",
+        "domain": "problem_clarity",
+        "confidence": 90,
+        "source_type": "deterministic_rule",
+        "source_version": "day4_qa_v1",
+        "evidence": []
+      },
+      "response": {
+        "success": false,
+        "status": "invalid_request",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_3_unsupported_observation",
+        "error": {
+          "code": "GV_LINEAGE_REQUIRED",
+          "message": "An observation requires at least one evidence link.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.4_SUPPORTED_HYPOTHESIS",
+      "timestamp": "2026-08-07T15:41:23.747Z",
+      "method": "POST",
+      "path": "/api/v1/hypotheses",
+      "status": 201,
+      "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "statement": "The venture may benefit from further problem-definition validation.",
+        "domain": "problem_clarity",
+        "confidence": 65,
+        "uncertainty": "This remains a hypothesis pending additional evidence.",
+        "source_type": "deterministic_rule",
+        "source_version": "day4_qa_v1",
+        "observations": [
+          {
+            "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+            "relationship_type": "supports"
+          }
+        ]
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis",
+        "data": {
+          "hypothesis": {
+            "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "statement": "The venture may benefit from further problem-definition validation.",
+            "status": "active",
+            "confidence": 65,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T15:41:23.666Z",
+            "updated_at": "2026-08-07T15:41:23.666Z",
+            "hypothesis_group_id": "hyg_507feef5b2744fd19d775fca07cd976a",
+            "version_no": 1,
+            "supersedes_hypothesis_id": null,
+            "domain": "problem_clarity",
+            "uncertainty": "This remains a hypothesis pending additional evidence.",
+            "source_type": "deterministic_rule",
+            "source_version": "day4_qa_v1",
+            "created_by_type": "public",
+            "created_by_id": "public-session",
+            "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis"
+          },
+          "links": [
+            {
+              "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+              "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+              "relationship_type": "supports",
+              "created_at": "2026-08-07T15:41:23.666Z",
+              "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis"
+            }
+          ],
+          "idempotent_replay": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.5_UNSUPPORTED_HYPOTHESIS",
+      "timestamp": "2026-08-07T15:41:23.783Z",
+      "method": "POST",
+      "path": "/api/v1/hypotheses",
+      "status": 422,
+      "correlation_id": "corr_d4_31193811042-1_h4_5_unsupported_hypothesis",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "statement": "The venture may benefit from further problem-definition validation.",
+        "domain": "problem_clarity",
+        "confidence": 65,
+        "uncertainty": "This remains a hypothesis pending additional evidence.",
+        "source_type": "deterministic_rule",
+        "source_version": "day4_qa_v1",
+        "observations": []
+      },
+      "response": {
+        "success": false,
+        "status": "invalid_request",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_5_unsupported_hypothesis",
+        "error": {
+          "code": "GV_LINEAGE_REQUIRED",
+          "message": "A hypothesis requires at least one observation.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.6_SUPPORTED_FINDING",
+      "timestamp": "2026-08-07T15:41:23.974Z",
+      "method": "POST",
+      "path": "/api/v1/findings",
+      "status": 201,
+      "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "finding_code": "D4_QA_PROBLEM_CLARITY",
+        "headline": "Problem clarity requires review",
+        "statement": "Current evidence supports a governed finding that problem clarity should be reviewed.",
+        "domain": "problem_clarity",
+        "confidence": 82,
+        "confirmation_status": "unconfirmed",
+        "source_type": "deterministic_rule",
+        "source_version": "day4_qa_v1",
+        "support": {
+          "evidence": [
+            {
+              "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+              "support_type": "supports"
+            }
+          ],
+          "observations": [
+            {
+              "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+              "support_type": "supports"
+            }
+          ],
+          "hypotheses": [
+            {
+              "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+              "relationship_type": "derived_from"
+            }
+          ]
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding",
+        "data": {
+          "finding": {
+            "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "product": "GalviVault",
+            "finding_type": "governed",
+            "title": "Problem clarity requires review",
+            "statement": "Current evidence supports a governed finding that problem clarity should be reviewed.",
+            "priority": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T15:41:23.873Z",
+            "updated_at": "2026-08-07T15:41:23.873Z",
+            "finding_group_id": "fng_39e771d581504d709c2b8d1bf3b73a8e",
+            "version_no": 1,
+            "supersedes_finding_id": null,
+            "finding_code": "D4_QA_PROBLEM_CLARITY",
+            "domain": "problem_clarity",
+            "confidence": 82,
+            "confidence_band": null,
+            "confirmation_status": "unconfirmed",
+            "governance_version": 1,
+            "status": "active",
+            "source_type": "deterministic_rule",
+            "source_version": "day4_qa_v1",
+            "created_by_type": "public",
+            "created_by_id": "public-session",
+            "confirmation_reason": null,
+            "confirmed_by_type": null,
+            "confirmed_by_id": null,
+            "confirmed_at": null,
+            "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+          },
+          "links": {
+            "evidence": [
+              {
+                "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+                "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                "support_type": "supports",
+                "weight": null,
+                "created_at": "2026-08-07T15:41:23.873Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+              }
+            ],
+            "observations": [
+              {
+                "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+                "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                "support_type": "supports",
+                "created_at": "2026-08-07T15:41:23.873Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+              }
+            ],
+            "hypotheses": [
+              {
+                "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+                "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                "relationship_type": "derived_from",
+                "created_at": "2026-08-07T15:41:23.873Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+              }
+            ]
+          },
+          "idempotent_replay": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.7_UNSUPPORTED_FINDING",
+      "timestamp": "2026-08-07T15:41:24.011Z",
+      "method": "POST",
+      "path": "/api/v1/findings",
+      "status": 422,
+      "correlation_id": "corr_d4_31193811042-1_h4_7_unsupported_finding",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "finding_code": "D4_QA_PROBLEM_CLARITY",
+        "headline": "Problem clarity requires review",
+        "statement": "Current evidence supports a governed finding that problem clarity should be reviewed.",
+        "domain": "problem_clarity",
+        "confidence": 82,
+        "confirmation_status": "unconfirmed",
+        "source_type": "deterministic_rule",
+        "source_version": "day4_qa_v1",
+        "support": {
+          "evidence": [],
+          "observations": [],
+          "hypotheses": []
+        }
+      },
+      "response": {
+        "success": false,
+        "status": "invalid_request",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_7_unsupported_finding",
+        "error": {
+          "code": "GV_LINEAGE_REQUIRED",
+          "message": "A finding requires explicit support lineage.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.8_FINDING_REPLAY",
+      "timestamp": "2026-08-07T15:41:24.159Z",
+      "method": "POST",
+      "path": "/api/v1/findings",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_8_finding_replay",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "finding_code": "D4_QA_PROBLEM_CLARITY",
+        "headline": "Problem clarity requires review",
+        "statement": "Current evidence supports a governed finding that problem clarity should be reviewed.",
+        "domain": "problem_clarity",
+        "confidence": 82,
+        "confirmation_status": "unconfirmed",
+        "source_type": "deterministic_rule",
+        "source_version": "day4_qa_v1",
+        "support": {
+          "evidence": [
+            {
+              "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+              "support_type": "supports"
+            }
+          ],
+          "observations": [
+            {
+              "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+              "support_type": "supports"
+            }
+          ],
+          "hypotheses": [
+            {
+              "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+              "relationship_type": "derived_from"
+            }
+          ]
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "no_change",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_8_finding_replay",
+        "data": {
+          "finding": {
+            "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "product": "GalviVault",
+            "finding_type": "governed",
+            "title": "Problem clarity requires review",
+            "statement": "Current evidence supports a governed finding that problem clarity should be reviewed.",
+            "priority": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T15:41:23.873Z",
+            "updated_at": "2026-08-07T15:41:23.873Z",
+            "finding_group_id": "fng_39e771d581504d709c2b8d1bf3b73a8e",
+            "version_no": 1,
+            "supersedes_finding_id": null,
+            "finding_code": "D4_QA_PROBLEM_CLARITY",
+            "domain": "problem_clarity",
+            "confidence": 82,
+            "confidence_band": null,
+            "confirmation_status": "unconfirmed",
+            "governance_version": 1,
+            "status": "active",
+            "source_type": "deterministic_rule",
+            "source_version": "day4_qa_v1",
+            "created_by_type": "public",
+            "created_by_id": "public-session",
+            "confirmation_reason": null,
+            "confirmed_by_type": null,
+            "confirmed_by_id": null,
+            "confirmed_at": null,
+            "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+          },
+          "links": {
+            "evidence": [
+              {
+                "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+                "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                "support_type": "supports",
+                "weight": null,
+                "created_at": "2026-08-07T15:41:23.873Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+              }
+            ],
+            "observations": [
+              {
+                "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+                "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                "support_type": "supports",
+                "created_at": "2026-08-07T15:41:23.873Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+              }
+            ],
+            "hypotheses": [
+              {
+                "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+                "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                "relationship_type": "derived_from",
+                "created_at": "2026-08-07T15:41:23.873Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+              }
+            ]
+          },
+          "idempotent_replay": true
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004",
+          "idempotent_replay": true
+        }
+      }
+    },
+    {
+      "step": "H4.9_AUTHORIZED_CONFIRMATION",
+      "timestamp": "2026-08-07T15:41:24.274Z",
+      "method": "POST",
+      "path": "/api/v1/governance/confirmations",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_9_authorized_confirmation",
+      "environment": "qa",
+      "request": {
+        "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+        "decision": "confirm",
+        "reason": "Authorized Day 4 QA confirmation",
+        "expected_version": 1
+      },
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_9_authorized_confirmation",
+        "data": {
+          "finding": {
+            "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "product": "GalviVault",
+            "finding_type": "governed",
+            "title": "Problem clarity requires review",
+            "statement": "Current evidence supports a governed finding that problem clarity should be reviewed.",
+            "priority": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T15:41:23.873Z",
+            "updated_at": "2026-08-07T15:41:24.200Z",
+            "finding_group_id": "fng_39e771d581504d709c2b8d1bf3b73a8e",
+            "version_no": 1,
+            "supersedes_finding_id": null,
+            "finding_code": "D4_QA_PROBLEM_CLARITY",
+            "domain": "problem_clarity",
+            "confidence": 82,
+            "confidence_band": null,
+            "confirmation_status": "confirmed",
+            "governance_version": 2,
+            "status": "active",
+            "source_type": "deterministic_rule",
+            "source_version": "day4_qa_v1",
+            "created_by_type": "public",
+            "created_by_id": "public-session",
+            "confirmation_reason": "Authorized Day 4 QA confirmation",
+            "confirmed_by_type": "operator",
+            "confirmed_by_id": "day4_qa_operator",
+            "confirmed_at": "2026-08-07T15:41:24.200Z",
+            "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+          },
+          "idempotent_replay": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.10_SECOND_FINDING",
+      "timestamp": "2026-08-07T15:41:24.471Z",
+      "method": "POST",
+      "path": "/api/v1/findings",
+      "status": 201,
+      "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "finding_code": "D4_QA_UNAUTH",
+        "headline": "Problem clarity requires review",
+        "statement": "Synthetic finding for authorization denial.",
+        "domain": "problem_clarity",
+        "confidence": 82,
+        "confirmation_status": "unconfirmed",
+        "source_type": "deterministic_rule",
+        "source_version": "day4_qa_v1",
+        "support": {
+          "evidence": [
+            {
+              "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+              "support_type": "supports"
+            }
+          ],
+          "observations": [
+            {
+              "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+              "support_type": "supports"
+            }
+          ],
+          "hypotheses": [
+            {
+              "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+              "relationship_type": "derived_from"
+            }
+          ]
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding",
+        "data": {
+          "finding": {
+            "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "product": "GalviVault",
+            "finding_type": "governed",
+            "title": "Problem clarity requires review",
+            "statement": "Synthetic finding for authorization denial.",
+            "priority": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T15:41:24.375Z",
+            "updated_at": "2026-08-07T15:41:24.375Z",
+            "finding_group_id": "fng_65a58ad1fc0a4d5cba24ac24471f776d",
+            "version_no": 1,
+            "supersedes_finding_id": null,
+            "finding_code": "D4_QA_UNAUTH",
+            "domain": "problem_clarity",
+            "confidence": 82,
+            "confidence_band": null,
+            "confirmation_status": "unconfirmed",
+            "governance_version": 1,
+            "status": "active",
+            "source_type": "deterministic_rule",
+            "source_version": "day4_qa_v1",
+            "created_by_type": "public",
+            "created_by_id": "public-session",
+            "confirmation_reason": null,
+            "confirmed_by_type": null,
+            "confirmed_by_id": null,
+            "confirmed_at": null,
+            "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+          },
+          "links": {
+            "evidence": [
+              {
+                "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                "support_type": "supports",
+                "weight": null,
+                "created_at": "2026-08-07T15:41:24.375Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+              }
+            ],
+            "observations": [
+              {
+                "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                "support_type": "supports",
+                "created_at": "2026-08-07T15:41:24.375Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+              }
+            ],
+            "hypotheses": [
+              {
+                "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                "relationship_type": "derived_from",
+                "created_at": "2026-08-07T15:41:24.375Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+              }
+            ]
+          },
+          "idempotent_replay": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.10_UNAUTHORIZED_CONFIRMATION",
+      "timestamp": "2026-08-07T15:41:24.484Z",
+      "method": "POST",
+      "path": "/api/v1/governance/confirmations",
+      "status": 403,
+      "correlation_id": "corr_d4_31193811042-1_h4_10_unauthorized_confirmation",
+      "environment": "qa",
+      "request": {
+        "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+        "decision": "confirm",
+        "reason": "must fail",
+        "expected_version": 1
+      },
+      "response": {
+        "success": false,
+        "status": "forbidden",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_10_unauthorized_confirmation",
+        "error": {
+          "code": "GV_AUTH_FORBIDDEN",
+          "message": "Authorized operator scope is required.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.11_STALE_VERSION",
+      "timestamp": "2026-08-07T15:41:24.535Z",
+      "method": "POST",
+      "path": "/api/v1/findings/fnd_8c907b5bb4214448a34d9409c35fb9af/supersede",
+      "status": 409,
+      "correlation_id": "corr_d4_31193811042-1_h4_11_stale_version",
+      "environment": "qa",
+      "request": {
+        "expected_version": 0,
+        "reason": "Material Day 4 QA revision",
+        "statement": "Revised governed finding after additional review.",
+        "domain": "problem_clarity",
+        "finding_code": "D4_QA_PROBLEM_CLARITY",
+        "headline": "Problem clarity reviewed",
+        "confidence": 86,
+        "source_type": "operator_review",
+        "source_version": "day4_qa_v2"
+      },
+      "response": {
+        "success": false,
+        "status": "conflict",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_11_stale_version",
+        "error": {
+          "code": "GV_VERSION_CONFLICT",
+          "message": "expected_version does not match the current finding version.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.12_SUPERSEDE_FINDING",
+      "timestamp": "2026-08-07T15:41:24.819Z",
+      "method": "POST",
+      "path": "/api/v1/findings/fnd_8c907b5bb4214448a34d9409c35fb9af/supersede",
+      "status": 201,
+      "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding",
+      "environment": "qa",
+      "request": {
+        "expected_version": 1,
+        "reason": "Material Day 4 QA revision",
+        "statement": "Revised governed finding after additional review.",
+        "domain": "problem_clarity",
+        "finding_code": "D4_QA_PROBLEM_CLARITY",
+        "headline": "Problem clarity reviewed",
+        "confidence": 86,
+        "source_type": "operator_review",
+        "source_version": "day4_qa_v2"
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding",
+        "data": {
+          "finding": {
+            "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "product": "GalviVault",
+            "finding_type": "governed",
+            "title": "Problem clarity reviewed",
+            "statement": "Revised governed finding after additional review.",
+            "priority": null,
+            "evidence_version": 2,
+            "created_at": "2026-08-07T15:41:24.663Z",
+            "updated_at": "2026-08-07T15:41:24.663Z",
+            "finding_group_id": "fng_39e771d581504d709c2b8d1bf3b73a8e",
+            "version_no": 2,
+            "supersedes_finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+            "finding_code": "D4_QA_PROBLEM_CLARITY",
+            "domain": "problem_clarity",
+            "confidence": 86,
+            "confidence_band": null,
+            "confirmation_status": "unconfirmed",
+            "governance_version": 1,
+            "status": "active",
+            "source_type": "operator_review",
+            "source_version": "day4_qa_v2",
+            "created_by_type": "operator",
+            "created_by_id": "day4_qa_operator",
+            "confirmation_reason": null,
+            "confirmed_by_type": null,
+            "confirmed_by_id": null,
+            "confirmed_at": null,
+            "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+          },
+          "links": {
+            "evidence": [
+              {
+                "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                "support_type": "supports",
+                "weight": null,
+                "created_at": "2026-08-07T15:41:24.663Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+              }
+            ],
+            "observations": [
+              {
+                "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                "support_type": "supports",
+                "created_at": "2026-08-07T15:41:24.663Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+              }
+            ],
+            "hypotheses": [
+              {
+                "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                "relationship_type": "derived_from",
+                "created_at": "2026-08-07T15:41:24.663Z",
+                "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+              }
+            ]
+          },
+          "previous_finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+          "idempotent_replay": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.13_CURRENT",
+      "timestamp": "2026-08-07T15:41:24.997Z",
+      "method": "GET",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/reasoning",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_13_current",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_13_current",
+        "data": {
+          "bmr": {
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+            "status": "active",
+            "record_version": 1,
+            "current_session_id": "ses_c0b18241d04d493db8165ac0760d016d"
+          },
+          "mode": "current",
+          "observations": [
+            {
+              "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+              "observation_type": "reasoning",
+              "dimension": "problem_clarity",
+              "statement": "Observed quantified problem clarity signal from accepted assessment evidence.",
+              "severity": null,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:23.466Z",
+              "updated_at": "2026-08-07T15:41:23.466Z",
+              "observation_group_id": "obg_55ed5d4579c84838afe507f9383f4e31",
+              "version_no": 1,
+              "supersedes_observation_id": null,
+              "domain": "problem_clarity",
+              "confidence": 90,
+              "source_type": "deterministic_rule",
+              "source_version": "day4_qa_v1",
+              "status": "active",
+              "created_by_type": "public",
+              "created_by_id": "public-session",
+              "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation",
+              "support": [
+                {
+                  "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                  "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                  "support_type": "supports",
+                  "created_at": "2026-08-07T15:41:23.466Z",
+                  "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation"
+                }
+              ]
+            }
+          ],
+          "hypotheses": [
+            {
+              "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "statement": "The venture may benefit from further problem-definition validation.",
+              "status": "active",
+              "confidence": 65,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:23.666Z",
+              "updated_at": "2026-08-07T15:41:23.666Z",
+              "hypothesis_group_id": "hyg_507feef5b2744fd19d775fca07cd976a",
+              "version_no": 1,
+              "supersedes_hypothesis_id": null,
+              "domain": "problem_clarity",
+              "uncertainty": "This remains a hypothesis pending additional evidence.",
+              "source_type": "deterministic_rule",
+              "source_version": "day4_qa_v1",
+              "created_by_type": "public",
+              "created_by_id": "public-session",
+              "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis",
+              "support": [
+                {
+                  "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                  "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                  "relationship_type": "supports",
+                  "created_at": "2026-08-07T15:41:23.666Z",
+                  "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis"
+                }
+              ]
+            }
+          ],
+          "findings": [
+            {
+              "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "product": "GalviVault",
+              "finding_type": "governed",
+              "title": "Problem clarity requires review",
+              "statement": "Synthetic finding for authorization denial.",
+              "priority": null,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:24.375Z",
+              "updated_at": "2026-08-07T15:41:24.375Z",
+              "finding_group_id": "fng_65a58ad1fc0a4d5cba24ac24471f776d",
+              "version_no": 1,
+              "supersedes_finding_id": null,
+              "finding_code": "D4_QA_UNAUTH",
+              "domain": "problem_clarity",
+              "confidence": 82,
+              "confidence_band": null,
+              "confirmation_status": "unconfirmed",
+              "governance_version": 1,
+              "status": "active",
+              "source_type": "deterministic_rule",
+              "source_version": "day4_qa_v1",
+              "created_by_type": "public",
+              "created_by_id": "public-session",
+              "confirmation_reason": null,
+              "confirmed_by_type": null,
+              "confirmed_by_id": null,
+              "confirmed_at": null,
+              "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding",
+              "support": {
+                "evidence": [
+                  {
+                    "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                    "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                    "support_type": "supports",
+                    "weight": null,
+                    "created_at": "2026-08-07T15:41:24.375Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+                  }
+                ],
+                "observations": [
+                  {
+                    "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                    "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                    "support_type": "supports",
+                    "created_at": "2026-08-07T15:41:24.375Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+                  }
+                ],
+                "hypotheses": [
+                  {
+                    "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                    "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                    "relationship_type": "derived_from",
+                    "created_at": "2026-08-07T15:41:24.375Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+                  }
+                ]
+              }
+            },
+            {
+              "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "product": "GalviVault",
+              "finding_type": "governed",
+              "title": "Problem clarity reviewed",
+              "statement": "Revised governed finding after additional review.",
+              "priority": null,
+              "evidence_version": 2,
+              "created_at": "2026-08-07T15:41:24.663Z",
+              "updated_at": "2026-08-07T15:41:24.663Z",
+              "finding_group_id": "fng_39e771d581504d709c2b8d1bf3b73a8e",
+              "version_no": 2,
+              "supersedes_finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+              "finding_code": "D4_QA_PROBLEM_CLARITY",
+              "domain": "problem_clarity",
+              "confidence": 86,
+              "confidence_band": null,
+              "confirmation_status": "unconfirmed",
+              "governance_version": 1,
+              "status": "active",
+              "source_type": "operator_review",
+              "source_version": "day4_qa_v2",
+              "created_by_type": "operator",
+              "created_by_id": "day4_qa_operator",
+              "confirmation_reason": null,
+              "confirmed_by_type": null,
+              "confirmed_by_id": null,
+              "confirmed_at": null,
+              "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding",
+              "support": {
+                "evidence": [
+                  {
+                    "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                    "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                    "support_type": "supports",
+                    "weight": null,
+                    "created_at": "2026-08-07T15:41:24.663Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+                  }
+                ],
+                "observations": [
+                  {
+                    "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                    "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                    "support_type": "supports",
+                    "created_at": "2026-08-07T15:41:24.663Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+                  }
+                ],
+                "hypotheses": [
+                  {
+                    "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                    "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                    "relationship_type": "derived_from",
+                    "created_at": "2026-08-07T15:41:24.663Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.13_HISTORY",
+      "timestamp": "2026-08-07T15:41:25.240Z",
+      "method": "GET",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/reasoning?history=true&limit=100",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_13_history",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_13_history",
+        "data": {
+          "bmr": {
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+            "status": "active",
+            "record_version": 1,
+            "current_session_id": "ses_c0b18241d04d493db8165ac0760d016d"
+          },
+          "mode": "history",
+          "observations": [
+            {
+              "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+              "observation_type": "reasoning",
+              "dimension": "problem_clarity",
+              "statement": "Observed quantified problem clarity signal from accepted assessment evidence.",
+              "severity": null,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:23.466Z",
+              "updated_at": "2026-08-07T15:41:23.466Z",
+              "observation_group_id": "obg_55ed5d4579c84838afe507f9383f4e31",
+              "version_no": 1,
+              "supersedes_observation_id": null,
+              "domain": "problem_clarity",
+              "confidence": 90,
+              "source_type": "deterministic_rule",
+              "source_version": "day4_qa_v1",
+              "status": "active",
+              "created_by_type": "public",
+              "created_by_id": "public-session",
+              "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation",
+              "support": [
+                {
+                  "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                  "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                  "support_type": "supports",
+                  "created_at": "2026-08-07T15:41:23.466Z",
+                  "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation"
+                }
+              ]
+            }
+          ],
+          "hypotheses": [
+            {
+              "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "statement": "The venture may benefit from further problem-definition validation.",
+              "status": "active",
+              "confidence": 65,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:23.666Z",
+              "updated_at": "2026-08-07T15:41:23.666Z",
+              "hypothesis_group_id": "hyg_507feef5b2744fd19d775fca07cd976a",
+              "version_no": 1,
+              "supersedes_hypothesis_id": null,
+              "domain": "problem_clarity",
+              "uncertainty": "This remains a hypothesis pending additional evidence.",
+              "source_type": "deterministic_rule",
+              "source_version": "day4_qa_v1",
+              "created_by_type": "public",
+              "created_by_id": "public-session",
+              "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis",
+              "support": [
+                {
+                  "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                  "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                  "relationship_type": "supports",
+                  "created_at": "2026-08-07T15:41:23.666Z",
+                  "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis"
+                }
+              ]
+            }
+          ],
+          "findings": [
+            {
+              "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "product": "GalviVault",
+              "finding_type": "governed",
+              "title": "Problem clarity requires review",
+              "statement": "Current evidence supports a governed finding that problem clarity should be reviewed.",
+              "priority": null,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:23.873Z",
+              "updated_at": "2026-08-07T15:41:24.200Z",
+              "finding_group_id": "fng_39e771d581504d709c2b8d1bf3b73a8e",
+              "version_no": 1,
+              "supersedes_finding_id": null,
+              "finding_code": "D4_QA_PROBLEM_CLARITY",
+              "domain": "problem_clarity",
+              "confidence": 82,
+              "confidence_band": null,
+              "confirmation_status": "confirmed",
+              "governance_version": 2,
+              "status": "active",
+              "source_type": "deterministic_rule",
+              "source_version": "day4_qa_v1",
+              "created_by_type": "public",
+              "created_by_id": "public-session",
+              "confirmation_reason": "Authorized Day 4 QA confirmation",
+              "confirmed_by_type": "operator",
+              "confirmed_by_id": "day4_qa_operator",
+              "confirmed_at": "2026-08-07T15:41:24.200Z",
+              "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding",
+              "support": {
+                "evidence": [
+                  {
+                    "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+                    "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                    "support_type": "supports",
+                    "weight": null,
+                    "created_at": "2026-08-07T15:41:23.873Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+                  }
+                ],
+                "observations": [
+                  {
+                    "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+                    "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                    "support_type": "supports",
+                    "created_at": "2026-08-07T15:41:23.873Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+                  }
+                ],
+                "hypotheses": [
+                  {
+                    "finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+                    "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                    "relationship_type": "derived_from",
+                    "created_at": "2026-08-07T15:41:23.873Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding"
+                  }
+                ]
+              }
+            },
+            {
+              "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "product": "GalviVault",
+              "finding_type": "governed",
+              "title": "Problem clarity requires review",
+              "statement": "Synthetic finding for authorization denial.",
+              "priority": null,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:24.375Z",
+              "updated_at": "2026-08-07T15:41:24.375Z",
+              "finding_group_id": "fng_65a58ad1fc0a4d5cba24ac24471f776d",
+              "version_no": 1,
+              "supersedes_finding_id": null,
+              "finding_code": "D4_QA_UNAUTH",
+              "domain": "problem_clarity",
+              "confidence": 82,
+              "confidence_band": null,
+              "confirmation_status": "unconfirmed",
+              "governance_version": 1,
+              "status": "active",
+              "source_type": "deterministic_rule",
+              "source_version": "day4_qa_v1",
+              "created_by_type": "public",
+              "created_by_id": "public-session",
+              "confirmation_reason": null,
+              "confirmed_by_type": null,
+              "confirmed_by_id": null,
+              "confirmed_at": null,
+              "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding",
+              "support": {
+                "evidence": [
+                  {
+                    "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                    "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                    "support_type": "supports",
+                    "weight": null,
+                    "created_at": "2026-08-07T15:41:24.375Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+                  }
+                ],
+                "observations": [
+                  {
+                    "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                    "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                    "support_type": "supports",
+                    "created_at": "2026-08-07T15:41:24.375Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+                  }
+                ],
+                "hypotheses": [
+                  {
+                    "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                    "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                    "relationship_type": "derived_from",
+                    "created_at": "2026-08-07T15:41:24.375Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+                  }
+                ]
+              }
+            },
+            {
+              "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "product": "GalviVault",
+              "finding_type": "governed",
+              "title": "Problem clarity reviewed",
+              "statement": "Revised governed finding after additional review.",
+              "priority": null,
+              "evidence_version": 2,
+              "created_at": "2026-08-07T15:41:24.663Z",
+              "updated_at": "2026-08-07T15:41:24.663Z",
+              "finding_group_id": "fng_39e771d581504d709c2b8d1bf3b73a8e",
+              "version_no": 2,
+              "supersedes_finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+              "finding_code": "D4_QA_PROBLEM_CLARITY",
+              "domain": "problem_clarity",
+              "confidence": 86,
+              "confidence_band": null,
+              "confirmation_status": "unconfirmed",
+              "governance_version": 1,
+              "status": "active",
+              "source_type": "operator_review",
+              "source_version": "day4_qa_v2",
+              "created_by_type": "operator",
+              "created_by_id": "day4_qa_operator",
+              "confirmation_reason": null,
+              "confirmed_by_type": null,
+              "confirmed_by_id": null,
+              "confirmed_at": null,
+              "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding",
+              "support": {
+                "evidence": [
+                  {
+                    "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                    "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                    "support_type": "supports",
+                    "weight": null,
+                    "created_at": "2026-08-07T15:41:24.663Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+                  }
+                ],
+                "observations": [
+                  {
+                    "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                    "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                    "support_type": "supports",
+                    "created_at": "2026-08-07T15:41:24.663Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+                  }
+                ],
+                "hypotheses": [
+                  {
+                    "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                    "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                    "relationship_type": "derived_from",
+                    "created_at": "2026-08-07T15:41:24.663Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.14_TIMELINE",
+      "timestamp": "2026-08-07T15:41:25.316Z",
+      "method": "GET",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/timeline",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_14_timeline",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_14_timeline",
+        "data": {
+          "bmr": {
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+            "status": "active",
+            "record_version": 1,
+            "current_session_id": "ses_c0b18241d04d493db8165ac0760d016d"
+          },
+          "entries": [
+            {
+              "canonical_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:22.379Z",
+              "source": "galvivault",
+              "safe_summary": "create",
+              "correlation_id": "corr_d4_31193811042-1_h4_1_identity",
+              "entry_type": "governance"
+            },
+            {
+              "canonical_id": "ses_c0b18241d04d493db8165ac0760d016d",
+              "version_no": null,
+              "occurred_at": "2026-08-07T15:41:22.379Z",
+              "source": "galvivault",
+              "correlation_id": null,
+              "entry_type": "session",
+              "safe_summary": "assessment session"
+            },
+            {
+              "canonical_id": "evd_e01ca4737aa742a5922db698e4348215",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:22.499Z",
+              "source": "assessment_answer",
+              "correlation_id": null,
+              "entry_type": "evidence",
+              "safe_summary": "evidence"
+            },
+            {
+              "canonical_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:23.466Z",
+              "source": "deterministic_rule",
+              "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation",
+              "entry_type": "observation",
+              "safe_summary": "observation"
+            },
+            {
+              "canonical_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:23.666Z",
+              "source": "deterministic_rule",
+              "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis",
+              "entry_type": "hypothesis",
+              "safe_summary": "hypothesis"
+            },
+            {
+              "canonical_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:23.873Z",
+              "source": "deterministic_rule",
+              "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding",
+              "entry_type": "finding",
+              "safe_summary": "finding"
+            },
+            {
+              "canonical_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:23.873Z",
+              "source": "deterministic_rule",
+              "safe_summary": "create",
+              "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding",
+              "entry_type": "governance"
+            },
+            {
+              "canonical_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+              "version_no": 2,
+              "occurred_at": "2026-08-07T15:41:24.200Z",
+              "source": "governance-service",
+              "safe_summary": "confirmed",
+              "correlation_id": "corr_d4_31193811042-1_h4_9_authorized_confirmation",
+              "entry_type": "governance"
+            },
+            {
+              "canonical_id": "fnd_2d814947d6d34465b49446205e53b903",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:24.375Z",
+              "source": "deterministic_rule",
+              "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding",
+              "entry_type": "finding",
+              "safe_summary": "finding"
+            },
+            {
+              "canonical_id": "fnd_2d814947d6d34465b49446205e53b903",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:24.375Z",
+              "source": "deterministic_rule",
+              "safe_summary": "create",
+              "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding",
+              "entry_type": "governance"
+            },
+            {
+              "canonical_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+              "version_no": 2,
+              "occurred_at": "2026-08-07T15:41:24.663Z",
+              "source": "operator_review",
+              "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding",
+              "entry_type": "finding",
+              "safe_summary": "finding"
+            },
+            {
+              "canonical_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+              "version_no": 2,
+              "occurred_at": "2026-08-07T15:41:24.663Z",
+              "source": "operator_review",
+              "safe_summary": "supersede",
+              "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding",
+              "entry_type": "governance"
+            }
+          ]
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.15_CUSTOMER_PROJECTION",
+      "timestamp": "2026-08-07T15:41:25.514Z",
+      "method": "GET",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/customer-projection",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_15_customer_projection",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_15_customer_projection",
+        "data": {
+          "bmr": {
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+            "status": "active",
+            "record_version": 1,
+            "current_session_id": "ses_c0b18241d04d493db8165ac0760d016d"
+          },
+          "findings": []
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.16_SECOND_SCOPE",
+      "timestamp": "2026-08-07T15:41:25.675Z",
+      "method": "POST",
+      "path": "/api/v1/sessions",
+      "status": 201,
+      "correlation_id": "corr_d4_31193811042-1_h4_16_second_scope",
+      "environment": "qa",
+      "request": {
+        "client_session_key": "d4-session-31193811042-1-02",
+        "source": "galvivault",
+        "current_stage": "GalviTriage",
+        "founder": {
+          "email": "founder.day4.second.31193811042-1@example.test",
+          "first_name": "Second",
+          "last_name": "Scope",
+          "consent_status": "approved"
+        },
+        "venture": {
+          "venture_name": "Day 4 Second Venture 31193811042-1",
+          "stage": "ideation",
+          "role_code": "founder",
+          "is_primary": true
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_16_second_scope",
+        "data": {
+          "identity": {
+            "founder": {
+              "founder_id": "fdr_f1b44b82ce4c4a77ac90447ae5eeb95b",
+              "first_name": "Second",
+              "last_name": "Scope",
+              "email": "founder.day4.second.31193811042-1@example.test",
+              "normalized_email": "founder.day4.second.31193811042-1@example.test",
+              "phone": null,
+              "consent_status": "approved",
+              "status": "active",
+              "record_version": 1,
+              "profile_json": null,
+              "created_at": "2026-08-07T15:41:25.565Z",
+              "updated_at": "2026-08-07T15:41:25.565Z"
+            },
+            "venture": {
+              "venture_id": "ven_7aaf1a1012b04dd4ad4c2c00cbcbf71c",
+              "venture_name": "Day 4 Second Venture 31193811042-1",
+              "stage": "ideation",
+              "website": null,
+              "industry": null,
+              "revenue_range": null,
+              "profile_json": null,
+              "status": "active",
+              "record_version": 1,
+              "created_at": "2026-08-07T15:41:25.565Z",
+              "updated_at": "2026-08-07T15:41:25.565Z"
+            },
+            "founder_venture_role": {
+              "founder_id": "fdr_f1b44b82ce4c4a77ac90447ae5eeb95b",
+              "venture_id": "ven_7aaf1a1012b04dd4ad4c2c00cbcbf71c",
+              "role_code": "founder",
+              "is_primary": 1,
+              "status": "active",
+              "created_at": "2026-08-07T15:41:25.565Z",
+              "updated_at": "2026-08-07T15:41:25.565Z"
+            },
+            "business_medical_record": {
+              "bmr_id": "bmr_42da4fc6185e42f2ad4c358af66b175e",
+              "venture_id": "ven_7aaf1a1012b04dd4ad4c2c00cbcbf71c",
+              "status": "active",
+              "record_version": 1,
+              "current_session_id": "ses_0ee082d939064d09b6483e6fc35351a5",
+              "opened_at": "2026-08-07T15:41:25.565Z",
+              "closed_at": null,
+              "created_at": "2026-08-07T15:41:25.565Z",
+              "updated_at": "2026-08-07T15:41:25.565Z"
+            },
+            "session": {
+              "session_id": "ses_0ee082d939064d09b6483e6fc35351a5",
+              "bmr_id": "bmr_42da4fc6185e42f2ad4c358af66b175e",
+              "venture_id": "ven_7aaf1a1012b04dd4ad4c2c00cbcbf71c",
+              "founder_id": "fdr_f1b44b82ce4c4a77ac90447ae5eeb95b",
+              "client_session_key": "d4-session-31193811042-1-02",
+              "source": "galvivault",
+              "current_stage": "GalviTriage",
+              "status": "active",
+              "started_at": "2026-08-07T15:41:25.565Z",
+              "completed_at": null,
+              "created_at": "2026-08-07T15:41:25.565Z",
+              "updated_at": "2026-08-07T15:41:25.565Z"
+            }
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0002",
+          "record_version": 1,
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.16_SECOND_EVIDENCE",
+      "timestamp": "2026-08-07T15:41:25.872Z",
+      "method": "POST",
+      "path": "/api/v1/evidence",
+      "status": 201,
+      "correlation_id": "corr_d4_31193811042-1_h4_16_second_evidence",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_42da4fc6185e42f2ad4c358af66b175e",
+        "session_id": "ses_0ee082d939064d09b6483e6fc35351a5",
+        "source_type": "assessment_answer",
+        "source_ref": "cross:31193811042-1",
+        "value_type": "number",
+        "value_number": 72,
+        "consent_status": "approved",
+        "captured_at": "2026-08-07T15:41:22.499Z",
+        "assessment_answer": {
+          "question_id": "triage.problem_clarity",
+          "question_version": "v1",
+          "raw_value_number": 72,
+          "normalized_value_number": 72,
+          "confidence_effect": 0.2
+        }
+      },
+      "response": {
+        "success": true,
+        "status": "created",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_16_second_evidence",
+        "data": {
+          "evidence": {
+            "evidence_id": "evd_3ff1c6a1d592407e9508b3606e8b58c8",
+            "bmr_id": "bmr_42da4fc6185e42f2ad4c358af66b175e",
+            "session_id": "ses_0ee082d939064d09b6483e6fc35351a5",
+            "evidence_type": "number",
+            "source_product": "GalviVault",
+            "source_reference": "ans_afe77103d4f5424db03f3818b5417a25",
+            "content_json": "{\"value_type\":\"number\",\"value_text\":null,\"value_number\":72,\"value_boolean\":null,\"value_date\":null,\"value_json\":null}",
+            "confidence": null,
+            "evidence_version": 1,
+            "created_at": "2026-08-07T15:41:25.746Z",
+            "evidence_group_id": "evg_2233958311bb4e85bef214182aff6726",
+            "version_no": 1,
+            "supersedes_evidence_id": null,
+            "source_type": "assessment_answer",
+            "source_ref": "ans_afe77103d4f5424db03f3818b5417a25",
+            "value_type": "number",
+            "value_text": null,
+            "value_number": 72,
+            "value_boolean": null,
+            "value_date": null,
+            "value_json": null,
+            "status": "draft",
+            "consent_status": "approved",
+            "source_actor_type": "public",
+            "source_actor_id": "public-session",
+            "captured_at": "2026-08-07T15:41:22.499Z",
+            "content_hash": "84fd54bbb2357a27e80fa8495ee79ffc5d8054b85ba5d1a4038563cd634f7429",
+            "rejection_reason": null,
+            "updated_at": "2026-08-07T15:41:25.746Z",
+            "is_current": true,
+            "superseded_by_evidence_id": null,
+            "relationships": []
+          },
+          "answer": {
+            "answer_id": "ans_afe77103d4f5424db03f3818b5417a25",
+            "session_id": "ses_0ee082d939064d09b6483e6fc35351a5",
+            "question_id": "triage.problem_clarity",
+            "bmr_id": "bmr_42da4fc6185e42f2ad4c358af66b175e",
+            "question_version": "v1",
+            "answer_group_id": "ang_91ff5e978ed346c5bc7b3e55c10276fe",
+            "version_no": 1,
+            "supersedes_answer_id": null,
+            "raw_value_text": null,
+            "raw_value_number": 72,
+            "normalized_value_text": null,
+            "normalized_value_number": 72,
+            "confidence_effect": 0.2,
+            "source": "assessment_answer",
+            "captured_at": "2026-08-07T15:41:22.499Z",
+            "status": "draft",
+            "content_hash": "104fb64b510d43234304b1246dc500b7f22aee9bd9c084f235ee4c6688828385"
+          }
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0003",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.16_CROSS_BMR_NEGATIVE",
+      "timestamp": "2026-08-07T15:41:25.924Z",
+      "method": "POST",
+      "path": "/api/v1/observations",
+      "status": 403,
+      "correlation_id": "corr_d4_31193811042-1_h4_16_cross_bmr_negative",
+      "environment": "qa",
+      "request": {
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "statement": "Observed quantified problem clarity signal from accepted assessment evidence.",
+        "domain": "problem_clarity",
+        "confidence": 90,
+        "source_type": "deterministic_rule",
+        "source_version": "day4_qa_v1",
+        "evidence": [
+          {
+            "evidence_id": "evd_3ff1c6a1d592407e9508b3606e8b58c8",
+            "support_type": "supports"
+          }
+        ]
+      },
+      "response": {
+        "success": false,
+        "status": "forbidden",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_16_cross_bmr_negative",
+        "error": {
+          "code": "GV_AUTH_FORBIDDEN",
+          "message": "Cross-BMR evidence support is prohibited.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.17_TO_ASSESSMENT",
+      "timestamp": "2026-08-07T15:41:26.019Z",
+      "method": "POST",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/transitions",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_17_to_assessment",
+      "environment": "qa",
+      "request": {
+        "to_status": "assessment_in_progress",
+        "expected_version": 1,
+        "reason_code": "day4_assessment"
+      },
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_17_to_assessment",
+        "data": {
+          "bmr": {
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+            "status": "assessment_in_progress",
+            "record_version": 2,
+            "current_session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+            "opened_at": "2026-08-07T15:41:22.379Z",
+            "closed_at": null,
+            "created_at": "2026-08-07T15:41:22.379Z",
+            "updated_at": "2026-08-07T15:41:25.961Z"
+          },
+          "idempotent_replay": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.17_TRANSITION_REPLAY",
+      "timestamp": "2026-08-07T15:41:26.090Z",
+      "method": "POST",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/transitions",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_17_transition_replay",
+      "environment": "qa",
+      "request": {
+        "to_status": "assessment_in_progress",
+        "expected_version": 1,
+        "reason_code": "day4_assessment"
+      },
+      "response": {
+        "success": true,
+        "status": "no_change",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_17_transition_replay",
+        "data": {
+          "bmr": {
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+            "status": "assessment_in_progress",
+            "record_version": 2,
+            "current_session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+            "opened_at": "2026-08-07T15:41:22.379Z",
+            "closed_at": null,
+            "created_at": "2026-08-07T15:41:22.379Z",
+            "updated_at": "2026-08-07T15:41:25.961Z"
+          },
+          "idempotent_replay": true
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004",
+          "idempotent_replay": true
+        }
+      }
+    },
+    {
+      "step": "H4.17_STALE_TRANSITION",
+      "timestamp": "2026-08-07T15:41:26.137Z",
+      "method": "POST",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/transitions",
+      "status": 409,
+      "correlation_id": "corr_d4_31193811042-1_h4_17_stale_transition",
+      "environment": "qa",
+      "request": {
+        "to_status": "under_review",
+        "expected_version": 1,
+        "reason_code": "day4_review"
+      },
+      "response": {
+        "success": false,
+        "status": "conflict",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_17_stale_transition",
+        "error": {
+          "code": "GV_VERSION_CONFLICT",
+          "message": "expected_version does not match the current BMR version.",
+          "retryable": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.17_UNDER_REVIEW",
+      "timestamp": "2026-08-07T15:41:26.233Z",
+      "method": "POST",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/transitions",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_17_under_review",
+      "environment": "qa",
+      "request": {
+        "to_status": "under_review",
+        "expected_version": 2,
+        "reason_code": "day4_review"
+      },
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_17_under_review",
+        "data": {
+          "bmr": {
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+            "status": "under_review",
+            "record_version": 3,
+            "current_session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+            "opened_at": "2026-08-07T15:41:22.379Z",
+            "closed_at": null,
+            "created_at": "2026-08-07T15:41:22.379Z",
+            "updated_at": "2026-08-07T15:41:26.173Z"
+          },
+          "idempotent_replay": false
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004",
+          "idempotent_replay": false
+        }
+      }
+    },
+    {
+      "step": "H4.18_REFRESH_CURRENT",
+      "timestamp": "2026-08-07T15:41:26.423Z",
+      "method": "GET",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/reasoning",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_18_refresh_current",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_18_refresh_current",
+        "data": {
+          "bmr": {
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+            "status": "under_review",
+            "record_version": 3,
+            "current_session_id": "ses_c0b18241d04d493db8165ac0760d016d"
+          },
+          "mode": "current",
+          "observations": [
+            {
+              "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+              "observation_type": "reasoning",
+              "dimension": "problem_clarity",
+              "statement": "Observed quantified problem clarity signal from accepted assessment evidence.",
+              "severity": null,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:23.466Z",
+              "updated_at": "2026-08-07T15:41:23.466Z",
+              "observation_group_id": "obg_55ed5d4579c84838afe507f9383f4e31",
+              "version_no": 1,
+              "supersedes_observation_id": null,
+              "domain": "problem_clarity",
+              "confidence": 90,
+              "source_type": "deterministic_rule",
+              "source_version": "day4_qa_v1",
+              "status": "active",
+              "created_by_type": "public",
+              "created_by_id": "public-session",
+              "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation",
+              "support": [
+                {
+                  "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                  "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                  "support_type": "supports",
+                  "created_at": "2026-08-07T15:41:23.466Z",
+                  "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation"
+                }
+              ]
+            }
+          ],
+          "hypotheses": [
+            {
+              "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "statement": "The venture may benefit from further problem-definition validation.",
+              "status": "active",
+              "confidence": 65,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:23.666Z",
+              "updated_at": "2026-08-07T15:41:23.666Z",
+              "hypothesis_group_id": "hyg_507feef5b2744fd19d775fca07cd976a",
+              "version_no": 1,
+              "supersedes_hypothesis_id": null,
+              "domain": "problem_clarity",
+              "uncertainty": "This remains a hypothesis pending additional evidence.",
+              "source_type": "deterministic_rule",
+              "source_version": "day4_qa_v1",
+              "created_by_type": "public",
+              "created_by_id": "public-session",
+              "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis",
+              "support": [
+                {
+                  "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                  "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                  "relationship_type": "supports",
+                  "created_at": "2026-08-07T15:41:23.666Z",
+                  "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis"
+                }
+              ]
+            }
+          ],
+          "findings": [
+            {
+              "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "product": "GalviVault",
+              "finding_type": "governed",
+              "title": "Problem clarity requires review",
+              "statement": "Synthetic finding for authorization denial.",
+              "priority": null,
+              "evidence_version": 1,
+              "created_at": "2026-08-07T15:41:24.375Z",
+              "updated_at": "2026-08-07T15:41:24.375Z",
+              "finding_group_id": "fng_65a58ad1fc0a4d5cba24ac24471f776d",
+              "version_no": 1,
+              "supersedes_finding_id": null,
+              "finding_code": "D4_QA_UNAUTH",
+              "domain": "problem_clarity",
+              "confidence": 82,
+              "confidence_band": null,
+              "confirmation_status": "unconfirmed",
+              "governance_version": 1,
+              "status": "active",
+              "source_type": "deterministic_rule",
+              "source_version": "day4_qa_v1",
+              "created_by_type": "public",
+              "created_by_id": "public-session",
+              "confirmation_reason": null,
+              "confirmed_by_type": null,
+              "confirmed_by_id": null,
+              "confirmed_at": null,
+              "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding",
+              "support": {
+                "evidence": [
+                  {
+                    "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                    "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                    "support_type": "supports",
+                    "weight": null,
+                    "created_at": "2026-08-07T15:41:24.375Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+                  }
+                ],
+                "observations": [
+                  {
+                    "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                    "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                    "support_type": "supports",
+                    "created_at": "2026-08-07T15:41:24.375Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+                  }
+                ],
+                "hypotheses": [
+                  {
+                    "finding_id": "fnd_2d814947d6d34465b49446205e53b903",
+                    "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                    "relationship_type": "derived_from",
+                    "created_at": "2026-08-07T15:41:24.375Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding"
+                  }
+                ]
+              }
+            },
+            {
+              "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+              "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "product": "GalviVault",
+              "finding_type": "governed",
+              "title": "Problem clarity reviewed",
+              "statement": "Revised governed finding after additional review.",
+              "priority": null,
+              "evidence_version": 2,
+              "created_at": "2026-08-07T15:41:24.663Z",
+              "updated_at": "2026-08-07T15:41:24.663Z",
+              "finding_group_id": "fng_39e771d581504d709c2b8d1bf3b73a8e",
+              "version_no": 2,
+              "supersedes_finding_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+              "finding_code": "D4_QA_PROBLEM_CLARITY",
+              "domain": "problem_clarity",
+              "confidence": 86,
+              "confidence_band": null,
+              "confirmation_status": "unconfirmed",
+              "governance_version": 1,
+              "status": "active",
+              "source_type": "operator_review",
+              "source_version": "day4_qa_v2",
+              "created_by_type": "operator",
+              "created_by_id": "day4_qa_operator",
+              "confirmation_reason": null,
+              "confirmed_by_type": null,
+              "confirmed_by_id": null,
+              "confirmed_at": null,
+              "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding",
+              "support": {
+                "evidence": [
+                  {
+                    "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                    "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+                    "support_type": "supports",
+                    "weight": null,
+                    "created_at": "2026-08-07T15:41:24.663Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+                  }
+                ],
+                "observations": [
+                  {
+                    "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                    "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+                    "support_type": "supports",
+                    "created_at": "2026-08-07T15:41:24.663Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+                  }
+                ],
+                "hypotheses": [
+                  {
+                    "finding_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+                    "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+                    "relationship_type": "derived_from",
+                    "created_at": "2026-08-07T15:41:24.663Z",
+                    "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.18_REFRESH_TIMELINE",
+      "timestamp": "2026-08-07T15:41:26.511Z",
+      "method": "GET",
+      "path": "/api/v1/business-medical-records/bmr_fe1ac4eef0a84f4e80d3665b51939b2b/timeline",
+      "status": 200,
+      "correlation_id": "corr_d4_31193811042-1_h4_18_refresh_timeline",
+      "environment": "qa",
+      "request": null,
+      "response": {
+        "success": true,
+        "status": "ok",
+        "environment": "qa",
+        "correlation_id": "corr_d4_31193811042-1_h4_18_refresh_timeline",
+        "data": {
+          "bmr": {
+            "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+            "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+            "status": "under_review",
+            "record_version": 3,
+            "current_session_id": "ses_c0b18241d04d493db8165ac0760d016d"
+          },
+          "entries": [
+            {
+              "canonical_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:22.379Z",
+              "source": "galvivault",
+              "safe_summary": "create",
+              "correlation_id": "corr_d4_31193811042-1_h4_1_identity",
+              "entry_type": "governance"
+            },
+            {
+              "canonical_id": "ses_c0b18241d04d493db8165ac0760d016d",
+              "version_no": null,
+              "occurred_at": "2026-08-07T15:41:22.379Z",
+              "source": "galvivault",
+              "correlation_id": null,
+              "entry_type": "session",
+              "safe_summary": "assessment session"
+            },
+            {
+              "canonical_id": "evd_e01ca4737aa742a5922db698e4348215",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:22.499Z",
+              "source": "assessment_answer",
+              "correlation_id": null,
+              "entry_type": "evidence",
+              "safe_summary": "evidence"
+            },
+            {
+              "canonical_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:23.466Z",
+              "source": "deterministic_rule",
+              "correlation_id": "corr_d4_31193811042-1_h4_2_supported_observation",
+              "entry_type": "observation",
+              "safe_summary": "observation"
+            },
+            {
+              "canonical_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:23.666Z",
+              "source": "deterministic_rule",
+              "correlation_id": "corr_d4_31193811042-1_h4_4_supported_hypothesis",
+              "entry_type": "hypothesis",
+              "safe_summary": "hypothesis"
+            },
+            {
+              "canonical_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:23.873Z",
+              "source": "deterministic_rule",
+              "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding",
+              "entry_type": "finding",
+              "safe_summary": "finding"
+            },
+            {
+              "canonical_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:23.873Z",
+              "source": "deterministic_rule",
+              "safe_summary": "create",
+              "correlation_id": "corr_d4_31193811042-1_h4_6_supported_finding",
+              "entry_type": "governance"
+            },
+            {
+              "canonical_id": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+              "version_no": 2,
+              "occurred_at": "2026-08-07T15:41:24.200Z",
+              "source": "governance-service",
+              "safe_summary": "confirmed",
+              "correlation_id": "corr_d4_31193811042-1_h4_9_authorized_confirmation",
+              "entry_type": "governance"
+            },
+            {
+              "canonical_id": "fnd_2d814947d6d34465b49446205e53b903",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:24.375Z",
+              "source": "deterministic_rule",
+              "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding",
+              "entry_type": "finding",
+              "safe_summary": "finding"
+            },
+            {
+              "canonical_id": "fnd_2d814947d6d34465b49446205e53b903",
+              "version_no": 1,
+              "occurred_at": "2026-08-07T15:41:24.375Z",
+              "source": "deterministic_rule",
+              "safe_summary": "create",
+              "correlation_id": "corr_d4_31193811042-1_h4_10_second_finding",
+              "entry_type": "governance"
+            },
+            {
+              "canonical_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+              "version_no": 2,
+              "occurred_at": "2026-08-07T15:41:24.663Z",
+              "source": "operator_review",
+              "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding",
+              "entry_type": "finding",
+              "safe_summary": "finding"
+            },
+            {
+              "canonical_id": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12",
+              "version_no": 2,
+              "occurred_at": "2026-08-07T15:41:24.663Z",
+              "source": "operator_review",
+              "safe_summary": "supersede",
+              "correlation_id": "corr_d4_31193811042-1_h4_12_supersede_finding",
+              "entry_type": "governance"
+            },
+            {
+              "canonical_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "version_no": 2,
+              "occurred_at": "2026-08-07T15:41:25.961Z",
+              "source": "bmr-service",
+              "safe_summary": "transition",
+              "correlation_id": "corr_d4_31193811042-1_h4_17_to_assessment",
+              "entry_type": "governance"
+            },
+            {
+              "canonical_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+              "version_no": 3,
+              "occurred_at": "2026-08-07T15:41:26.173Z",
+              "source": "bmr-service",
+              "safe_summary": "transition",
+              "correlation_id": "corr_d4_31193811042-1_h4_17_under_review",
+              "entry_type": "governance"
+            }
+          ]
+        },
+        "meta": {
+          "api_version": "v1",
+          "schema_version": "0004"
+        }
+      }
+    },
+    {
+      "step": "H4.19_PRODUCTION_REGRESSION",
+      "status": "delegated_to_workflow",
+      "timestamp": "2026-08-07T15:41:26.511Z"
+    }
+  ],
+  "ids": {
+    "founder_id": "fdr_c53f523a4aa4480e91c7be3c26e9862a",
+    "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+    "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+    "session_id": "ses_c0b18241d04d493db8165ac0760d016d",
+    "bmr_version": 1,
+    "evidence_id": "evd_e01ca4737aa742a5922db698e4348215",
+    "observation_id": "obs_fd9e61aa89c5497bbbeb415d99619e3b",
+    "hypothesis_id": "hyp_aeaab5d7b57b4ba0a076edc9ebfb87ec",
+    "finding_v1": "fnd_8c907b5bb4214448a34d9409c35fb9af",
+    "finding_v2": "fnd_3375b8fdb3cd44d1a98f4b9dcce41c12"
+  },
+  "finished_at": "2026-08-07T15:41:26.511Z",
+  "status": "pass"
+}

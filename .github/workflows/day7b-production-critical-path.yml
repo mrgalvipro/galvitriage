@@ -1,0 +1,67 @@
+name: Day 7B Production Critical Path
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [qa-revamped-galvicare-0-5]
+    paths:
+      - 'scripts/day7b-d1-api.mjs'
+      - 'scripts/day7b-verify-production-runtime-isolation.mjs'
+      - 'scripts/day7b-build-production-frontend.mjs'
+      - 'migrations/production/**'
+      - '.github/workflows/day7b-production-critical-path.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  production-critical-path:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout authoritative Day 7B source
+        uses: actions/checkout@v4
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Production D1 GREEN
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/day7b-d1-api.mjs
+
+      - name: Production security and isolation GREEN
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: node scripts/day7b-verify-production-runtime-isolation.mjs
+
+      - name: Generate Production pre-Stripe frontend
+        run: |
+          node scripts/day7b-build-production-frontend.mjs --prestripe
+          test -f index.production.prestripe.html
+          grep -q 'https://galvicare-0-5-production.mrgalvipro.workers.dev' index.production.prestripe.html
+          ! grep -q 'buy.stripe.com/test_' index.production.prestripe.html
+          grep -q '__PENDING_APPROVED_LIVE_GALVISCORE__' index.production.prestripe.html
+          grep -q '__PENDING_APPROVED_LIVE_GALVISHOT__' index.production.prestripe.html
+          grep -q '__PENDING_APPROVED_LIVE_GALVISIGHT__' index.production.prestripe.html
+          grep -q '__PENDING_APPROVED_LIVE_GALVIPATH__' index.production.prestripe.html
+
+      - name: Upload Production pre-Stripe frontend artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: galvicare-production-prestripe
+          path: index.production.prestripe.html
+          if-no-files-found: error
+
+      - name: Day 7B gate summary
+        if: success()
+        run: |
+          echo '## Day 7B Critical Path PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production D1: GREEN' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production security/isolation: GREEN' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production pre-Stripe frontend: GREEN' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Remaining external input: four approved Stripe LIVE Payment Links' >> "$GITHUB_STEP_SUMMARY"

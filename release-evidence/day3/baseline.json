@@ -1,0 +1,11 @@
+{
+  "repository": "mrgalvipro/galvitriage",
+  "branch": "qa-revamped-galvicare-0-5",
+  "candidate_sha": "a62fff21534cc6777d6385dd8fbfcacf6c7f0b0f",
+  "qa_worker_name": "galvivault-p0-day1-qa",
+  "qa_d1": "galvivault-0-5-qa",
+  "schema_target": "0003",
+  "production_mutated": false,
+  "galvicare_mutated": false,
+  "galvicare_completion_baseline": "ae41b41892de2e9b88b4e81d5e521c535719bb15"
+}

@@ -1,0 +1,88 @@
+# GALVICARE 0.5 — DAY 7B FINAL CRITICAL PATH
+# PRODUCTION SCHEMA → SECURITY → ISOLATION → LIVE FRONTEND → FINAL GATE
+# MEASURE TWICE | CUT ONCE
+
+MISSION
+Reach READY FOR FINAL DAY 7B HUMAN E2E without reopening Day 7A product logic.
+
+CURRENT AUTHORITATIVE FACTS
+- QA/BUILD branch: qa-revamped-galvicare-0-5
+- Production/RUN branch: main
+- Day 7A regression baseline: 102/102 PASS.
+- Production Worker: galvicare-0-5-production
+- Production Worker URL: https://galvicare-0-5-production.mrgalvipro.workers.dev
+- Production entrypoint: worker/production-entry.js
+- Production D1: galvivault-0-5-production
+- Production D1 ID: 2fc954b7-00ca-405b-8313-f91e706845a2
+- QA D1: galvivault-0-5-qa
+- QA D1 ID: cdf9042b-ab09-498a-ac66-010b6cce47d4
+- Production /health has already been human-verified with environment=production, galvivault=galvivault-0-5-production, runtime_marker=day7b-production-isolation-v1, day7a_runtime_marker=day7a-payment-products-v1, db_bound=true.
+- Human /tables evidence currently shows Production D1 is EMPTY.
+- Human /tables evidence shows QA D1 has the established GalviCare schema.
+- Current production frontend source is NOT ready: it still targets the QA Worker and Stripe TEST Payment Links.
+
+IMPORTANT CODEX SANDBOX RULE
+The prior report stopped because Codex's isolated checkout did not contain the authoritative production-specific files. The authoritative artifacts are now committed on qa-revamped-galvicare-0-5. Use repository-backed files directly. Do NOT create a branch merely to make a sandbox name match. Do NOT overwrite worker/worker.js with a stale sandbox copy. Do NOT target QA D1 from any Production command.
+
+REQUIRED AUTHORITATIVE FILES
+- wrangler.production.jsonc
+- worker/production-entry.js
+- migrations/production/0001_galvicare_0_5_production_baseline.sql
+- scripts/day7b-apply-production-schema.sh
+- DAY7B_PRODUCTION_FRONTEND_PATCH.txt
+
+PHASE 1 — SOURCE/CONFIG SAFETY
+Verify Production files contain Worker=galvicare-0-5-production, main=worker/production-entry.js, D1 name=galvivault-0-5-production, D1 ID=2fc954b7-00ca-405b-8313-f91e706845a2, allowed origin=https://www.galvipro.com. Reject if Production config contains galvivault-0-5-qa or cdf9042b-ab09-498a-ac66-010b6cce47d4.
+
+PHASE 2 — REGRESSION
+Run:
+npm run day7b:gate
+git diff --check
+Do not weaken tests. Required Day 7A baseline remains 102/102 PASS.
+
+PHASE 3 — INITIALIZE PRODUCTION D1
+Apply ONLY migrations/production/0001_galvicare_0_5_production_baseline.sql to ONLY galvivault-0-5-production / 2fc954b7-00ca-405b-8313-f91e706845a2.
+Preferred command:
+bash scripts/day7b-apply-production-schema.sh
+DO NOT apply legacy QA-only migration files to Production. DO NOT copy QA rows.
+Verify Production tables exist. Verify sessions, founders, ventures, payments, entitlements, product_results start at zero. release_metadata may contain rows.
+
+PHASE 4 — PRODUCTION SECURITY
+POST to https://galvicare-0-5-production.mrgalvipro.workers.dev/api
+{"action":"get_fixture_result","product":"GalviVitals"} => HTTP 404
+{"action":"grant_test_override"} => HTTP 404
+If either succeeds: BLOCKED.
+
+PHASE 5 — DATABASE ISOLATION
+Create a unique synthetic session in QA through the existing QA API contract. Confirm QA can read it. Query Production for same session => NOT FOUND.
+Create a unique synthetic session in Production through normal production session/intake contract. Confirm Production can read it. Query QA for same session => NOT FOUND.
+Required: QA→PROD contamination=NONE; PROD→QA contamination=NONE.
+
+PHASE 6 — PRODUCTION FRONTEND
+Production must use https://galvicare-0-5-production.mrgalvipro.workers.dev and MUST NOT use https://galvicare-triage-intake.mrgalvipro.workers.dev.
+Replace four TEST Stripe mappings only with EXACT APPROVED LIVE Payment Links: GalviScore, GalviShot, GalviSight, GalviPath.
+DO NOT GUESS LIVE LINKS. DO NOT derive a live URL by removing test_. If exact four approved LIVE links are not supplied, STOP with: BLOCKED — MISSING APPROVED STRIPE LIVE PAYMENT LINK(S).
+After replacement: no buy.stripe.com/test_ remains in Production frontend; no QA override control is exposed; canonical customer URL remains https://www.galvipro.com/#galvitriage.
+
+PHASE 7 — FINAL REGRESSION
+Run:
+npm run stabilization:gate
+npm run day7b:gate
+git diff --check
+Expected all PASS. Verify Production /health again.
+
+PHASE 8 — READY DECLARATION
+Declare READY FOR FINAL DAY 7B HUMAN E2E only if: Day 7A regression PASS; Day 7B source isolation PASS; Production D1 schema PASS; Production customer tables start empty before E2E; get_fixture_result denied; grant_test_override denied; QA session invisible in Production; Production session invisible in QA; Production frontend points to Production Worker; four approved Stripe LIVE links installed; no TEST Stripe links in Production; no QA controls in Production; final regression PASS.
+DO NOT run the live paid customer E2E automatically.
+
+FINAL RESPONSE FORMAT
+1. DAY 7A REGRESSION — PASS/FAIL/NOT REPRODUCIBLE
+2. PRODUCTION SCHEMA — PASS/FAIL
+3. PRODUCTION TABLES — <list/count>
+4. PRODUCTION QA CONTROLS — fixture PASS/FAIL; override PASS/FAIL
+5. DATABASE ISOLATION — QA→PROD PASS/FAIL; PROD→QA PASS/FAIL
+6. PRODUCTION FRONTEND — PROD/QA
+7. STRIPE — LIVE/TEST/BLOCKED
+8. FINAL REGRESSION — PASS/FAIL
+9. FILES CHANGED — <list>
+10. FINAL STATUS — READY FOR FINAL DAY 7B HUMAN E2E or BLOCKED — <one blocker>

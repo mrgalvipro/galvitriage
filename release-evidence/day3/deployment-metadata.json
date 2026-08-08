@@ -1,0 +1,7 @@
+{
+  "candidate_sha": "a62fff21534cc6777d6385dd8fbfcacf6c7f0b0f",
+  "qa_worker_name": "galvivault-p0-day1-qa",
+  "qa_worker_url": "https://galvivault-p0-day1-qa.mrgalvipro.workers.dev",
+  "qa_d1": "galvivault-0-5-qa",
+  "schema_version": "0003"
+}
