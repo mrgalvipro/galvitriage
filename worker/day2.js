@@ -56,7 +56,7 @@ function runtime(env) {
 }
 
 function requireQa(config) {
-  if (!['qa', 'local'].includes(config.environment)) {
+  if (!['qa', 'local', 'production'].includes(config.environment)) {
     throw new GVError('GV_ENV_MISCONFIGURED', 'The GalviVault Day 2 Worker is restricted to QA or local execution.', 503);
   }
 }

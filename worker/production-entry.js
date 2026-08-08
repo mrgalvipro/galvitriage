@@ -1,4 +1,5 @@
 import day7aWorker from './worker.js';
+import galviVaultWorker from './day5-entry.js';
 
 const PRODUCTION_ORIGINS = new Set([
   'https://www.galvipro.com',
@@ -24,6 +25,10 @@ function productionEnv(env = {}, request = null) {
     RELEASE_BRANCH: 'main',
     GALVIVAULT_NAME: 'galvivault-0-5-production',
     HUBSPOT_ENABLED: 'true',
+    FIXTURE_MODE: 'false',
+    API_VERSION: 'v1',
+    MIN_SCHEMA_VERSION: '0005',
+    ALLOWED_ORIGINS: Array.from(PRODUCTION_ORIGINS).join(','),
     ALLOWED_ORIGIN: isAllowedOrigin(origin) && origin ? origin : PRIMARY_PRODUCTION_ORIGIN
   };
 }
@@ -33,7 +38,7 @@ function corsHeaders(request) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Idempotency-Key, X-Correlation-Id, X-Galvi-Role, X-Galvi-Actor-Id, X-GalviVault-Actor-Id, X-GalviVault-Actor-Type',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin'
   };
@@ -128,6 +133,22 @@ async function upsertHubSpotContact(env, payload) {
   });
   return { attempted: true, success: true, status: 'created', contact_id: contact.id, adapter: HUBSPOT_ADAPTER_MARKER };
 }
+async function delegateGalviVault(request, env, ctx) {
+  const response = await galviVaultWorker.fetch(request, productionEnv(env, request), ctx);
+  const headers = new Headers(response.headers);
+  headers.delete('Access-Control-Allow-Origin');
+  headers.delete('Access-Control-Allow-Credentials');
+  headers.delete('Access-Control-Allow-Headers');
+  headers.delete('Access-Control-Allow-Methods');
+  headers.delete('Access-Control-Max-Age');
+  for (const [key, value] of Object.entries(commonHeaders(request))) headers.set(key, value);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
 async function delegate(request, env, ctx, payload = null) {
   const response = await day7aWorker.fetch(request, productionEnv(env, request), ctx);
   let responseBody = null;
@@ -176,6 +197,7 @@ export default {
       return new Response(null, { status: 204, headers: commonHeaders(request) });
     }
     if (forbiddenOrigin(request)) return json(request, { success: false, status: 'forbidden_origin' }, 403);
+    if (pathname === '/ready' || pathname.startsWith('/api/v1/')) return delegateGalviVault(request, env, ctx);
     if (request.method === 'GET' && (pathname === '/' || pathname === '/health')) {
       return json(request, {
         success: true,
@@ -189,6 +211,9 @@ export default {
         hubspot_enabled: true,
         hubspot_credential_present: Boolean(String(env?.HUBSPOT_PRIVATE_APP_TOKEN || '').trim()),
         hubspot_adapter: HUBSPOT_ADAPTER_MARKER,
+        fixture_mode: false,
+        api_version: 'v1',
+        required_schema_version: '0005',
         db_bound: Boolean(env?.DB)
       });
     }
@@ -207,6 +232,9 @@ export default {
         hubspot_enabled: true,
         hubspot_credential_present: Boolean(String(env?.HUBSPOT_PRIVATE_APP_TOKEN || '').trim()),
         hubspot_adapter: HUBSPOT_ADAPTER_MARKER,
+        fixture_mode: false,
+        api_version: 'v1',
+        required_schema_version: '0005',
         db_bound: Boolean(env?.DB)
       });
     }
