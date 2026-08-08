@@ -120,7 +120,7 @@ function fail(cfg, corr, origin, error) {
 }
 
 function requireRuntime(cfg) {
-  if (!['qa','local'].includes(cfg.environment)) throw new GVError('GV_ENV_MISCONFIGURED', 'Day 3 is restricted to QA or local.', 503);
+  if (!['qa','local','production'].includes(cfg.environment)) throw new GVError('GV_ENV_MISCONFIGURED', 'Day 3 runtime environment is not permitted.', 503);
   if (!cfg.db || typeof cfg.db.prepare !== 'function') throw new GVError('GV_DB_UNAVAILABLE', 'The GalviVault DB binding is unavailable.', 503, undefined, true);
 }
 
