@@ -1,7 +1,10 @@
-# one-time trigger; workflow deletes itself after a green bounded patch
+# one-time operator; deletes itself after a green bounded patch
 name: Day 7 enable Production GalviVault runtime
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - qa-revamped-galvicare-0-5
@@ -69,10 +72,8 @@ jobs:
 
           rep("import day7aWorker from './worker.js';",
               "import day7aWorker from './worker.js';\nimport galviVaultWorker from './day5-entry.js';")
-
           rep("'Access-Control-Allow-Headers': 'Content-Type',",
               "'Access-Control-Allow-Headers': 'Content-Type, Idempotency-Key, X-Correlation-Id, X-Galvi-Role, X-Galvi-Actor-Id, X-GalviVault-Actor-Id, X-GalviVault-Actor-Type',")
-
           rep("    HUBSPOT_ENABLED: 'true',\n    ALLOWED_ORIGIN: isAllowedOrigin(origin) && origin ? origin : PRIMARY_PRODUCTION_ORIGIN",
               "    HUBSPOT_ENABLED: 'true',\n    FIXTURE_MODE: 'false',\n    API_VERSION: 'v1',\n    MIN_SCHEMA_VERSION: '0005',\n    ALLOWED_ORIGINS: Array.from(PRODUCTION_ORIGINS).join(','),\n    ALLOWED_ORIGIN: isAllowedOrigin(origin) && origin ? origin : PRIMARY_PRODUCTION_ORIGIN")
 
@@ -87,7 +88,6 @@ jobs:
 
           rep("        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,\n        db_bound: Boolean(env?.DB)",
               "        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,\n        fixture_mode: false,\n        api_version: 'v1',\n        required_schema_version: '0005',\n        db_bound: Boolean(env?.DB)")
-
           rep("        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,\n        db_bound: Boolean(env?.DB)",
               "        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,\n        fixture_mode: false,\n        api_version: 'v1',\n        required_schema_version: '0005',\n        db_bound: Boolean(env?.DB)")
 
@@ -111,12 +111,7 @@ jobs:
           git diff --check
           git diff --name-only | sort | tee /tmp/day7-runtime-files.txt
           test "$(wc -l < /tmp/day7-runtime-files.txt | tr -d ' ')" -eq 6
-          grep -qx 'worker/day1.js' /tmp/day7-runtime-files.txt
-          grep -qx 'worker/day2.js' /tmp/day7-runtime-files.txt
-          grep -qx 'worker/day3.js' /tmp/day7-runtime-files.txt
-          grep -qx 'worker/day4-common.js' /tmp/day7-runtime-files.txt
-          grep -qx 'worker/day5-common.js' /tmp/day7-runtime-files.txt
-          grep -qx 'worker/production-entry.js' /tmp/day7-runtime-files.txt
+          for f in worker/day1.js worker/day2.js worker/day3.js worker/day4-common.js worker/day5-common.js worker/production-entry.js; do grep -qx "$f" /tmp/day7-runtime-files.txt; done
 
       - name: Commit correction and remove temporary operator
         shell: bash
