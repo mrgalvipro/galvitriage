@@ -1,3 +1,4 @@
+# one-time trigger; workflow deletes itself after a green bounded patch
 name: Day 7 enable Production GalviVault runtime
 
 on:
@@ -80,9 +81,6 @@ jobs:
               raise SystemExit('worker/production-entry.js: delegate anchor missing/ambiguous')
           helper = """async function delegateGalviVault(request, env, ctx) {\n  const response = await galviVaultWorker.fetch(request, productionEnv(env, request), ctx);\n  const headers = new Headers(response.headers);\n  headers.delete('Access-Control-Allow-Origin');\n  headers.delete('Access-Control-Allow-Credentials');\n  headers.delete('Access-Control-Allow-Headers');\n  headers.delete('Access-Control-Allow-Methods');\n  headers.delete('Access-Control-Max-Age');\n  for (const [key, value] of Object.entries(commonHeaders(request))) headers.set(key, value);\n  return new Response(response.body, {\n    status: response.status,\n    statusText: response.statusText,\n    headers\n  });\n}\n\n"""
           text = text.replace(anchor, helper + anchor, 1)
-
-          rep("    const pathname = new URL(request.url).pathname;\n    if (request.method === 'OPTIONS') {",
-              "    const pathname = new URL(request.url).pathname;\n    if (request.method === 'OPTIONS') {")
 
           rep("    if (forbiddenOrigin(request)) return json(request, { success: false, status: 'forbidden_origin' }, 403);\n    if (request.method === 'GET' && (pathname === '/' || pathname === '/health')) {",
               "    if (forbiddenOrigin(request)) return json(request, { success: false, status: 'forbidden_origin' }, 403);\n    if (pathname === '/ready' || pathname.startsWith('/api/v1/')) return delegateGalviVault(request, env, ctx);\n    if (request.method === 'GET' && (pathname === '/' || pathname === '/health')) {")
