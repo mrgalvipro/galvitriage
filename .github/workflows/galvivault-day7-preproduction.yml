@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - '.github/workflows/galvivault-day7-preproduction.yml'
+      - '.github/workflows/galvivault-day7-production-acceptance.yml'
       - 'worker/day1.js'
       - 'worker/day2.js'
       - 'worker/day3*.js'
@@ -64,14 +65,10 @@ jobs:
           test "${{ github.event.pull_request.head.ref || 'qa-revamped-galvicare-0-5' }}" = "qa-revamped-galvicare-0-5"
           git merge-base --is-ancestor origin/main HEAD
 
-          # GalviCare frontend and Production binding/config remain byte-for-byte unchanged.
           git diff --exit-code origin/main HEAD -- \
             index.html \
             wrangler.production.jsonc
 
-          # The demonstrated Day 7 blocker requires a bounded Production-entry delta.
-          # Preserve existing GalviCare authorities while allowing only the GalviVault
-          # cumulative /ready + /api/v1/* delegation needed for Production acceptance.
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const p = fs.readFileSync('worker/production-entry.js','utf8');
@@ -95,14 +92,13 @@ jobs:
           console.log('bounded_production_entry_release_delta=PASS');
           NODE
 
-          # No unrelated Production-facing file may change in this candidate.
           changed="$(git diff --name-only origin/main HEAD | sort)"
           printf '%s\n' "$changed"
           while IFS= read -r file; do
             case "$file" in
-              .github/workflows/galvivault-day7-preproduction.yml|worker/day1.js|worker/day2.js|worker/day3.js|worker/day4-common.js|worker/day5-common.js|worker/production-entry.js) ;;
+              .github/workflows/galvivault-day7-preproduction.yml|.github/workflows/galvivault-day7-production-acceptance.yml) ;;
               '') ;;
-              *) echo "Unexpected Day 7 release-delta path: $file" >&2; exit 1 ;;
+              *) echo "Unexpected final Day 7 release-control path: $file" >&2; exit 1 ;;
             esac
           done <<< "$changed"
 
