@@ -1,0 +1,68 @@
+name: Day 7 critical-path source guard
+
+on:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - '.github/workflows/day7-critical-path-source-guard.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  apply-source-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout QA branch
+        uses: actions/checkout@v4
+        with:
+          ref: qa-revamped-galvicare-0-5
+          fetch-depth: 0
+
+      - name: Apply only the Production isolation guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('worker/worker.js')
+          text = path.read_text()
+          old = """    const score = await writeProductResult(db, session_id, 'GalviScore', calculateDeterministicScore(payload));
+    const hubspot = await upsertHubSpotContact(env, payload, session_id);
+"""
+          new = """    const score = await writeProductResult(db, session_id, 'GalviScore', calculateDeterministicScore(payload));
+    if (!isQaEnvironment(env)) {
+      return jsonResponse({
+        success: true,
+        action,
+        session_id,
+        next_screen: 'GalviVitals',
+        triage: { session_id, question_contract_version: DAY2_QUESTION_CONTRACT_VERSION },
+        vitals,
+        score
+      }, 200, env);
+    }
+    const hubspot = await upsertHubSpotContact(env, payload, session_id);
+"""
+          if old not in text:
+              raise SystemExit('Expected submit_triage insertion point not found; refusing speculative rewrite.')
+          if text.count(old) != 1:
+              raise SystemExit(f'Expected one insertion point; found {text.count(old)}.')
+          path.write_text(text.replace(old, new, 1))
+          PY
+          node --check worker/worker.js
+          node --test tests/day7b-environment-isolation.test.mjs
+
+      - name: Commit source correction and remove temporary operator
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git rm .github/workflows/day7-critical-path-source-guard.yml
+          git add worker/worker.js
+          git diff --cached --check
+          git commit -m 'Day 7: isolate QA HubSpot adapter from Production [skip ci]'
+          git push origin HEAD:qa-revamped-galvicare-0-5
