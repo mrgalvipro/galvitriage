@@ -86,10 +86,11 @@ jobs:
           rep("    if (forbiddenOrigin(request)) return json(request, { success: false, status: 'forbidden_origin' }, 403);\n    if (request.method === 'GET' && (pathname === '/' || pathname === '/health')) {",
               "    if (forbiddenOrigin(request)) return json(request, { success: false, status: 'forbidden_origin' }, 403);\n    if (pathname === '/ready' || pathname.startsWith('/api/v1/')) return delegateGalviVault(request, env, ctx);\n    if (request.method === 'GET' && (pathname === '/' || pathname === '/health')) {")
 
-          rep("        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,\n        db_bound: Boolean(env?.DB)",
-              "        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,\n        fixture_mode: false,\n        api_version: 'v1',\n        required_schema_version: '0005',\n        db_bound: Boolean(env?.DB)")
-          rep("        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,\n        db_bound: Boolean(env?.DB)",
-              "        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,\n        fixture_mode: false,\n        api_version: 'v1',\n        required_schema_version: '0005',\n        db_bound: Boolean(env?.DB)")
+          old = "        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,\n        db_bound: Boolean(env?.DB)"
+          new = "        hubspot_adapter: HUBSPOT_ADAPTER_MARKER,\n        fixture_mode: false,\n        api_version: 'v1',\n        required_schema_version: '0005',\n        db_bound: Boolean(env?.DB)"
+          if text.count(old) != 2:
+              raise SystemExit(f'worker/production-entry.js: expected exactly two health/action blocks, found {text.count(old)}')
+          text = text.replace(old, new)
 
           p.write_text(text)
           PY
