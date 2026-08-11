@@ -1,5 +1,5 @@
 name: GalviVault Day 8 QA Clinician Workspace
-# Rerun marker: Access Apps and Policies permission confirmed 2026-08-10 21:36 ET
+# Critical-path bootstrap: enable Zero Trust organization only when Cloudflare reports Access not enabled.
 
 on:
   workflow_dispatch:
@@ -98,19 +98,49 @@ jobs:
           set -euo pipefail
           api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
           auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
-          org="$(curl -fsS "${auth[@]}" "$api/access/organizations")"
-          echo "$org" | jq -e '.success == true' >/dev/null
-          auth_domain="$(echo "$org" | jq -r '.result.auth_domain // empty')"
+
+          # Probe Access without failing so the exact not-enabled state can be handled deterministically.
+          org_http="$(curl -sS -o /tmp/day8-org.json -w '%{http_code}' "${auth[@]}" "$api/access/organizations" || true)"
+          apps_http="$(curl -sS -o /tmp/day8-apps.json -w '%{http_code}' "${auth[@]}" "$api/access/apps?per_page=100" || true)"
+          not_enabled="$(jq -r 'any(.errors[]?; (.code==9999) or ((.message // "") | contains("Access is not enabled")))' /tmp/day8-apps.json 2>/dev/null || echo false)"
+
+          if [ "$not_enabled" = "true" ]; then
+            echo "Cloudflare Access is not enabled for this account; creating the minimum Zero Trust organization required for Day 8."
+            suffix="$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | cut -c1-8 | tr '[:upper:]' '[:lower:]')"
+            auth_domain="mrgalvipro-${suffix}.cloudflareaccess.com"
+            org_payload="$(jq -nc --arg d "$auth_domain" '{auth_domain:$d,name:"MrGalviPro",session_duration:"24h",auto_redirect_to_identity:false,deny_unmatched_requests:false}')"
+            create_http="$(curl -sS -o /tmp/day8-org-create.json -w '%{http_code}' -X POST "${auth[@]}" --data "$org_payload" "$api/access/organizations" || true)"
+            if [ "$create_http" -lt 200 ] || [ "$create_http" -ge 300 ] || ! jq -e '.success == true' /tmp/day8-org-create.json >/dev/null 2>&1; then
+              echo "Zero Trust organization creation failed (HTTP $create_http)." >&2
+              jq -c '{errors:[.errors[]? | {code,message}]}' /tmp/day8-org-create.json >&2 || true
+              echo "Required token capability: Access: Organizations, Identity Providers, and Groups Write/Edit." >&2
+              exit 22
+            fi
+          fi
+
+          org_http="$(curl -sS -o /tmp/day8-org.json -w '%{http_code}' "${auth[@]}" "$api/access/organizations" || true)"
+          if [ "$org_http" -lt 200 ] || [ "$org_http" -ge 300 ] || ! jq -e '.success == true' /tmp/day8-org.json >/dev/null 2>&1; then
+            echo "Zero Trust organization lookup failed (HTTP $org_http)." >&2
+            jq -c '{errors:[.errors[]? | {code,message}]}' /tmp/day8-org.json >&2 || true
+            exit 22
+          fi
+          auth_domain="$(jq -r '.result.auth_domain // empty' /tmp/day8-org.json)"
           test -n "$auth_domain"
-          apps="$(curl -fsS "${auth[@]}" "$api/access/apps?per_page=100")"
-          echo "$apps" | jq -e '.success == true' >/dev/null
-          app_id="$(echo "$apps" | jq -r --arg d "$DAY8_HOST" '.result[] | select(.domain==$d) | .id' | head -1)"
+
+          apps_http="$(curl -sS -o /tmp/day8-apps.json -w '%{http_code}' "${auth[@]}" "$api/access/apps?per_page=100" || true)"
+          if [ "$apps_http" -lt 200 ] || [ "$apps_http" -ge 300 ] || ! jq -e '.success == true' /tmp/day8-apps.json >/dev/null 2>&1; then
+            echo "Access application listing failed (HTTP $apps_http)." >&2
+            jq -c '{errors:[.errors[]? | {code,message}]}' /tmp/day8-apps.json >&2 || true
+            exit 22
+          fi
+          app_id="$(jq -r --arg d "$DAY8_HOST" '.result[] | select(.domain==$d) | .id' /tmp/day8-apps.json | head -1)"
           if [ -z "$app_id" ]; then
             payload="$(jq -nc --arg n 'GalviVault Day 8 QA Clinician Workspace' --arg d "$DAY8_HOST" '{name:$n,domain:$d,type:"self_hosted",session_duration:"24h",auto_redirect_to_identity:false}')"
             created="$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/access/apps")"
             echo "$created" | jq -e '.success == true' >/dev/null
             app_id="$(echo "$created" | jq -r '.result.id')"
           fi
+
           app="$(curl -fsS "${auth[@]}" "$api/access/apps/$app_id")"
           aud="$(echo "$app" | jq -r '.result.aud // empty')"
           test -n "$aud"
@@ -179,6 +209,9 @@ jobs:
             /tmp/day8-d1-proof.json
             /tmp/day8-preauth.headers
             /tmp/day8-preauth.html
+            /tmp/day8-org.json
+            /tmp/day8-apps.json
+            /tmp/day8-org-create.json
 
       - name: Persist Day 8 QA run outcome
         if: always()
