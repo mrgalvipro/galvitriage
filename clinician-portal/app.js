@@ -98,9 +98,21 @@ function careForms(){
   const treatmentForm=eligibleRecommendations.length&&confirmed.length
     ? form('plan','Treatment Plan',`<label>BMR ID<input name="bmr_id" value="${esc(chart.identity.bmr.bmr_id)}" readonly required></label>`+`<label>Recommendation<select name="recommendation_id" required>${recommendationOptions}</select></label>`+`<label>Confirmed finding<select name="finding_id" required>${findingOptions}</select></label>`+field('title','Title')+field('objective','Objective','textarea'))
     : `<section class="card"><h3>Treatment Plan</h3><p>A canonical recommendation and confirmed governed finding from this BMR are required before a treatment plan can be created.</p></section>`;
-  return recommendationForm+treatmentForm;
+  const eventPlans=arr(chart?.care?.treatment_plans).filter(x=>!['superseded','archived'].includes(String(first(x,['status'],'')).toLowerCase()));
+  const eventPlanOptions=eventPlans.map(x=>`<option value="${esc(first(x,['treatment_plan_id','id'],''))}">${esc(first(x,['title','name','treatment_plan_id']))} — ${esc(first(x,['status']))} — ${esc(first(x,['treatment_plan_id','id']))}</option>`).join('');
+  const treatmentEventForm=eventPlans.length
+    ? form('treatment_event','Treatment Event',`<label>Treatment plan<select name="treatment_plan_id" required>${eventPlanOptions}</select></label>`+field('event_type','Event type')+`<label>Occurred at<input name="occurred_at" type="datetime-local" required></label>`+field('notes','Notes','textarea'))
+    : `<section class="card"><h3>Treatment Event</h3><p>An existing treatment plan is required before an append-only treatment event can be recorded.</p></section>`;
+  return recommendationForm+treatmentForm+treatmentEventForm;
 }
-function outcomeForms(){return form('outcome','Outcome',field('bmr_id','BMR ID')+field('outcome_code','Outcome code')+field('observed_value','Observed value')+field('observed_at','Observed at'))+form('feedback','Feedback / Follow-up',field('target_type','Target type')+field('target_id','Target ID')+field('feedback_type','Feedback type')+field('comment','Comment','textarea'))}
+function outcomeForms(){
+  const plans=arr(chart?.care?.treatment_plans).filter(x=>!['superseded','archived'].includes(String(first(x,['status'],'')).toLowerCase()));
+  const planOptions=plans.map(x=>`<option value="${esc(first(x,['treatment_plan_id','id'],''))}">${esc(first(x,['title','name','treatment_plan_id']))} — ${esc(first(x,['status']))}</option>`).join('');
+  const outcomeForm=plans.length
+    ? form('outcome','Outcome',`<label>BMR ID<input name="bmr_id" value="${esc(chart.identity.bmr.bmr_id)}" readonly required></label>`+`<label>Treatment plan<select name="treatment_plan_id" required>${planOptions}</select></label>`+field('outcome_code','Outcome code')+field('value_text','Observed value','textarea')+`<label>Observed at<input name="observed_at" type="datetime-local" required></label>`)
+    : `<section class="card"><h3>Outcome</h3><p>An existing treatment plan is required before a related outcome can be recorded.</p></section>`;
+  return outcomeForm+form('feedback','Feedback / Follow-up',field('target_type','Target type')+field('target_id','Target ID')+field('feedback_type','Feedback type')+field('comment','Comment','textarea'));
+}
 const key=(name,payload)=>{const raw=JSON.stringify(payload);const prev=retry.get(name);if(prev?.raw===raw)return prev.key;const k=`d8_${crypto.randomUUID().replaceAll('-','')}`;retry.set(name,{raw,key:k});return k};
 async function postForm(f,path,payload){const name=f.id;f.querySelector('button').disabled=true;try{await api(path,{method:'POST',headers:{'Idempotency-Key':key(name,payload)},body:JSON.stringify(payload)});retry.delete(name);await openChart(selected);return true}catch(e){f.querySelector('.msg').textContent=e.status===409?'Record changed. Canonical chart refreshed; review before retry.':e.message;if(e.status===409)await openChart(selected);if(e.status===401)await load();return false}finally{f.querySelector('button').disabled=false}}
 function bindActions(){
@@ -108,7 +120,8 @@ function bindActions(){
  const gov=$('#gov');if(gov){const finding=gov.querySelector('[name="finding_id"]'),expected=gov.querySelector('[name="expected_version"]');if(finding&&expected)finding.onchange=()=>{expected.value=finding.selectedOptions[0]?.dataset.version||''};gov.onsubmit=e=>{e.preventDefault();const v=vals(gov);postForm(gov,'/api/v1/governance/confirmations',{bmr_id:selected,finding_id:v.finding_id,decision:v.decision,reason:v.reason,expected_version:Number(v.expected_version)})}};
  const rec=$('#rec');if(rec)rec.onsubmit=e=>{e.preventDefault();const v=vals(rec);postForm(rec,'/api/v1/recommendations',{bmr_id:selected,finding_ids:[v.finding_id],recommendation_code:'GALVICLINIC_DAY8',title:v.title,action:v.action,rationale:v.rationale,priority:Number(v.priority),status:'proposed',source_type:'clinician',source_version:'day8'})};
  const plan=$('#plan');if(plan)plan.onsubmit=e=>{e.preventDefault();const v=vals(plan);postForm(plan,'/api/v1/treatment-plans',{...v,bmr_id:selected,recommendation_ids:[v.recommendation_id],finding_ids:[v.finding_id],treatment_code:'galviclinic',status:'approved',target_outcome:'follow_up',items:[{item_code:'initial',title:v.title,owner:'clinician'}]})};
- const out=$('#outcome');if(out)out.onsubmit=e=>{e.preventDefault();const v=vals(out);postForm(out,'/api/v1/outcomes',{...v,bmr_id:selected,outcome_type:'observed',source_type:'clinician',source_reference:'galviclinic_day8'})};
+ const tev=$('#treatment_event');if(tev)tev.onsubmit=e=>{e.preventDefault();const v=vals(tev);postForm(tev,`/api/v1/treatment-plans/${encodeURIComponent(v.treatment_plan_id)}/events`,{event_type:v.event_type,occurred_at:new Date(v.occurred_at).toISOString(),notes:v.notes,metadata:{source:'galviclinic_day8'}})};
+ const out=$('#outcome');if(out)out.onsubmit=e=>{e.preventDefault();const v=vals(out);postForm(out,'/api/v1/outcomes',{bmr_id:selected,treatment_plan_id:v.treatment_plan_id,outcome_code:v.outcome_code,outcome_type:'observed',value_text:v.value_text,observed_at:new Date(v.observed_at).toISOString(),source_type:'clinician',source_ref:'galviclinic_day8',status:'observed'})};
  const fb=$('#feedback');if(fb)fb.onsubmit=e=>{e.preventDefault();const v=vals(fb);postForm(fb,'/api/v1/feedback',{...v,bmr_id:selected,disposition:'follow_up',source:'clinician'})};
 }
 $('#logout').addEventListener('click',async()=>{try{await api('/api/v1/operator/auth/logout',{method:'POST',body:'{}'})}finally{showAuth('Signed out securely.');}});load();
