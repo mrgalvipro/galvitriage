@@ -137,6 +137,43 @@ jobs:
           grep -q 'GV_AUTH_REQUIRED' /tmp/day8-me.json
           ! grep -Eqi 'bmr_id|founder_id|venture_id' /tmp/day8-me.json
 
+      - name: E2E-18 final read-only D1 assertion catalog
+        id: d1final
+        shell: bash
+        env:
+          BMR_ID: bmr_0d72e878cc634917ae2ac8430a73331f
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day8.json \
+            --command="SELECT COUNT(*) AS fixture_bmr_count FROM gv1_business_medical_records WHERE bmr_id='${BMR_ID}'; SELECT COUNT(*) AS fixture_evidence_count FROM gv1_evidence_items WHERE bmr_id='${BMR_ID}'; SELECT COUNT(*) AS fixture_findings_count FROM gv1_findings WHERE bmr_id='${BMR_ID}'; SELECT COUNT(*) AS fixture_recommendations_count FROM gv1_recommendations WHERE bmr_id='${BMR_ID}'; SELECT COUNT(*) AS fixture_treatment_plans_count FROM gv1_treatment_plans WHERE bmr_id='${BMR_ID}'; SELECT COUNT(*) AS fixture_treatment_events_count FROM gv1_treatment_events WHERE bmr_id='${BMR_ID}'; SELECT COUNT(*) AS fixture_outcomes_count FROM gv1_outcomes WHERE bmr_id='${BMR_ID}'; SELECT COUNT(*) AS e2e14_outcome_count FROM gv1_outcomes WHERE bmr_id='${BMR_ID}' AND outcome_code='D8_FOLLOW_UP_STATUS'; SELECT COUNT(*) AS orphan_recommendation_findings FROM gv1_recommendation_findings rf LEFT JOIN gv1_recommendations r ON r.recommendation_id=rf.recommendation_id LEFT JOIN gv1_findings f ON f.finding_id=rf.finding_id WHERE r.recommendation_id IS NULL OR f.finding_id IS NULL; SELECT COUNT(*) AS orphan_treatment_items FROM gv1_treatment_plan_items i LEFT JOIN gv1_treatment_plans p ON p.treatment_plan_id=i.treatment_plan_id WHERE p.treatment_plan_id IS NULL; SELECT COUNT(*) AS orphan_treatment_links FROM gv1_treatment_plan_recommendations l LEFT JOIN gv1_treatment_plans p ON p.treatment_plan_id=l.treatment_plan_id LEFT JOIN gv1_recommendations r ON r.recommendation_id=l.recommendation_id WHERE p.treatment_plan_id IS NULL OR r.recommendation_id IS NULL; SELECT COUNT(*) AS orphan_outcome_evidence FROM gv1_outcome_evidence oe LEFT JOIN gv1_outcomes o ON o.outcome_id=oe.outcome_id LEFT JOIN gv1_evidence_items e ON e.evidence_id=oe.evidence_id WHERE o.outcome_id IS NULL OR e.evidence_id IS NULL;" \
+            --json | tee /tmp/day8-e2e18-d1-final.json
+          test "$(jq -r '.[0].results[0].fixture_bmr_count' /tmp/day8-e2e18-d1-final.json)" = "1"
+          test "$(jq -r '.[1].results[0].fixture_evidence_count' /tmp/day8-e2e18-d1-final.json)" -ge 1
+          test "$(jq -r '.[2].results[0].fixture_findings_count' /tmp/day8-e2e18-d1-final.json)" -ge 1
+          test "$(jq -r '.[3].results[0].fixture_recommendations_count' /tmp/day8-e2e18-d1-final.json)" -ge 1
+          test "$(jq -r '.[4].results[0].fixture_treatment_plans_count' /tmp/day8-e2e18-d1-final.json)" -ge 1
+          test "$(jq -r '.[5].results[0].fixture_treatment_events_count' /tmp/day8-e2e18-d1-final.json)" -ge 1
+          test "$(jq -r '.[6].results[0].fixture_outcomes_count' /tmp/day8-e2e18-d1-final.json)" -ge 1
+          test "$(jq -r '.[7].results[0].e2e14_outcome_count' /tmp/day8-e2e18-d1-final.json)" = "1"
+          test "$(jq -r '.[8].results[0].orphan_recommendation_findings' /tmp/day8-e2e18-d1-final.json)" = "0"
+          test "$(jq -r '.[9].results[0].orphan_treatment_items' /tmp/day8-e2e18-d1-final.json)" = "0"
+          test "$(jq -r '.[10].results[0].orphan_treatment_links' /tmp/day8-e2e18-d1-final.json)" = "0"
+          test "$(jq -r '.[11].results[0].orphan_outcome_evidence' /tmp/day8-e2e18-d1-final.json)" = "0"
+
+      - name: E2E-19 public GalviCare QA smoke
+        id: galvicare
+        shell: bash
+        env:
+          GALVICARE_QA_URL: https://galvicare-0-5-qa.mrgalvipro.workers.dev/
+        run: |
+          set -euo pipefail
+          status="$(curl -L -sS -o /tmp/day8-e2e19-galvicare.html -D /tmp/day8-e2e19-galvicare.headers -w '%{http_code}' "$GALVICARE_QA_URL")"
+          echo "status=$status" | tee /tmp/day8-e2e19-galvicare-status.txt
+          test "$status" = "200"
+          grep -qi 'GalviCare' /tmp/day8-e2e19-galvicare.html
+          grep -qi 'GalviTriage' /tmp/day8-e2e19-galvicare.html
+          grep -qi 'GalviVitals' /tmp/day8-e2e19-galvicare.html
+
       - name: Capture Day 8 deployment evidence artifact
         if: always()
         uses: actions/upload-artifact@v4
@@ -151,6 +188,10 @@ jobs:
             /tmp/day8-preauth.headers
             /tmp/day8-preauth.html
             /tmp/day8-me.json
+            /tmp/day8-e2e18-d1-final.json
+            /tmp/day8-e2e19-galvicare-status.txt
+            /tmp/day8-e2e19-galvicare.headers
+            /tmp/day8-e2e19-galvicare.html
 
       - name: Persist Day 8 QA run outcome
         if: always()
@@ -169,11 +210,12 @@ jobs:
             --arg baseline "${{ steps.baseline.outcome }}" --arg tests "${{ steps.tests.outcome }}" \
             --arg credentials "${{ steps.credentials.outcome }}" --arg migration "${{ steps.migration.outcome }}" \
             --arg deploy "${{ steps.deploy.outcome }}" --arg d1 "${{ steps.d1.outcome }}" \
-            --arg preauth "${{ steps.preauth.outcome }}" --arg job_status_before_evidence "${{ job.status }}" \
-            '{source_sha:$source_sha,branch:$branch,worker:$worker,portal_url:$portal_url,auth_mode:$auth_mode,schema_version:$schema_version,baseline:$baseline,tests:$tests,credentials:$credentials,migration:$migration,deploy:$deploy,d1:$d1,preauth:$preauth,job_status_before_evidence:$job_status_before_evidence}' \
+            --arg preauth "${{ steps.preauth.outcome }}" --arg d1_final "${{ steps.d1final.outcome }}" \
+            --arg galvicare_smoke "${{ steps.galvicare.outcome }}" --arg job_status_before_evidence "${{ job.status }}" \
+            '{source_sha:$source_sha,branch:$branch,worker:$worker,portal_url:$portal_url,auth_mode:$auth_mode,schema_version:$schema_version,baseline:$baseline,tests:$tests,credentials:$credentials,migration:$migration,deploy:$deploy,d1:$d1,preauth:$preauth,d1_final:$d1_final,galvicare_smoke:$galvicare_smoke,job_status_before_evidence:$job_status_before_evidence}' \
             > release-evidence/day8/qa-deployment-current.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add release-evidence/day8/qa-deployment-current.json
-          git commit -m "Day 8 QA: record Worker-native auth deployment ${source_sha} [skip ci]" || exit 0
+          git commit -m "Day 8 QA: record final D1 and GalviCare evidence ${source_sha} [skip ci]" || exit 0
           git push origin HEAD:qa-revamped-galvicare-0-5
