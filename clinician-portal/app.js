@@ -46,8 +46,25 @@ function careSection(title,items,type){
   return `<section class="card"><h3>${esc(title)}</h3>${items.map(x=>`<article class="record ${esc(type)}">${kv('ID',first(x,[`${type}_id`,'id']))}${kv('Title',first(x,['title','name','objective','description']))}${kv('Status',first(x,['status','disposition']))}${kv('Code',first(x,[`${type}_code`,'code','action_code']))}${kv('Version',first(x,['version','version_no','record_version']))}${kv('Created',first(x,['created_at','occurred_at','observed_at']))}</article>`).join('')}</section>`;
 }
 function renderCare(){const c=chart.care||{};return `<div class="clinical-projection"><h2>Current Care</h2>${careSection('Recommendations',arr(c.recommendations),'recommendation')}${careSection('Treatment Plans',arr(c.treatment_plans),'treatment_plan')}${careSection('Treatment Events',arr(c.treatment_events),'treatment_event')}${careSection('Outcomes',arr(c.outcomes),'outcome')}${careSection('Feedback / Follow-up',arr(c.feedback),'feedback')}</div>`;}
-function timelineCard(x){return `<article class="card record timeline-entry"><h3>${esc(first(x,['safe_summary','entry_type'],'Clinical record event'))}</h3>${kv('Type',first(x,['entry_type','type']))}${kv('Canonical ID',first(x,['canonical_id','entity_id','id']))}${kv('Version',first(x,['version_no','version','record_version']))}${kv('Occurred',first(x,['occurred_at','created_at','observed_at']))}${kv('Source',first(x,['source','source_type']))}${kv('Correlation ID',first(x,['correlation_id']))}</article>`;}
-function renderTimeline(){const items=arr(chart.timeline).length?arr(chart.timeline):arr(chart.entries);return `<div class="clinical-projection"><h2>Longitudinal Timeline</h2>${items.length?items.map(timelineCard).join(''):empty('timeline events')}</div>`;}
+function timelineCard(x){return `<article class="card record timeline-entry"><h3>${esc(first(x,['safe_summary','title','statement','source_reference','entry_type'],'Clinical record event'))}</h3>${kv('Type',first(x,['entry_type','type']))}${kv('Canonical ID',first(x,['canonical_id','entity_id','id']))}${kv('Version',first(x,['version_no','version','record_version']))}${kv('Occurred',first(x,['occurred_at','created_at','observed_at','captured_at','updated_at']))}${kv('Source',first(x,['source','source_type','source_product']))}${kv('Correlation ID',first(x,['correlation_id']))}</article>`;}
+function projectedTimeline(){
+  const direct=arr(chart.timeline).length?arr(chart.timeline):arr(chart.entries);
+  if(direct.length)return direct;
+  const r=chart.reasoning||{},c=chart.care||{};
+  const typed=[];
+  const add=(items,type,idKeys)=>arr(items).forEach(x=>typed.push({...x,entry_type:type,canonical_id:first(x,idKeys),occurred_at:first(x,['occurred_at','created_at','observed_at','captured_at','updated_at'],''),source:first(x,['source','source_type','source_product'],'')}));
+  add(chart.evidence,'evidence',['evidence_id','id']);
+  add(r.observations,'observation',['observation_id','id']);
+  add(r.hypotheses,'hypothesis',['hypothesis_id','id']);
+  add(r.findings,'finding',['finding_id','id']);
+  add(c.recommendations,'recommendation',['recommendation_id','id']);
+  add(c.treatment_plans,'treatment_plan',['treatment_plan_id','id']);
+  add(c.treatment_events,'treatment_event',['treatment_event_id','id']);
+  add(c.outcomes,'outcome',['outcome_id','id']);
+  add(c.feedback,'feedback',['feedback_id','id']);
+  return typed.sort((a,b)=>String(first(a,['occurred_at'],'')).localeCompare(String(first(b,['occurred_at'],''))));
+}
+function renderTimeline(){const items=projectedTimeline();return `<div class="clinical-projection"><h2>Longitudinal Timeline</h2>${items.length?items.map(timelineCard).join(''):empty('timeline events')}</div>`;}
 function evidenceCard(x){const value=first(x,['value_text','safe_summary','content','statement'],'—');return `<article class="card record evidence-entry"><h3>${esc(first(x,['source_reference','source_ref','evidence_type'],'Evidence'))}</h3>${kv('Evidence ID',first(x,['evidence_id','id']))}${kv('Type',first(x,['evidence_type','value_type','source_type']))}${kv('Source',first(x,['source_product','source_type']))}${kv('Source reference',first(x,['source_reference','source_ref']))}${kv('Value',typeof value==='object'?JSON.stringify(value):value)}${kv('Confidence',first(x,['confidence']))}${kv('Version',first(x,['evidence_version','version_no','version']))}${kv('Captured / created',first(x,['captured_at','created_at','observed_at']))}</article>`;}
 function renderEvidence(){const items=arr(chart.evidence);return `<div class="clinical-projection"><h2>Evidence & Source Material</h2>${items.length?items.map(evidenceCard).join(''):empty('evidence records')}</div>`;}
 function render(i){const p=$('#panel');if(!chart)return;
