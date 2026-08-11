@@ -1,0 +1,182 @@
+name: GalviVault Day 8 QA Clinician Workspace
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - '.github/workflows/galvivault-day8-qa.yml'
+      - 'clinician-portal/**'
+      - 'worker/day8-entry.js'
+      - 'worker/auth/operator-identity.js'
+      - 'worker/routes/operator-workspace.js'
+      - 'tests/day8-clinician-workspace.test.mjs'
+      - 'wrangler.day8.json'
+      - 'package.json'
+      - 'package-lock.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvivault-day8-qa
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DAY8_HOST: galvivault-day8-qa.mrgalvipro.workers.dev
+  BUSINESS_PHYSICIAN_EMAIL: galvipro@outlook.com
+
+jobs:
+  day8:
+    name: Deploy and prove Day 8 QA
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: qa
+
+    steps:
+      - name: Checkout exact QA candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Protect branch and GalviCare baselines
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
+          git merge-base --is-ancestor eb8630c112ac5557bd374e5f5e1db05e4435bad5 "$GITHUB_SHA"
+          git diff --exit-code eb8630c112ac5557bd374e5f5e1db05e4435bad5 -- \
+            index.html \
+            worker/worker.js \
+            worker/production-entry.js \
+            worker/day7d-engine.js \
+            worker/day7d-runtime.js \
+            day7c-browser-observability.js \
+            day7d-browser-customer-intelligence.js \
+            qa-frontend-worker.js \
+            wrangler.production.jsonc \
+            wrangler.day7d.json \
+            wrangler.qa-frontend.jsonc
+
+      - name: Run Day 8 and inherited regression gates
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run check
+          npm run test:day8
+          npm test
+          npm run day8:gate
+
+      - name: Verify Cloudflare deployment credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          npx --yes wrangler@4.120.0 whoami
+
+      - name: Configure bounded QA Cloudflare Access application
+        id: access
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+
+          org="$(curl -fsS "${auth[@]}" "$api/access/organizations")"
+          echo "$org" | jq -e '.success == true' >/dev/null
+          auth_domain="$(echo "$org" | jq -r '.result.auth_domain // empty')"
+          test -n "$auth_domain"
+
+          apps="$(curl -fsS "${auth[@]}" "$api/access/apps?per_page=100")"
+          echo "$apps" | jq -e '.success == true' >/dev/null
+          app_id="$(echo "$apps" | jq -r --arg d "$DAY8_HOST" '.result[] | select(.domain==$d) | .id' | head -1)"
+
+          if [ -z "$app_id" ]; then
+            payload="$(jq -nc --arg n 'GalviVault Day 8 QA Clinician Workspace' --arg d "$DAY8_HOST" '{name:$n,domain:$d,type:"self_hosted",session_duration:"24h",auto_redirect_to_identity:false}')"
+            created="$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/access/apps")"
+            echo "$created" | jq -e '.success == true' >/dev/null
+            app_id="$(echo "$created" | jq -r '.result.id')"
+          fi
+
+          app="$(curl -fsS "${auth[@]}" "$api/access/apps/$app_id")"
+          aud="$(echo "$app" | jq -r '.result.aud // empty')"
+          test -n "$aud"
+
+          policies="$(curl -fsS "${auth[@]}" "$api/access/apps/$app_id/policies?per_page=100")"
+          policy_id="$(echo "$policies" | jq -r '.result[] | select(.name=="Day 8 Business Physician QA") | .id' | head -1)"
+          policy_payload="$(jq -nc --arg e "$BUSINESS_PHYSICIAN_EMAIL" '{name:"Day 8 Business Physician QA",decision:"allow",precedence:1,include:[{email:{email:$e}}]}')"
+          if [ -n "$policy_id" ]; then
+            updated="$(curl -fsS -X PUT "${auth[@]}" --data "$policy_payload" "$api/access/apps/$app_id/policies/$policy_id")"
+            echo "$updated" | jq -e '.success == true' >/dev/null
+          else
+            created_policy="$(curl -fsS -X POST "${auth[@]}" --data "$policy_payload" "$api/access/apps/$app_id/policies")"
+            echo "$created_policy" | jq -e '.success == true' >/dev/null
+          fi
+
+          echo "auth_domain=$auth_domain" >> "$GITHUB_OUTPUT"
+          echo "aud=$aud" >> "$GITHUB_OUTPUT"
+          echo "app_id=$app_id" >> "$GITHUB_OUTPUT"
+          echo "Cloudflare Access app configured for $DAY8_HOST"
+
+      - name: Deploy exact Day 8 Worker + protected clinician assets
+        shell: bash
+        env:
+          CF_ACCESS_TEAM_DOMAIN: ${{ steps.access.outputs.auth_domain }}
+          CF_ACCESS_AUD: ${{ steps.access.outputs.aud }}
+        run: |
+          set -euo pipefail
+          operator_directory="$(jq -nc --arg e "$BUSINESS_PHYSICIAN_EMAIL" '[{email:$e,operator_id:"op_mrgalvipro_qa",display_name:"Mr. GalviPro",role:"business_physician",status:"active"}]')"
+          npx --yes wrangler@4.120.0 deploy --config wrangler.day8.json \
+            --var "CF_ACCESS_TEAM_DOMAIN:$CF_ACCESS_TEAM_DOMAIN" \
+            --var "CF_ACCESS_AUD:$CF_ACCESS_AUD" \
+            --var "OPERATOR_DIRECTORY_JSON:$operator_directory" \
+            | tee /tmp/day8-deploy.txt
+
+      - name: Prove QA D1 binding and canonical schema
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day8.json \
+            --command="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0001','0002','0003','0004','0005') ORDER BY migration_id; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1);" \
+            --json | tee /tmp/day8-d1-proof.json
+          grep -q '"migration_id": "0005"' /tmp/day8-d1-proof.json
+          grep -q '"duplicate_bmr_ventures": 0' /tmp/day8-d1-proof.json
+
+      - name: Prove public endpoint is Access-gated
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://${DAY8_HOST}/"
+          status="$(curl -sS -o /tmp/day8-preauth.html -D /tmp/day8-preauth.headers -w '%{http_code}' "$url")"
+          echo "preauth_status=$status"
+          cat /tmp/day8-preauth.headers
+          case "$status" in
+            301|302|303|307|308) ;;
+            *) echo "Expected Cloudflare Access redirect before clinician UI; got $status" >&2; exit 1;;
+          esac
+          grep -Eiq 'location:.*cloudflareaccess|location:.*cdn-cgi/access' /tmp/day8-preauth.headers
+
+      - name: Capture Day 8 deployment evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: galvivault-day8-qa-evidence-${{ github.sha }}
+          if-no-files-found: ignore
+          path: |
+            /tmp/day8-deploy.txt
+            /tmp/day8-d1-proof.json
+            /tmp/day8-preauth.headers
+            /tmp/day8-preauth.html
