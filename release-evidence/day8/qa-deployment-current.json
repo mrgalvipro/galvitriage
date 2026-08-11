@@ -1,0 +1,16 @@
+{
+  "source_sha": "6daab197a4c483dcfa559f13826fe89e669e28ba",
+  "branch": "qa-revamped-galvicare-0-5",
+  "worker": "galvivault-day8-qa",
+  "portal_url": "https://galvivault-day8-qa.mrgalvipro.workers.dev/",
+  "business_physician_email": "galvipro@outlook.com",
+  "baseline": "success",
+  "tests": "success",
+  "credentials": "success",
+  "access": "failure",
+  "access_app_id": "",
+  "deploy": "skipped",
+  "d1": "skipped",
+  "preauth": "skipped",
+  "job_status_before_evidence": "failure"
+}
