@@ -1,6 +1,6 @@
 # GalviVault Day 8 Human E2E — Current Evidence
 
-Current clinician UI candidate under Human test: `5107b4cf957131267765b5a2e068aaf21e414b63`
+Current clinician UI candidate under Human test: `bf3c5883004e9286f11f325676262cd95184e495`
 QA portal: `https://galvivault-day8-qa.mrgalvipro.workers.dev/`
 Auth mode: `worker_device_ecdsa_session`
 Schema: `0006`
@@ -78,24 +78,47 @@ Human continuity proof after hard browser refresh:
 - Founder and venture identity remained `Day Four` / `Day 4 Reasoning Venture 31189484560-1`;
 - no duplicate BMR or alternate venture identity appeared.
 
-This proves browser refresh does not become canonical state; the same record is recovered through authenticated Worker reads from QA D1.
+### E2E-08 — GalviClinic note/evidence — REMEDIATION IN PROGRESS
+Human attempt used the bounded QA note:
+`Day 8 Human E2E clinician note — continuity verified; no production action.`
+
+Observed exact failure before remediation:
+- protected `POST /api/v1/evidence` reached the QA Worker;
+- Worker returned HTTP `422 Unprocessable Content`;
+- canonical error code: `GV_REQ_SCHEMA`;
+- message: `value_type is unsupported.`;
+- correlation ID: `corr_4c043031fd5041a1a0b9a32dab55dfa9`;
+- request was correctly scoped to BMR `bmr_0d72e878cc634917ae2ac8430a73331f` and the active assessment session;
+- no evidence write was committed because schema validation failed before persistence.
+
+Root cause confirmed against the inherited Day 3 canonical evidence contract:
+- `/api/v1/evidence` expects top-level `source_type`, optional `source_ref`, `value_type`, exactly one compatible typed value field, and `captured_at`;
+- the Day 8 portal incorrectly sent Day 8 convenience fields (`evidence_type`, `source_product`, `source_reference`, nested `content.value_text`, `observed_at`) instead of the canonical evidence-write payload.
+
+Bounded remediation committed directly to approved QA branch:
+- commit: `bf3c5883004e9286f11f325676262cd95184e495`;
+- changed file only: `clinician-portal/app.js`;
+- no Worker canonical evidence validation was weakened;
+- no schema or migration was changed;
+- no public GalviCare file/workflow was changed;
+- note submission now sends `source_type:'facilitator_capture'`, `source_ref`, `value_type:'text'`, top-level `value_text`, and `captured_at`, preserving the existing Worker + D1 evidence contract.
+
+E2E-08 remains PENDING until the remediated QA deployment is Human-retested and the evidence/timeline record is proven durable.
 
 ## Next exact Human E2E target
 
-### E2E-08 — GalviClinic note/evidence — PENDING
-Use the currently open canonical `Day Four` BMR and open the `GalviClinic Session` tab.
-Required Human proof:
-1. enter one short bounded QA clinician note;
-2. submit once;
-3. the save must succeed through the protected Worker route;
-4. capture the returned evidence/source identifier and correlation context if surfaced;
-5. reopen Timeline and/or Evidence and prove the new note/source record is retrievable against the same BMR;
-6. the note must remain source evidence only and must not silently become a confirmed finding, recommendation, or treatment action;
-7. no duplicate evidence row may be created from the single submission.
+### E2E-08 RETEST — GalviClinic note/evidence
+After the QA deployment for `bf3c5883004e9286f11f325676262cd95184e495` completes:
+1. hard refresh the QA clinician portal;
+2. reopen the same `Day Four` canonical BMR;
+3. open `GalviClinic Session`;
+4. enter the same bounded QA note;
+5. click Save once;
+6. verify the evidence POST succeeds (expected created/success response rather than 422);
+7. open Evidence and Timeline and prove one new note/source evidence record exists against the same BMR with actor/source/time/correlation lineage;
+8. verify the note did not silently create or confirm a finding, recommendation, or treatment action.
 
-Recommended QA note text: `Day 8 Human E2E clinician note — continuity verified; no production action.`
-
-Do not change implementation code unless this exact note/evidence write fails. If it fails, use the observed HTTP/UI/record-persistence error as the next remediation target.
+Do not change any additional implementation unless this exact retest exposes another specific defect.
 
 ## Human E2E status
 
@@ -106,7 +129,7 @@ Do not change implementation code unless this exact note/evidence write fails. I
 - [x] E2E-05 Findings
 - [x] E2E-06 Care Plan
 - [x] E2E-07 refresh / same BMR
-- [ ] E2E-08 GalviClinic note/evidence
+- [ ] E2E-08 GalviClinic note/evidence — exact 422 schema defect remediated; Human retest pending
 - [ ] E2E-09 governed finding decision
 - [ ] E2E-10 recommendation
 - [ ] E2E-11 treatment plan
@@ -123,9 +146,9 @@ Do not change implementation code unless this exact note/evidence write fails. I
 
 - D8-01 Secure clinician identity: **PASS for Business Physician Human proof; second-clinician coverage remains pending under E2E-16/17**
 - D8-02 Founder search + chart projection: **PASS Human E2E-03/04/05/06**
-- D8-03 Governed GalviClinic care workflow: **IN PROGRESS — E2E-08 is next; E2E-09..13 remain pending**
+- D8-03 Governed GalviClinic care workflow: **IN PROGRESS — E2E-08 exact payload defect remediated; Human retest required before E2E-09**
 - D8-04 Continuity + D1 integrity: **PARTIAL PASS — refresh continuity E2E-07 passed; E2E-14/15/16/18 remain pending**
-- D8-05 GalviVault + GalviCare regression: **PASS automated/deployment evidence**
+- D8-05 GalviVault + GalviCare regression: **PASS before this bounded UI-only remediation; deployment workflow will rerun inherited regression gates for the new candidate**
 - D8-06 Human E2E + evidence: **IN PROGRESS**
 
 Final declaration remains blocked until every mandatory Human E2E and D1 assertion passes on the same Day 8 QA build lineage.
