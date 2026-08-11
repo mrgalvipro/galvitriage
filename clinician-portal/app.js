@@ -32,12 +32,26 @@ $('#results').addEventListener('click',e=>{const b=e.target.closest('[data-bmr]'
 async function openChart(id){selected=id;$('#panel').textContent='Loading…';try{chart=await api(`/api/v1/operator/business-medical-records/${encodeURIComponent(id)}/chart`);}catch(e){if(e.status===401)return load();throw e}if(selected!==id)return;$('#chart').hidden=false;$('#chartTitle').textContent=`${chart.identity.founder.first_name||''} ${chart.identity.founder.last_name||''} — ${chart.identity.venture.venture_name}`;$('#tabs').innerHTML=tabs.map((t,i)=>`<button data-tab="${i}">${t}</button>`).join('');render(0)}
 $('#tabs').addEventListener('click',e=>{if(e.target.dataset.tab)render(Number(e.target.dataset.tab))});
 function esc(x){return String(x??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+const arr=v=>Array.isArray(v)?v:[];
+const first=(o,keys,blank='—')=>{for(const k of keys){if(o?.[k]!==undefined&&o?.[k]!==null&&String(o[k]).trim()!=='')return o[k]}return blank};
+const kv=(label,value)=>`<p><strong>${esc(label)}:</strong> ${esc(value)}</p>`;
+const empty=label=>`<p>No ${esc(label)} recorded for this canonical BMR.</p>`;
+function reasoningSection(title,items,type){
+  if(!items.length)return `<section class="card"><h3>${esc(title)}</h3>${empty(title.toLowerCase())}</section>`;
+  return `<section class="card"><h3>${esc(title)}</h3>${items.map(x=>`<article class="record ${esc(type)}">${kv('ID',first(x,[`${type}_id`,'id']))}${kv('Statement',first(x,['statement','description','text']))}${kv('Status',first(x,['confirmation_status','status']))}${kv('Confidence',first(x,['confidence']))}${kv('Source',`${first(x,['source_type'])} ${first(x,['source_version'],'')}`.trim())}${kv('Version',first(x,['version','record_version']))}${kv('Support count',arr(x.support).length)}</article>`).join('')}</section>`;
+}
+function renderReasoning(){const r=chart.reasoning||{};return `<div class="clinical-projection"><h2>Current Reasoning</h2>${reasoningSection('Observations',arr(r.observations),'observation')}${reasoningSection('Hypotheses',arr(r.hypotheses),'hypothesis')}${reasoningSection('Findings',arr(r.findings),'finding')}</div>`;}
+function careSection(title,items,type){
+  if(!items.length)return `<section class="card"><h3>${esc(title)}</h3>${empty(title.toLowerCase())}</section>`;
+  return `<section class="card"><h3>${esc(title)}</h3>${items.map(x=>`<article class="record ${esc(type)}">${kv('ID',first(x,[`${type}_id`,'id']))}${kv('Title',first(x,['title','name','objective','description']))}${kv('Status',first(x,['status','disposition']))}${kv('Code',first(x,[`${type}_code`,'code','action_code']))}${kv('Version',first(x,['version','version_no','record_version']))}${kv('Created',first(x,['created_at','occurred_at','observed_at']))}</article>`).join('')}</section>`;
+}
+function renderCare(){const c=chart.care||{};return `<div class="clinical-projection"><h2>Current Care</h2>${careSection('Recommendations',arr(c.recommendations),'recommendation')}${careSection('Treatment Plans',arr(c.treatment_plans),'treatment_plan')}${careSection('Treatment Events',arr(c.treatment_events),'treatment_event')}${careSection('Outcomes',arr(c.outcomes),'outcome')}${careSection('Feedback / Follow-up',arr(c.feedback),'feedback')}</div>`;}
 function render(i){const p=$('#panel');if(!chart)return;
  if(i===0)p.innerHTML=`<div class=grid><div class=card><h3>BMR</h3><p>${esc(chart.identity.bmr.bmr_id)}</p><p>${esc(chart.identity.bmr.lifecycle_status)} · v${esc(chart.identity.bmr.record_version)}</p></div><div class=card><h3>Venture</h3><p>${esc(chart.identity.venture.venture_name)}</p></div></div>`;
  else if(i===1)p.innerHTML=`<pre>${esc(JSON.stringify(chart.timeline,null,2))}</pre>`;
  else if(i===2)p.innerHTML=`<pre>${esc(JSON.stringify(chart.evidence,null,2))}</pre>`;
- else if(i===3)p.innerHTML=`<pre>${esc(JSON.stringify(chart.reasoning,null,2))}</pre>`+(window.operator.role==='business_physician'?governanceForm():'');
- else if(i===4)p.innerHTML=`<pre>${esc(JSON.stringify(chart.care,null,2))}</pre>`+careForms();
+ else if(i===3)p.innerHTML=renderReasoning()+(window.operator.role==='business_physician'?governanceForm():'');
+ else if(i===4)p.innerHTML=renderCare()+careForms();
  else if(i===5)p.innerHTML=noteForm();
  else p.innerHTML=outcomeForms();
  bindActions();
