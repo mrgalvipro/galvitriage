@@ -1,4 +1,5 @@
 name: GalviVault Day 8 QA Clinician Workspace
+# Rerun marker: Access permissions remediated 2026-08-10
 
 on:
   workflow_dispatch:
