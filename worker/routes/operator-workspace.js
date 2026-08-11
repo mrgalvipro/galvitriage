@@ -40,7 +40,8 @@ export async function handleOperatorWorkspace(request,env,ctx,path,identity){
     if(!core) throw new GVError('GV_NOT_FOUND','Business Medical Record not found.',404);
     const sessions=await all(env.DB,`SELECT session_id,current_stage,status,started_at,completed_at,updated_at FROM gv1_assessment_sessions WHERE bmr_id=? ORDER BY updated_at DESC LIMIT 25`,bmrId);
     const evidence=await all(env.DB,`SELECT evidence_id,session_id,evidence_type,source_product,source_reference,confidence,evidence_version,created_at FROM gv1_evidence_items WHERE bmr_id=? ORDER BY created_at DESC LIMIT 50`,bmrId);
-    const [reasoning,care,timeline]=await Promise.all([getReasoning(env,bmrId,{history:false}),getCare(env,bmrId,{history:false,limit:100}),getDay5Timeline(env,bmrId,{limit:100})]);
+    const [reasoning,care,timelineProjection]=await Promise.all([getReasoning(env,bmrId,{history:false}),getCare(env,bmrId,{history:false,limit:100}),getDay5Timeline(env,bmrId,{limit:100})]);
+    const timeline=Array.isArray(timelineProjection)?timelineProjection:(timelineProjection?.entries||[]);
     return success(ctx,{identity:{founder:{founder_id:core.founder_id,first_name:core.first_name,last_name:core.last_name,email:core.email},venture:{venture_id:core.venture_id,venture_name:core.venture_name,stage:core.stage,industry:core.industry},bmr:{bmr_id:core.bmr_id,lifecycle_status:core.lifecycle_status,record_version:core.record_version,current_session_id:core.current_session_id,opened_at:core.opened_at,updated_at:core.updated_at}},sessions,evidence,reasoning,care,timeline});
   }
   return null;
