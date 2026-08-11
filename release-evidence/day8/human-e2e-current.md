@@ -14,34 +14,52 @@ Observed in fresh Incognito browser session:
 - No Founder chart or protected BMR content was visible before authentication.
 - Network evidence showed `/api/v1/operator/me` returning HTTP `401 Unauthorized`.
 
-This satisfies the Day 8 pre-auth requirement: sign-in gate present; no protected chart/PII exposed.
-
 ### E2E-02 — Business Physician enrollment/authentication — PASS
 Observed in normal browser profile after one-time approved-device enrollment:
 - Enrollment request returned HTTP `201`.
 - Subsequent `/api/v1/operator/me` returned HTTP `200`.
 - UI rendered `Signed in: Mr. GalviPro (business_physician)`.
 - Founder search became available only after successful authenticated session establishment.
-- One-time enrollment secret is intentionally not recorded in repository evidence.
 
-This satisfies the Day 8 Business Physician identity/role Human proof.
+### E2E-03 — Founder search — IN PROGRESS / FIXTURE MISMATCH IDENTIFIED
+Human test used `Test2 Tester` and `test2@tester.com` from prior GalviCare runs.
+Observed:
+- authenticated founder-search route returned HTTP `200` for both exact name and exact email;
+- UI returned no result and therefore did not enter E2E-04.
+
+Read-only QA D1 diagnostic proved the exact cause:
+- `Test2 Tester` / `test2@tester.com` does **not** exist in the canonical GalviVault QA Founder/Venture/BMR join used by Day 8 search;
+- the search route itself is functioning and returning a valid empty bounded result;
+- HubSpot/contact presence is not proof of canonical GalviVault QA D1 presence.
+
+No implementation change is warranted for this observed result. The correct next action is to use an existing canonical QA D1 Founder/Venture/BMR fixture.
+
+Approved next fixture from QA D1:
+- Founder: `Day Four`
+- Email: `founder.day4.31189484560-1@example.test`
+- founder_id: `fdr_3ba68b8ee59543c793ad735bb43a858e`
+- venture_id: `ven_82fab4017a4a473bab403755276be4ff`
+- venture_name: `Day 4 Reasoning Venture 31189484560-1`
+- bmr_id: `bmr_0d72e878cc634917ae2ac8430a73331f`
+- bmr_status: `treatment_active`
+- record_version: `2`
+- active primary founder/venture role: yes
 
 ## Next exact Human E2E target
 
-### E2E-03 — Founder search — PENDING
-Action: search one known QA founder by exact email or exact name.
+### E2E-03 retry — canonical QA D1 fixture
+Search the exact email `founder.day4.31189484560-1@example.test`.
 Pass proof required:
-- correct single/limited result;
-- capture `founder_id`, `venture_id`, and `bmr_id` from the returned result/chart flow;
+- one correct bounded result;
+- returned IDs match the recorded canonical fixture;
 - no unrelated Founder records leaked.
-
-Do not change implementation code unless this exact Human test fails. If it fails, use the observed HTTP/UI failure as the next remediation target.
+Then open that result to begin E2E-04 and prove the canonical BMR chart.
 
 ## Human E2E status
 
 - [x] E2E-01 fresh-session login screen
 - [x] E2E-02 Business Physician enrollment/authentication
-- [ ] E2E-03 Founder search
+- [ ] E2E-03 Founder search — fixture corrected; Human retry pending
 - [ ] E2E-04 canonical BMR chart
 - [ ] E2E-05 Findings
 - [ ] E2E-06 Care Plan
@@ -62,7 +80,7 @@ Do not change implementation code unless this exact Human test fails. If it fail
 ## Day 8 gate status
 
 - D8-01 Secure clinician identity: **PASS for Business Physician Human proof; second-clinician coverage remains pending under E2E-16/17**
-- D8-02 Founder search + chart projection: **PENDING Human E2E-03/04**
+- D8-02 Founder search + chart projection: **IN PROGRESS — search implementation healthy; canonical fixture retry pending**
 - D8-03 Governed GalviClinic care workflow: **PENDING Human E2E-08..13**
 - D8-04 Continuity + D1 integrity: **PENDING Human E2E-07/14/15/16/18**
 - D8-05 GalviVault + GalviCare regression: **PASS automated/deployment evidence**
