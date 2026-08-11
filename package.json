@@ -41,7 +41,7 @@
     "day7d:preflight": "node scripts/day7d-preflight.mjs",
     "day7d:gate": "npm run day7d:preflight && npm run test:day7d && npm run stabilization:gate && npm run day7c:gate",
     "test:day8": "node --test tests/day3-evidence-versioning.test.mjs tests/day4-reasoning-integration.test.mjs tests/day5-care.test.mjs tests/day8-clinician-workspace.test.mjs",
-    "day8:gate": "node --check worker/day8-entry.js && node --check worker/auth/operator-identity.js && node --check worker/routes/operator-workspace.js && node --check clinician-portal/app.js && npm run test:day8 && npm run stabilization:gate",
+    "day8:gate": "node --check worker/day8-entry.js && node --check worker/auth/operator-identity.js && node --check worker/routes/operator-auth.js && node --check worker/routes/operator-workspace.js && node --check clinician-portal/app.js && npm run test:day8 && npm run stabilization:gate",
     "deploy:day8:qa": "npx wrangler@4.120.0 deploy --config wrangler.day8.json"
   }
 }
