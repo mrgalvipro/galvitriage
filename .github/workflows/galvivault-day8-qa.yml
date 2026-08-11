@@ -1,5 +1,4 @@
 name: GalviVault Day 8 QA Clinician Workspace
-# Critical-path bootstrap: enable Zero Trust organization only when Cloudflare reports Access not enabled.
 
 on:
   workflow_dispatch:
@@ -11,11 +10,12 @@ on:
       - 'clinician-portal/**'
       - 'worker/day8-entry.js'
       - 'worker/auth/operator-identity.js'
+      - 'worker/routes/operator-auth.js'
       - 'worker/routes/operator-workspace.js'
       - 'tests/day8-clinician-workspace.test.mjs'
+      - 'migrations/day8/**'
       - 'wrangler.day8.json'
       - 'package.json'
-      - 'package-lock.json'
 
 permissions:
   contents: write
@@ -28,7 +28,6 @@ env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   DAY8_HOST: galvivault-day8-qa.mrgalvipro.workers.dev
-  BUSINESS_PHYSICIAN_EMAIL: galvipro@outlook.com
 
 jobs:
   day8:
@@ -82,7 +81,7 @@ jobs:
           npm test
           npm run day8:gate
 
-      - name: Verify Cloudflare deployment credentials
+      - name: Verify Cloudflare Worker/D1 deployment credentials
         id: credentials
         shell: bash
         run: |
@@ -91,103 +90,20 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           npx --yes wrangler@4.120.0 whoami
 
-      - name: Configure bounded QA Cloudflare Access application
-        id: access
+      - name: Apply additive Day 8 operator-auth migration to QA D1
+        id: migration
         shell: bash
         run: |
           set -euo pipefail
-          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
-          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day8.json \
+            --file=migrations/day8/0006_operator_device_auth.sql | tee /tmp/day8-migration.txt
 
-          org_http="$(curl -sS -o /tmp/day8-org.json -w '%{http_code}' "${auth[@]}" "$api/access/organizations" || true)"
-          apps_http="$(curl -sS -o /tmp/day8-apps.json -w '%{http_code}' "${auth[@]}" "$api/access/apps?per_page=100" || true)"
-          not_enabled="$(jq -r 'any(.errors[]?; (.code==9999) or ((.message // "") | contains("Access is not enabled")))' /tmp/day8-apps.json 2>/dev/null || echo false)"
-
-          if [ "$not_enabled" = "true" ]; then
-            echo "Cloudflare Access is not enabled for this account; creating the minimum Zero Trust organization required for Day 8."
-            suffix="$(printf '%s' "$CLOUDFLARE_ACCOUNT_ID" | cut -c1-8 | tr '[:upper:]' '[:lower:]')"
-            auth_domain="mrgalvipro-${suffix}.cloudflareaccess.com"
-            org_payload="$(jq -nc --arg d "$auth_domain" '{auth_domain:$d,name:"MrGalviPro",session_duration:"24h",auto_redirect_to_identity:false,deny_unmatched_requests:false}')"
-            create_http="$(curl -sS -o /tmp/day8-org-create.json -w '%{http_code}' -X POST "${auth[@]}" --data "$org_payload" "$api/access/organizations" || true)"
-            if [ "$create_http" -lt 200 ] || [ "$create_http" -ge 300 ] || ! jq -e '.success == true' /tmp/day8-org-create.json >/dev/null 2>&1; then
-              echo "Zero Trust organization creation failed (HTTP $create_http)." >&2
-              jq -c '{errors:[.errors[]? | {code,message}]}' /tmp/day8-org-create.json >&2 || true
-              exit 22
-            fi
-          fi
-
-          org_http="$(curl -sS -o /tmp/day8-org.json -w '%{http_code}' "${auth[@]}" "$api/access/organizations" || true)"
-          if [ "$org_http" -lt 200 ] || [ "$org_http" -ge 300 ] || ! jq -e '.success == true' /tmp/day8-org.json >/dev/null 2>&1; then
-            echo "Zero Trust organization lookup failed (HTTP $org_http)." >&2
-            jq -c '{errors:[.errors[]? | {code,message}]}' /tmp/day8-org.json >&2 || true
-            exit 22
-          fi
-          auth_domain="$(jq -r '.result.auth_domain // empty' /tmp/day8-org.json)"
-          test -n "$auth_domain"
-
-          apps_http="$(curl -sS -o /tmp/day8-apps.json -w '%{http_code}' "${auth[@]}" "$api/access/apps?per_page=100" || true)"
-          if [ "$apps_http" -lt 200 ] || [ "$apps_http" -ge 300 ] || ! jq -e '.success == true' /tmp/day8-apps.json >/dev/null 2>&1; then
-            echo "Access application listing failed (HTTP $apps_http)." >&2
-            jq -c '{errors:[.errors[]? | {code,message}]}' /tmp/day8-apps.json >&2 || true
-            exit 22
-          fi
-          app_id="$(jq -r --arg d "$DAY8_HOST" '.result[] | select(.domain==$d) | .id' /tmp/day8-apps.json | head -1)"
-          if [ -z "$app_id" ]; then
-            payload="$(jq -nc --arg n 'GalviVault Day 8 QA Clinician Workspace' --arg d "$DAY8_HOST" '{name:$n,domain:$d,type:"self_hosted",session_duration:"24h",auto_redirect_to_identity:false}')"
-            app_create_http="$(curl -sS -o /tmp/day8-app-create.json -w '%{http_code}' -X POST "${auth[@]}" --data "$payload" "$api/access/apps" || true)"
-            if [ "$app_create_http" -lt 200 ] || [ "$app_create_http" -ge 300 ] || ! jq -e '.success == true' /tmp/day8-app-create.json >/dev/null 2>&1; then
-              echo "Access application creation failed (HTTP $app_create_http)." >&2
-              jq -c '{errors:[.errors[]? | {code,message}]}' /tmp/day8-app-create.json >&2 || true
-              exit 22
-            fi
-            app_id="$(jq -r '.result.id' /tmp/day8-app-create.json)"
-          fi
-
-          app_http="$(curl -sS -o /tmp/day8-app.json -w '%{http_code}' "${auth[@]}" "$api/access/apps/$app_id" || true)"
-          if [ "$app_http" -lt 200 ] || [ "$app_http" -ge 300 ] || ! jq -e '.success == true' /tmp/day8-app.json >/dev/null 2>&1; then
-            echo "Access application lookup failed (HTTP $app_http)." >&2
-            jq -c '{errors:[.errors[]? | {code,message}]}' /tmp/day8-app.json >&2 || true
-            exit 22
-          fi
-          aud="$(jq -r '.result.aud // empty' /tmp/day8-app.json)"
-          test -n "$aud"
-
-          policies_http="$(curl -sS -o /tmp/day8-policies.json -w '%{http_code}' "${auth[@]}" "$api/access/apps/$app_id/policies?per_page=100" || true)"
-          if [ "$policies_http" -lt 200 ] || [ "$policies_http" -ge 300 ] || ! jq -e '.success == true' /tmp/day8-policies.json >/dev/null 2>&1; then
-            echo "Access policy listing failed (HTTP $policies_http)." >&2
-            jq -c '{errors:[.errors[]? | {code,message}]}' /tmp/day8-policies.json >&2 || true
-            exit 22
-          fi
-          policy_id="$(jq -r '.result[] | select(.name=="Day 8 Business Physician QA") | .id' /tmp/day8-policies.json | head -1)"
-          policy_payload="$(jq -nc --arg e "$BUSINESS_PHYSICIAN_EMAIL" '{name:"Day 8 Business Physician QA",decision:"allow",precedence:1,include:[{email:{email:$e}}]}')"
-          if [ -n "$policy_id" ]; then
-            policy_http="$(curl -sS -o /tmp/day8-policy-write.json -w '%{http_code}' -X PUT "${auth[@]}" --data "$policy_payload" "$api/access/apps/$app_id/policies/$policy_id" || true)"
-          else
-            policy_http="$(curl -sS -o /tmp/day8-policy-write.json -w '%{http_code}' -X POST "${auth[@]}" --data "$policy_payload" "$api/access/apps/$app_id/policies" || true)"
-          fi
-          if [ "$policy_http" -lt 200 ] || [ "$policy_http" -ge 300 ] || ! jq -e '.success == true' /tmp/day8-policy-write.json >/dev/null 2>&1; then
-            echo "Access policy write failed (HTTP $policy_http)." >&2
-            jq -c '{errors:[.errors[]? | {code,message}]}' /tmp/day8-policy-write.json >&2 || true
-            exit 22
-          fi
-          echo "auth_domain=$auth_domain" >> "$GITHUB_OUTPUT"
-          echo "aud=$aud" >> "$GITHUB_OUTPUT"
-          echo "app_id=$app_id" >> "$GITHUB_OUTPUT"
-
-      - name: Deploy exact Day 8 Worker + protected clinician assets
+      - name: Deploy exact Day 8 Worker + clinician assets
         id: deploy
         shell: bash
-        env:
-          CF_ACCESS_TEAM_DOMAIN: ${{ steps.access.outputs.auth_domain }}
-          CF_ACCESS_AUD: ${{ steps.access.outputs.aud }}
         run: |
           set -euo pipefail
-          operator_directory="$(jq -nc --arg e "$BUSINESS_PHYSICIAN_EMAIL" '[{email:$e,operator_id:"op_mrgalvipro_qa",display_name:"Mr. GalviPro",role:"business_physician",status:"active"}]')"
-          npx --yes wrangler@4.120.0 deploy --config wrangler.day8.json \
-            --var "CF_ACCESS_TEAM_DOMAIN:$CF_ACCESS_TEAM_DOMAIN" \
-            --var "CF_ACCESS_AUD:$CF_ACCESS_AUD" \
-            --var "OPERATOR_DIRECTORY_JSON:$operator_directory" \
-            | tee /tmp/day8-deploy.txt
+          npx --yes wrangler@4.120.0 deploy --config wrangler.day8.json | tee /tmp/day8-deploy.txt
 
       - name: Prove QA D1 binding and canonical schema
         id: d1
@@ -195,24 +111,24 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day8.json \
-            --command="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0001','0002','0003','0004','0005') ORDER BY migration_id; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1);" \
+            --command="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0001','0002','0003','0004','0005','0006') ORDER BY migration_id; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS active_operator_credentials FROM gv8_operator_credentials WHERE status='active';" \
             --json | tee /tmp/day8-d1-proof.json
-          grep -q '"migration_id": "0005"' /tmp/day8-d1-proof.json
+          grep -q '"migration_id": "0006"' /tmp/day8-d1-proof.json
           grep -q '"duplicate_bmr_ventures": 0' /tmp/day8-d1-proof.json
 
-      - name: Prove public endpoint is Access-gated
+      - name: Prove public login shell and protected API fail-closed
         id: preauth
         shell: bash
         run: |
           set -euo pipefail
-          url="https://${DAY8_HOST}/"
-          status="$(curl -sS -o /tmp/day8-preauth.html -D /tmp/day8-preauth.headers -w '%{http_code}' "$url")"
-          echo "preauth_status=$status"
-          case "$status" in
-            301|302|303|307|308) ;;
-            *) echo "Expected Cloudflare Access redirect before clinician UI; got $status" >&2; exit 1;;
-          esac
-          grep -Eiq 'location:.*cloudflareaccess|location:.*cdn-cgi/access' /tmp/day8-preauth.headers
+          base="https://${DAY8_HOST}"
+          page_status="$(curl -sS -o /tmp/day8-preauth.html -D /tmp/day8-preauth.headers -w '%{http_code}' "$base/")"
+          test "$page_status" = "200"
+          grep -q 'Business Physician Workspace' /tmp/day8-preauth.html
+          api_status="$(curl -sS -o /tmp/day8-me.json -w '%{http_code}' "$base/api/v1/operator/me")"
+          test "$api_status" = "401"
+          grep -q 'GV_AUTH_REQUIRED' /tmp/day8-me.json
+          ! grep -qi 'bmr_id\|founder_id\|venture_id' /tmp/day8-me.json
 
       - name: Capture Day 8 deployment evidence artifact
         if: always()
@@ -221,17 +137,12 @@ jobs:
           name: galvivault-day8-qa-evidence-${{ github.sha }}
           if-no-files-found: ignore
           path: |
+            /tmp/day8-migration.txt
             /tmp/day8-deploy.txt
             /tmp/day8-d1-proof.json
             /tmp/day8-preauth.headers
             /tmp/day8-preauth.html
-            /tmp/day8-org.json
-            /tmp/day8-apps.json
-            /tmp/day8-org-create.json
-            /tmp/day8-app-create.json
-            /tmp/day8-app.json
-            /tmp/day8-policies.json
-            /tmp/day8-policy-write.json
+            /tmp/day8-me.json
 
       - name: Persist Day 8 QA run outcome
         if: always()
@@ -239,13 +150,6 @@ jobs:
         run: |
           set -euo pipefail
           source_sha="$GITHUB_SHA"
-          org_errors="$(jq -c '[.errors[]? | {code,message}]' /tmp/day8-org.json 2>/dev/null || echo '[]')"
-          org_create_errors="$(jq -c '[.errors[]? | {code,message}]' /tmp/day8-org-create.json 2>/dev/null || echo '[]')"
-          apps_errors="$(jq -c '[.errors[]? | {code,message}]' /tmp/day8-apps.json 2>/dev/null || echo '[]')"
-          app_create_errors="$(jq -c '[.errors[]? | {code,message}]' /tmp/day8-app-create.json 2>/dev/null || echo '[]')"
-          policy_errors="$(jq -c '[.errors[]? | {code,message}]' /tmp/day8-policy-write.json 2>/dev/null || echo '[]')"
-
-          # The QA ref may advance while this run is executing. Base the evidence commit on the latest remote ref so evidence persistence cannot fail non-fast-forward.
           git fetch origin qa-revamped-galvicare-0-5
           git checkout -B day8-evidence origin/qa-revamped-galvicare-0-5
           mkdir -p release-evidence/day8
@@ -254,25 +158,20 @@ jobs:
             --arg branch "qa-revamped-galvicare-0-5" \
             --arg worker "galvivault-day8-qa" \
             --arg portal_url "https://${DAY8_HOST}/" \
-            --arg business_physician_email "$BUSINESS_PHYSICIAN_EMAIL" \
+            --arg auth_mode "worker_device_ecdsa_session" \
+            --arg schema_version "0006" \
             --arg baseline "${{ steps.baseline.outcome }}" \
             --arg tests "${{ steps.tests.outcome }}" \
             --arg credentials "${{ steps.credentials.outcome }}" \
-            --arg access "${{ steps.access.outcome }}" \
-            --arg access_app_id "${{ steps.access.outputs.app_id }}" \
+            --arg migration "${{ steps.migration.outcome }}" \
             --arg deploy "${{ steps.deploy.outcome }}" \
             --arg d1 "${{ steps.d1.outcome }}" \
             --arg preauth "${{ steps.preauth.outcome }}" \
             --arg job_status_before_evidence "${{ job.status }}" \
-            --argjson organization_errors "$org_errors" \
-            --argjson organization_create_errors "$org_create_errors" \
-            --argjson applications_errors "$apps_errors" \
-            --argjson application_create_errors "$app_create_errors" \
-            --argjson policy_write_errors "$policy_errors" \
-            '{source_sha:$source_sha,branch:$branch,worker:$worker,portal_url:$portal_url,business_physician_email:$business_physician_email,baseline:$baseline,tests:$tests,credentials:$credentials,access:$access,access_app_id:$access_app_id,deploy:$deploy,d1:$d1,preauth:$preauth,job_status_before_evidence:$job_status_before_evidence,organization_errors:$organization_errors,organization_create_errors:$organization_create_errors,applications_errors:$applications_errors,application_create_errors:$application_create_errors,policy_write_errors:$policy_write_errors}' \
+            '{source_sha:$source_sha,branch:$branch,worker:$worker,portal_url:$portal_url,auth_mode:$auth_mode,schema_version:$schema_version,baseline:$baseline,tests:$tests,credentials:$credentials,migration:$migration,deploy:$deploy,d1:$d1,preauth:$preauth,job_status_before_evidence:$job_status_before_evidence}' \
             > release-evidence/day8/qa-deployment-current.json
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add release-evidence/day8/qa-deployment-current.json
-          git commit -m "Day 8 QA: record clinician deployment outcome ${source_sha} [skip ci]" || exit 0
+          git commit -m "Day 8 QA: record Worker-native auth deployment ${source_sha} [skip ci]" || exit 0
           git push origin HEAD:qa-revamped-galvicare-0-5
