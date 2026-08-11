@@ -10,12 +10,20 @@ const protectedPath=(path)=> path.startsWith('/api/v1/operator/') ||
   path==='/api/v1/recommendations' || path.startsWith('/api/v1/recommendations/') ||
   path==='/api/v1/treatment-plans' || path.startsWith('/api/v1/treatment-plans/') ||
   path==='/api/v1/outcomes' || path==='/api/v1/feedback';
+const isApi=(path)=>path.startsWith('/api/')||path==='/health'||path==='/ready';
 
 const worker={async fetch(request,env,executionContext){
   const ctx=context(request,env), path=new URL(request.url).pathname.replace(/\/+$/,'')||'/';
   try{
     if(ctx.origin&&!ctx.allowedOrigins.includes(ctx.origin)) throw new GVError('GV_CORS_DENIED','The request origin is not allowed.',403);
     if(request.method==='OPTIONS'&&path.startsWith('/api/v1/')) return new Response(null,{status:204,headers:headers(ctx)});
+    if(!isApi(path)){
+      await requireClinicianIdentity(request,env);
+      if(!env?.ASSETS?.fetch) throw new GVError('GV_NOT_READY','Clinician portal assets are unavailable.',503);
+      const response=await env.ASSETS.fetch(request);
+      const h=new Headers(response.headers); h.set('Cache-Control','no-store');
+      return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});
+    }
     if(!protectedPath(path)) return day5Worker.fetch(request,env,executionContext);
     const identity=await requireClinicianIdentity(request,env);
     if(identity.role!=='business_physician'&&(path==='/api/v1/governance/confirmations'||/\/transitions$/.test(path)))
