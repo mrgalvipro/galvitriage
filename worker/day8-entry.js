@@ -15,9 +15,9 @@ const protectedPath=(path)=> path.startsWith('/api/v1/operator/') ||
 const isApi=(path)=>path.startsWith('/api/')||path==='/health'||path==='/ready';
 
 const worker={async fetch(request,env,executionContext){
-  const ctx=context(request,env), path=new URL(request.url).pathname.replace(/\/+$/,'')||'/';
+  const url=new URL(request.url), ctx=context(request,env), path=url.pathname.replace(/\/+$/,'')||'/';
   try{
-    if(ctx.origin&&!ctx.allowedOrigins.includes(ctx.origin)) throw new GVError('GV_CORS_DENIED','The request origin is not allowed.',403);
+    if(ctx.origin&&ctx.origin!==url.origin&&!ctx.allowedOrigins.includes(ctx.origin)) throw new GVError('GV_CORS_DENIED','The request origin is not allowed.',403);
     if(request.method==='OPTIONS'&&path.startsWith('/api/v1/')) return new Response(null,{status:204,headers:headers(ctx)});
     if(authPath(path)){
       const response=await handleOperatorAuth(request,env,ctx,path,success);
