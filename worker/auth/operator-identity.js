@@ -41,12 +41,16 @@ export async function requireClinicianIdentity(request,env){
   if(!payload.sub||!payload.exp||payload.exp<=now||(payload.nbf&&payload.nbf>now)) throw new GVError('GV_AUTH_INVALID','Expired or invalid Access token.',401);
   if(aud&&!audiences.includes(aud)) throw new GVError('GV_AUTH_INVALID','Access token audience is invalid.',401);
   if(payload.iss&&payload.iss.replace(/\/+$/,'')!==issuer.replace(/\/+$/,'')) throw new GVError('GV_AUTH_INVALID','Access token issuer is invalid.',401);
-  const matches=directory(env).filter(x=>clean(x.subject)===clean(payload.sub));
+  const subject=clean(payload.sub), email=clean(payload.email).toLowerCase();
+  const matches=directory(env).filter(x=>{
+    const configuredSubject=clean(x.subject), configuredEmail=clean(x.email).toLowerCase();
+    return (configuredSubject&&configuredSubject===subject)||(configuredEmail&&configuredEmail===email);
+  });
   if(matches.length!==1) throw new GVError('GV_AUTH_FORBIDDEN','Clinician identity is not provisioned.',403);
   const op=matches[0], role=clean(op.role).toLowerCase();
   if(clean(op.status).toLowerCase()!=='active'||!['business_physician','clinician'].includes(role)||!clean(op.operator_id)||!clean(op.display_name))
     throw new GVError('GV_AUTH_FORBIDDEN','Clinician identity is not authorized.',403);
-  return {operator_id:clean(op.operator_id),display_name:clean(op.display_name),role,subject:clean(payload.sub),email:clean(payload.email),exp:payload.exp};
+  return {operator_id:clean(op.operator_id),display_name:clean(op.display_name),role,subject,email,exp:payload.exp};
 }
 export function asLegacyOperatorHeaders(request,identity){
   const h=new Headers(request.headers);
