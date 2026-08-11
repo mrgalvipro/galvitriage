@@ -1,0 +1,185 @@
+[
+  {
+    "results": [],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 0.5472
+      },
+      "duration": 0.5472,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 2957312,
+      "rows_read": 18,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  },
+  {
+    "results": [
+      {
+        "founder_id": "fdr_3ba68b8ee59543c793ad735bb43a858e",
+        "first_name": "Day",
+        "last_name": "Four",
+        "email": "founder.day4.31189484560-1@example.test",
+        "venture_id": "ven_82fab4017a4a473bab403755276be4ff",
+        "venture_name": "Day 4 Reasoning Venture 31189484560-1",
+        "bmr_id": "bmr_0d72e878cc634917ae2ac8430a73331f",
+        "bmr_status": "treatment_active",
+        "record_version": 2,
+        "role_status": "active",
+        "is_primary": 1,
+        "updated_at": "2026-08-07T21:14:34.466Z"
+      },
+      {
+        "founder_id": "fdr_8b96c51d815f438c83bb59feb29948e2",
+        "first_name": "Day",
+        "last_name": "Four",
+        "email": "founder.day4.31192575362-1@example.test",
+        "venture_id": "ven_527738dc4f634ce68f6ce394461e74e7",
+        "venture_name": "Day 4 Reasoning Venture 31192575362-1",
+        "bmr_id": "bmr_79bf50ba2dc94a68a25f17168cc6eb67",
+        "bmr_status": "treatment_active",
+        "record_version": 2,
+        "role_status": "active",
+        "is_primary": 1,
+        "updated_at": "2026-08-07T20:06:12.522Z"
+      },
+      {
+        "founder_id": "fdr_c53f523a4aa4480e91c7be3c26e9862a",
+        "first_name": "Day",
+        "last_name": "Four",
+        "email": "founder.day4.31193811042-1@example.test",
+        "venture_id": "ven_32f7bb4b2e2e44e1b5d3601c86db9712",
+        "venture_name": "Day 4 Reasoning Venture 31193811042-1",
+        "bmr_id": "bmr_fe1ac4eef0a84f4e80d3665b51939b2b",
+        "bmr_status": "treatment_active",
+        "record_version": 4,
+        "role_status": "active",
+        "is_primary": 1,
+        "updated_at": "2026-08-07T19:59:18.671Z"
+      },
+      {
+        "founder_id": "fdr_f1b44b82ce4c4a77ac90447ae5eeb95b",
+        "first_name": "Second",
+        "last_name": "Scope",
+        "email": "founder.day4.second.31193811042-1@example.test",
+        "venture_id": "ven_7aaf1a1012b04dd4ad4c2c00cbcbf71c",
+        "venture_name": "Day 4 Second Venture 31193811042-1",
+        "bmr_id": "bmr_42da4fc6185e42f2ad4c358af66b175e",
+        "bmr_status": "active",
+        "record_version": 1,
+        "role_status": "active",
+        "is_primary": 1,
+        "updated_at": "2026-08-07T15:41:25.565Z"
+      },
+      {
+        "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+        "first_name": "Day",
+        "last_name": "Three",
+        "email": "founder.day3.31182583984-1@example.test",
+        "venture_id": "ven_32a553666d824d7eba75de3ee351a7be",
+        "venture_name": "Day 3 Second Venture 31182583984-1",
+        "bmr_id": "bmr_6f1e4d3c007b4678b2bd9d1b2bd67824",
+        "bmr_status": "active",
+        "record_version": 1,
+        "role_status": "active",
+        "is_primary": 1,
+        "updated_at": "2026-08-07T13:26:32.302Z"
+      },
+      {
+        "founder_id": "fdr_f779d00f4882418e92d7baaf904a8e1c",
+        "first_name": "Day",
+        "last_name": "Three",
+        "email": "founder.day3.31182583984-1@example.test",
+        "venture_id": "ven_f4ce972aba3b4ca185b724c12ee03301",
+        "venture_name": "Day 3 Evidence Venture 31182583984-1",
+        "bmr_id": "bmr_731c5908446a454197f18b5618acc62c",
+        "bmr_status": "active",
+        "record_version": 1,
+        "role_status": "active",
+        "is_primary": 1,
+        "updated_at": "2026-08-07T13:26:30.822Z"
+      },
+      {
+        "founder_id": "fdr_dcb9b4462d464821b4f23f92800cd9fb",
+        "first_name": "Day",
+        "last_name": "Three",
+        "email": "founder.day3.31181673532-1@example.test",
+        "venture_id": "ven_4f4983881a3c4c75ac106c26360b33eb",
+        "venture_name": "Day 3 Second Venture 31181673532-1",
+        "bmr_id": "bmr_c22d9df69fdb4467a8ffe34e61689fd8",
+        "bmr_status": "active",
+        "record_version": 1,
+        "role_status": "active",
+        "is_primary": 1,
+        "updated_at": "2026-08-07T13:14:40.240Z"
+      },
+      {
+        "founder_id": "fdr_dcb9b4462d464821b4f23f92800cd9fb",
+        "first_name": "Day",
+        "last_name": "Three",
+        "email": "founder.day3.31181673532-1@example.test",
+        "venture_id": "ven_ab274283d5404e55b0fb265603d453a9",
+        "venture_name": "Day 3 Evidence Venture 31181673532-1",
+        "bmr_id": "bmr_4d0cbfa83ac047119cd44eeab6e969f2",
+        "bmr_status": "active",
+        "record_version": 1,
+        "role_status": "active",
+        "is_primary": 1,
+        "updated_at": "2026-08-07T13:14:34.273Z"
+      },
+      {
+        "founder_id": "fdr_d66cf4f7c52448c3a6430fffc51d1a49",
+        "first_name": "Day",
+        "last_name": "Three",
+        "email": "founder.day3.31180844237-1@example.test",
+        "venture_id": "ven_955f927d2f8844988daf43a21a337b4d",
+        "venture_name": "Day 3 Second Venture 31180844237-1",
+        "bmr_id": "bmr_29473a77f71d46778eca320d04786181",
+        "bmr_status": "active",
+        "record_version": 1,
+        "role_status": "active",
+        "is_primary": 1,
+        "updated_at": "2026-08-07T13:03:39.655Z"
+      },
+      {
+        "founder_id": "fdr_d66cf4f7c52448c3a6430fffc51d1a49",
+        "first_name": "Day",
+        "last_name": "Three",
+        "email": "founder.day3.31180844237-1@example.test",
+        "venture_id": "ven_57eba780d71c40ab9803948e81765ebf",
+        "venture_name": "Day 3 Evidence Venture 31180844237-1",
+        "bmr_id": "bmr_495f67c9919e469a8d0c490347c114db",
+        "bmr_status": "active",
+        "record_version": 1,
+        "role_status": "active",
+        "is_primary": 1,
+        "updated_at": "2026-08-07T13:03:38.134Z"
+      }
+    ],
+    "success": true,
+    "meta": {
+      "served_by": "v3-prod",
+      "served_by_region": "ENAM",
+      "served_by_colo": "EWR",
+      "served_by_primary": true,
+      "timings": {
+        "sql_duration_ms": 1.1875
+      },
+      "duration": 1.1875,
+      "changes": 0,
+      "last_row_id": 0,
+      "changed_db": false,
+      "size_after": 2957312,
+      "rows_read": 110,
+      "rows_written": 0,
+      "total_attempts": 1
+    }
+  }
+]
