@@ -17,7 +17,7 @@ on:
       - 'package-lock.json'
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: galvivault-day8-qa
@@ -94,27 +94,22 @@ jobs:
           set -euo pipefail
           api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}"
           auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H "Content-Type: application/json")
-
           org="$(curl -fsS "${auth[@]}" "$api/access/organizations")"
           echo "$org" | jq -e '.success == true' >/dev/null
           auth_domain="$(echo "$org" | jq -r '.result.auth_domain // empty')"
           test -n "$auth_domain"
-
           apps="$(curl -fsS "${auth[@]}" "$api/access/apps?per_page=100")"
           echo "$apps" | jq -e '.success == true' >/dev/null
           app_id="$(echo "$apps" | jq -r --arg d "$DAY8_HOST" '.result[] | select(.domain==$d) | .id' | head -1)"
-
           if [ -z "$app_id" ]; then
             payload="$(jq -nc --arg n 'GalviVault Day 8 QA Clinician Workspace' --arg d "$DAY8_HOST" '{name:$n,domain:$d,type:"self_hosted",session_duration:"24h",auto_redirect_to_identity:false}')"
             created="$(curl -fsS -X POST "${auth[@]}" --data "$payload" "$api/access/apps")"
             echo "$created" | jq -e '.success == true' >/dev/null
             app_id="$(echo "$created" | jq -r '.result.id')"
           fi
-
           app="$(curl -fsS "${auth[@]}" "$api/access/apps/$app_id")"
           aud="$(echo "$app" | jq -r '.result.aud // empty')"
           test -n "$aud"
-
           policies="$(curl -fsS "${auth[@]}" "$api/access/apps/$app_id/policies?per_page=100")"
           policy_id="$(echo "$policies" | jq -r '.result[] | select(.name=="Day 8 Business Physician QA") | .id' | head -1)"
           policy_payload="$(jq -nc --arg e "$BUSINESS_PHYSICIAN_EMAIL" '{name:"Day 8 Business Physician QA",decision:"allow",precedence:1,include:[{email:{email:$e}}]}')"
@@ -125,13 +120,12 @@ jobs:
             created_policy="$(curl -fsS -X POST "${auth[@]}" --data "$policy_payload" "$api/access/apps/$app_id/policies")"
             echo "$created_policy" | jq -e '.success == true' >/dev/null
           fi
-
           echo "auth_domain=$auth_domain" >> "$GITHUB_OUTPUT"
           echo "aud=$aud" >> "$GITHUB_OUTPUT"
           echo "app_id=$app_id" >> "$GITHUB_OUTPUT"
-          echo "Cloudflare Access app configured for $DAY8_HOST"
 
       - name: Deploy exact Day 8 Worker + protected clinician assets
+        id: deploy
         shell: bash
         env:
           CF_ACCESS_TEAM_DOMAIN: ${{ steps.access.outputs.auth_domain }}
@@ -146,6 +140,7 @@ jobs:
             | tee /tmp/day8-deploy.txt
 
       - name: Prove QA D1 binding and canonical schema
+        id: d1
         shell: bash
         run: |
           set -euo pipefail
@@ -156,21 +151,20 @@ jobs:
           grep -q '"duplicate_bmr_ventures": 0' /tmp/day8-d1-proof.json
 
       - name: Prove public endpoint is Access-gated
+        id: preauth
         shell: bash
         run: |
           set -euo pipefail
           url="https://${DAY8_HOST}/"
           status="$(curl -sS -o /tmp/day8-preauth.html -D /tmp/day8-preauth.headers -w '%{http_code}' "$url")"
           echo "preauth_status=$status"
-          cat /tmp/day8-preauth.headers
           case "$status" in
             301|302|303|307|308) ;;
             *) echo "Expected Cloudflare Access redirect before clinician UI; got $status" >&2; exit 1;;
           esac
           grep -Eiq 'location:.*cloudflareaccess|location:.*cdn-cgi/access' /tmp/day8-preauth.headers
 
-      - name: Capture Day 8 deployment evidence
-        if: always()
+      - name: Capture Day 8 deployment evidence artifact
         uses: actions/upload-artifact@v4
         with:
           name: galvivault-day8-qa-evidence-${{ github.sha }}
@@ -180,3 +174,28 @@ jobs:
             /tmp/day8-d1-proof.json
             /tmp/day8-preauth.headers
             /tmp/day8-preauth.html
+
+      - name: Persist successful Day 8 QA deployment proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-evidence/day8
+          cat > release-evidence/day8/qa-deployment-current.json <<EOF
+          {
+            "source_sha": "${GITHUB_SHA}",
+            "branch": "qa-revamped-galvicare-0-5",
+            "worker": "galvivault-day8-qa",
+            "portal_url": "https://${DAY8_HOST}/",
+            "access_app_id": "${{ steps.access.outputs.app_id }}",
+            "d1_database": "galvivault-0-5-qa",
+            "schema_version": "0005",
+            "automated_gate": "PASS",
+            "d1_binding_gate": "PASS",
+            "preauth_access_gate": "PASS"
+          }
+          EOF
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add release-evidence/day8/qa-deployment-current.json
+          git commit -m "Day 8 QA: record successful clinician deployment ${GITHUB_SHA}" || exit 0
+          git push origin HEAD:qa-revamped-galvicare-0-5
