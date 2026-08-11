@@ -1,0 +1,42 @@
+name: GalviVault Day 8 Token Capability
+
+on:
+  push:
+    branches: [qa-revamped-galvicare-0-5]
+    paths: ['.github/workflows/galvivault-day8-token-capability.yml']
+
+permissions:
+  contents: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: qa
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-evidence/day8
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json')
+          verify_code="$(curl -sS -o /tmp/verify.json -w '%{http_code}' "${auth[@]}" https://api.cloudflare.com/client/v4/user/tokens/verify || true)"
+          token_id="$(jq -r '.result.id // empty' /tmp/verify.json 2>/dev/null || true)"
+          detail_code=000; groups_code=000
+          if [ -n "$token_id" ]; then
+            detail_code="$(curl -sS -o /tmp/detail.json -w '%{http_code}' "${auth[@]}" "https://api.cloudflare.com/client/v4/user/tokens/$token_id" || true)"
+            groups_code="$(curl -sS -o /tmp/groups.json -w '%{http_code}' "${auth[@]}" 'https://api.cloudflare.com/client/v4/user/tokens/permission_groups?per_page=200' || true)"
+          fi
+          detail_errors="$(jq -c '[.errors[]? | {code,message}]' /tmp/detail.json 2>/dev/null || echo '[]')"
+          groups_errors="$(jq -c '[.errors[]? | {code,message}]' /tmp/groups.json 2>/dev/null || echo '[]')"
+          jq -nc --arg sha "$GITHUB_SHA" --arg vc "$verify_code" --arg dc "$detail_code" --arg gc "$groups_code" --argjson de "$detail_errors" --argjson ge "$groups_errors" '{source_sha:$sha,verify_http:$vc,token_detail_http:$dc,permission_groups_http:$gc,token_detail_errors:$de,permission_groups_errors:$ge}' > release-evidence/day8/token-capability.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add release-evidence/day8/token-capability.json
+          git commit -m "Day 8 QA: record token capability ${GITHUB_SHA} [skip ci]" || exit 0
+          git push origin HEAD:qa-revamped-galvicare-0-5
