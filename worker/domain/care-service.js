@@ -117,16 +117,36 @@ export async function createTreatmentPlan(env,ctx,actor,key,input){
   const fp=await hash('day5:treatment:create',{bmrId,recIds,findingIds,code,title,objective,status,items});
   const prior=await replay(env.DB,'day5:treatment:create',key,fp,async id=>({treatment_plan:await findPlan(env.DB,id),links:await planLinks(env.DB,id)})); if(prior)return prior;
   const timestamp=now(), id=newId('trp'), group=newId('tpg'), sessionId=await sessionForBmr(env.DB,bmr);
-  const stmts=[env.DB.prepare(`INSERT INTO gv1_treatment_plans
+  const staged=[];
+  const stage=(name,stmt)=>{staged.push({name,stmt});};
+  stage('treatment_plan_parent',env.DB.prepare(`/* E2E11_STAGE:treatment_plan_parent */ INSERT INTO gv1_treatment_plans
     (treatment_plan_id,bmr_id,name,status,start_date,target_end_date,evidence_version,created_at,updated_at,treatment_plan_group_id,version_no,supersedes_treatment_plan_id,treatment_code,objective,owner_actor_type,owner_actor_id,target_outcomes_json,created_by_type,created_by_id,correlation_id)
-    VALUES (?,?,?,?,?,?,1,?,?,?,?,NULL,?,?,?,?,?,?,?,?)`).bind(id,bmrId,title,status,input.start_date||null,input.target_end_date||null,timestamp,timestamp,group,1,code,objective,actor.role,actor.id,JSON.stringify(input.target_outcomes||[]),actor.role,actor.id,ctx.correlation)];
-  for(const rid of recIds) stmts.push(env.DB.prepare(`INSERT INTO gv1_treatment_plan_recommendations (treatment_plan_id,recommendation_id,created_at,correlation_id) VALUES (?,?,?,?)`).bind(id,rid,timestamp,ctx.correlation));
-  for(const fid of findingIds) stmts.push(env.DB.prepare(`INSERT INTO gv1_treatment_plan_findings (treatment_plan_id,finding_id,created_at,correlation_id) VALUES (?,?,?,?)`).bind(id,fid,timestamp,ctx.correlation));
-  for(const item of items) stmts.push(env.DB.prepare(`INSERT INTO gv1_treatment_plan_items
+    VALUES (?,?,?,?,?,?,1,?,?,?,?,NULL,?,?,?,?,?,?,?,?)`).bind(id,bmrId,title,status,input.start_date||null,input.target_end_date||null,timestamp,timestamp,group,1,code,objective,actor.role,actor.id,JSON.stringify(input.target_outcomes||[]),actor.role,actor.id,ctx.correlation));
+  for(const rid of recIds) stage('recommendation_link',env.DB.prepare(`/* E2E11_STAGE:recommendation_link */ INSERT INTO gv1_treatment_plan_recommendations (treatment_plan_id,recommendation_id,created_at,correlation_id) VALUES (?,?,?,?)`).bind(id,rid,timestamp,ctx.correlation));
+  for(const fid of findingIds) stage('finding_link',env.DB.prepare(`/* E2E11_STAGE:finding_link */ INSERT INTO gv1_treatment_plan_findings (treatment_plan_id,finding_id,created_at,correlation_id) VALUES (?,?,?,?)`).bind(id,fid,timestamp,ctx.correlation));
+  for(const item of items) stage('treatment_plan_item',env.DB.prepare(`/* E2E11_STAGE:treatment_plan_item */ INSERT INTO gv1_treatment_plan_items
     (treatment_plan_item_id,treatment_plan_id,recommendation_id,title,item_type,status,sequence_number,due_at,created_at,updated_at,action_code,description,owner_actor_type,owner_actor_id,correlation_id)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(newId('tpi'),id,recIds[0]||null,item.title,'action',item.status,item.sequence,item.targetDate,timestamp,timestamp,item.actionCode,item.description,actor.role,actor.id,ctx.correlation));
-  stmts.push(eventStmt(env.DB,{id:newId('jev'),key:`day5:treatment:${id}`,bmrId,sessionId,name:'treatment_plan_created',timestamp,actor,metadata:{treatment_plan_id:id,version_no:1,item_count:items.length},fingerprint:fp,correlation:ctx.correlation,environment:ctx.environment}),auditStmt(env.DB,{id:newId('aud'),entityType:'treatment_plan',entityId:id,operation:'create',priorVersion:null,newVersion:1,actor,source:'treatment-service',change:{group_id:group,item_count:items.length},correlation:ctx.correlation,environment:ctx.environment,timestamp}),receiptStmt(env.DB,{id:newId('idem'),scope:'day5:treatment:create',key,fingerprint:fp,status:201,entityType:'treatment_plan',entityId:id,timestamp}));
-  await env.DB.batch(stmts);
+  stage('journey_event',eventStmt(env.DB,{id:newId('jev'),key:`day5:treatment:${id}`,bmrId,sessionId,name:'treatment_plan_created',timestamp,actor,metadata:{treatment_plan_id:id,version_no:1,item_count:items.length},fingerprint:fp,correlation:ctx.correlation,environment:ctx.environment}));
+  stage('audit',auditStmt(env.DB,{id:newId('aud'),entityType:'treatment_plan',entityId:id,operation:'create',priorVersion:null,newVersion:1,actor,source:'treatment-service',change:{group_id:group,item_count:items.length},correlation:ctx.correlation,environment:ctx.environment,timestamp}));
+  stage('idempotency_receipt',receiptStmt(env.DB,{id:newId('idem'),scope:'day5:treatment:create',key,fingerprint:fp,status:201,entityType:'treatment_plan',entityId:id,timestamp}));
+  try{
+    await env.DB.batch(staged.map(x=>x.stmt));
+  }catch(error){
+    console.error('GalviVault E2E-11 treatment-plan batch failure',{
+      correlation_id:ctx.correlation,
+      bmr_id:bmrId,
+      treatment_plan_id:id,
+      session_id:sessionId,
+      recommendation_ids:recIds,
+      finding_ids:findingIds,
+      stage_order:staged.map(x=>x.name),
+      message:String(error?.message||error),
+      cause:String(error?.cause?.message||''),
+      stack:String(error?.stack||'')
+    });
+    throw error;
+  }
   return {treatment_plan:await findPlan(env.DB,id),links:await planLinks(env.DB,id),idempotent_replay:false};
 }
 
