@@ -52,6 +52,7 @@ jobs:
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
       - name: Protect branch and GalviCare baselines
+        id: baseline
         shell: bash
         run: |
           set -euo pipefail
@@ -71,6 +72,7 @@ jobs:
             wrangler.qa-frontend.jsonc
 
       - name: Run Day 8 and inherited regression gates
+        id: tests
         shell: bash
         run: |
           set -euo pipefail
@@ -80,6 +82,7 @@ jobs:
           npm run day8:gate
 
       - name: Verify Cloudflare deployment credentials
+        id: credentials
         shell: bash
         run: |
           set -euo pipefail
@@ -165,6 +168,7 @@ jobs:
           grep -Eiq 'location:.*cloudflareaccess|location:.*cdn-cgi/access' /tmp/day8-preauth.headers
 
       - name: Capture Day 8 deployment evidence artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: galvivault-day8-qa-evidence-${{ github.sha }}
@@ -175,7 +179,8 @@ jobs:
             /tmp/day8-preauth.headers
             /tmp/day8-preauth.html
 
-      - name: Persist successful Day 8 QA deployment proof
+      - name: Persist Day 8 QA run outcome
+        if: always()
         shell: bash
         run: |
           set -euo pipefail
@@ -186,16 +191,20 @@ jobs:
             "branch": "qa-revamped-galvicare-0-5",
             "worker": "galvivault-day8-qa",
             "portal_url": "https://${DAY8_HOST}/",
+            "business_physician_email": "${BUSINESS_PHYSICIAN_EMAIL}",
+            "baseline": "${{ steps.baseline.outcome }}",
+            "tests": "${{ steps.tests.outcome }}",
+            "credentials": "${{ steps.credentials.outcome }}",
+            "access": "${{ steps.access.outcome }}",
             "access_app_id": "${{ steps.access.outputs.app_id }}",
-            "d1_database": "galvivault-0-5-qa",
-            "schema_version": "0005",
-            "automated_gate": "PASS",
-            "d1_binding_gate": "PASS",
-            "preauth_access_gate": "PASS"
+            "deploy": "${{ steps.deploy.outcome }}",
+            "d1": "${{ steps.d1.outcome }}",
+            "preauth": "${{ steps.preauth.outcome }}",
+            "job_status_before_evidence": "${{ job.status }}"
           }
           EOF
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add release-evidence/day8/qa-deployment-current.json
-          git commit -m "Day 8 QA: record successful clinician deployment ${GITHUB_SHA}" || exit 0
+          git commit -m "Day 8 QA: record clinician deployment outcome ${GITHUB_SHA} [skip ci]" || exit 0
           git push origin HEAD:qa-revamped-galvicare-0-5
