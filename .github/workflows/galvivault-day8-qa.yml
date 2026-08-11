@@ -27,7 +27,6 @@ concurrency:
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-  DAY8_HOST: galvivault-day8-qa.mrgalvipro.workers.dev
 
 jobs:
   day8:
@@ -59,17 +58,10 @@ jobs:
           test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
           git merge-base --is-ancestor eb8630c112ac5557bd374e5f5e1db05e4435bad5 "$GITHUB_SHA"
           git diff --exit-code eb8630c112ac5557bd374e5f5e1db05e4435bad5 -- \
-            index.html \
-            worker/worker.js \
-            worker/production-entry.js \
-            worker/day7d-engine.js \
-            worker/day7d-runtime.js \
-            day7c-browser-observability.js \
-            day7d-browser-customer-intelligence.js \
-            qa-frontend-worker.js \
-            wrangler.production.jsonc \
-            wrangler.day7d.json \
-            wrangler.qa-frontend.jsonc
+            index.html worker/worker.js worker/production-entry.js \
+            worker/day7d-engine.js worker/day7d-runtime.js \
+            day7c-browser-observability.js day7d-browser-customer-intelligence.js \
+            qa-frontend-worker.js wrangler.production.jsonc wrangler.day7d.json wrangler.qa-frontend.jsonc
 
       - name: Run Day 8 and inherited regression gates
         id: tests
@@ -104,6 +96,11 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4.120.0 deploy --config wrangler.day8.json | tee /tmp/day8-deploy.txt
+          portal_url="$(grep -Eo 'https://[^[:space:]]+\.workers\.dev/?' /tmp/day8-deploy.txt | tail -1)"
+          test -n "$portal_url"
+          portal_url="${portal_url%/}/"
+          echo "portal_url=$portal_url" >> "$GITHUB_OUTPUT"
+          echo "Day 8 deployed URL: $portal_url"
 
       - name: Prove QA D1 binding and canonical schema
         id: d1
@@ -119,16 +116,20 @@ jobs:
       - name: Prove public login shell and protected API fail-closed
         id: preauth
         shell: bash
+        env:
+          PORTAL_URL: ${{ steps.deploy.outputs.portal_url }}
         run: |
           set -euo pipefail
-          base="https://${DAY8_HOST}"
-          page_status="$(curl -sS -o /tmp/day8-preauth.html -D /tmp/day8-preauth.headers -w '%{http_code}' "$base/")"
+          test -n "$PORTAL_URL"
+          page_status="$(curl -sS -o /tmp/day8-preauth.html -D /tmp/day8-preauth.headers -w '%{http_code}' "$PORTAL_URL")"
+          echo "page_status=$page_status" | tee /tmp/day8-preauth-status.txt
           test "$page_status" = "200"
           grep -q 'Business Physician Workspace' /tmp/day8-preauth.html
-          api_status="$(curl -sS -o /tmp/day8-me.json -w '%{http_code}' "$base/api/v1/operator/me")"
+          api_status="$(curl -sS -o /tmp/day8-me.json -w '%{http_code}' "${PORTAL_URL}api/v1/operator/me")"
+          echo "api_status=$api_status" | tee -a /tmp/day8-preauth-status.txt
           test "$api_status" = "401"
           grep -q 'GV_AUTH_REQUIRED' /tmp/day8-me.json
-          ! grep -qi 'bmr_id\|founder_id\|venture_id' /tmp/day8-me.json
+          ! grep -Eqi 'bmr_id|founder_id|venture_id' /tmp/day8-me.json
 
       - name: Capture Day 8 deployment evidence artifact
         if: always()
@@ -140,6 +141,7 @@ jobs:
             /tmp/day8-migration.txt
             /tmp/day8-deploy.txt
             /tmp/day8-d1-proof.json
+            /tmp/day8-preauth-status.txt
             /tmp/day8-preauth.headers
             /tmp/day8-preauth.html
             /tmp/day8-me.json
@@ -150,24 +152,18 @@ jobs:
         run: |
           set -euo pipefail
           source_sha="$GITHUB_SHA"
+          portal_url="${{ steps.deploy.outputs.portal_url }}"
           git fetch origin qa-revamped-galvicare-0-5
           git checkout -B day8-evidence origin/qa-revamped-galvicare-0-5
           mkdir -p release-evidence/day8
           jq -nc \
-            --arg source_sha "$source_sha" \
-            --arg branch "qa-revamped-galvicare-0-5" \
-            --arg worker "galvivault-day8-qa" \
-            --arg portal_url "https://${DAY8_HOST}/" \
-            --arg auth_mode "worker_device_ecdsa_session" \
-            --arg schema_version "0006" \
-            --arg baseline "${{ steps.baseline.outcome }}" \
-            --arg tests "${{ steps.tests.outcome }}" \
-            --arg credentials "${{ steps.credentials.outcome }}" \
-            --arg migration "${{ steps.migration.outcome }}" \
-            --arg deploy "${{ steps.deploy.outcome }}" \
-            --arg d1 "${{ steps.d1.outcome }}" \
-            --arg preauth "${{ steps.preauth.outcome }}" \
-            --arg job_status_before_evidence "${{ job.status }}" \
+            --arg source_sha "$source_sha" --arg branch "qa-revamped-galvicare-0-5" \
+            --arg worker "galvivault-day8-qa" --arg portal_url "$portal_url" \
+            --arg auth_mode "worker_device_ecdsa_session" --arg schema_version "0006" \
+            --arg baseline "${{ steps.baseline.outcome }}" --arg tests "${{ steps.tests.outcome }}" \
+            --arg credentials "${{ steps.credentials.outcome }}" --arg migration "${{ steps.migration.outcome }}" \
+            --arg deploy "${{ steps.deploy.outcome }}" --arg d1 "${{ steps.d1.outcome }}" \
+            --arg preauth "${{ steps.preauth.outcome }}" --arg job_status_before_evidence "${{ job.status }}" \
             '{source_sha:$source_sha,branch:$branch,worker:$worker,portal_url:$portal_url,auth_mode:$auth_mode,schema_version:$schema_version,baseline:$baseline,tests:$tests,credentials:$credentials,migration:$migration,deploy:$deploy,d1:$d1,preauth:$preauth,job_status_before_evidence:$job_status_before_evidence}' \
             > release-evidence/day8/qa-deployment-current.json
           git config user.name "github-actions[bot]"
