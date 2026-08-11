@@ -1,0 +1,19 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "galvivault-day8-qa",
+  "main": "worker/day8-entry.js",
+  "compatibility_date": "2026-08-01",
+  "vars": {
+    "ENVIRONMENT": "qa",
+    "API_VERSION": "v1",
+    "MIN_SCHEMA_VERSION": "0005",
+    "ALLOWED_ORIGINS": "https://clinician-qa.galvipro.com,http://localhost:8788"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "galvivault-0-5-qa",
+      "database_id": "cdf9042b-ab09-498a-ac66-010b6cce47d4"
+    }
+  ]
+}
