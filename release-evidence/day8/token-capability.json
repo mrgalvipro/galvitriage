@@ -1,1 +1,1 @@
-{"source_sha":"96b7acb8414cd416a306bb8aceba2f3f3c76790f","verify_http":"401","token_detail_http":"000","permission_groups_http":"000","token_detail_errors":[],"permission_groups_errors":[]}
+{"source_sha":"e7d47c5408164269ae910ad0251d3a914a51bc5a","account_token_verify_http":"200","token_detail_http":"403","permission_groups_http":"403","verify_errors":[],"token_detail_errors":[{"code":9109,"message":"Unauthorized to access requested resource"}],"permission_groups_errors":[{"code":9109,"message":"Unauthorized to access requested resource"}]}
