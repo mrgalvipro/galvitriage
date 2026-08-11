@@ -1,0 +1,49 @@
+name: GalviVault Day 8 E2E-03 Fixture Diagnostic
+
+on:
+  push:
+    branches: [qa-revamped-galvicare-0-5]
+    paths: ['.github/workflows/galvivault-day8-e2e03-fixture-diagnostic.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: qa
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Read-only QA D1 fixture discovery for E2E-03
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-evidence/day8
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day8.json --json \
+            --command="SELECT f.founder_id,f.first_name,f.last_name,f.email,v.venture_id,v.venture_name,b.bmr_id,b.status AS bmr_status,b.record_version,r.status AS role_status,r.is_primary FROM gv1_founders f LEFT JOIN gv1_founder_venture_roles r ON r.founder_id=f.founder_id LEFT JOIN gv1_ventures v ON v.venture_id=r.venture_id LEFT JOIN gv1_business_medical_records b ON b.venture_id=v.venture_id WHERE lower(coalesce(f.email,''))='test2@tester.com' OR lower(trim(coalesce(f.first_name,'')||' '||coalesce(f.last_name,'')))='test2 tester' ORDER BY b.updated_at DESC; SELECT f.founder_id,f.first_name,f.last_name,f.email,v.venture_id,v.venture_name,b.bmr_id,b.status AS bmr_status,b.record_version,r.status AS role_status,r.is_primary,b.updated_at FROM gv1_founders f JOIN gv1_founder_venture_roles r ON r.founder_id=f.founder_id AND r.status='active' JOIN gv1_ventures v ON v.venture_id=r.venture_id JOIN gv1_business_medical_records b ON b.venture_id=v.venture_id ORDER BY b.updated_at DESC LIMIT 10;" \
+            > /tmp/day8-e2e03-fixture.json
+          cp /tmp/day8-e2e03-fixture.json release-evidence/day8/e2e03-fixture-diagnostic.json
+      - name: Persist fixture evidence race-safe
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin qa-revamped-galvicare-0-5
+          git checkout -B day8-e2e03-evidence origin/qa-revamped-galvicare-0-5
+          mkdir -p release-evidence/day8
+          cp /tmp/day8-e2e03-fixture.json release-evidence/day8/e2e03-fixture-diagnostic.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add release-evidence/day8/e2e03-fixture-diagnostic.json
+          git commit -m "Day 8 E2E-03: record QA founder fixture diagnostic ${GITHUB_SHA} [skip ci]" || exit 0
+          git push origin HEAD:qa-revamped-galvicare-0-5
