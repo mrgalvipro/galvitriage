@@ -67,20 +67,35 @@ Observed:
 - Recommendation/Treatment Plan action forms were present below the read projection;
 - no clinical mutation was submitted during this read-only proof.
 
+### E2E-07 — Refresh / same BMR — PASS
+Human continuity proof after hard browser refresh:
+- active Business Physician session survived refresh; `/api/v1/operator/me` returned HTTP `200` without re-enrollment;
+- the SPA returned to the authenticated Business Physician workspace and the same Founder was searched again;
+- founder search returned HTTP `200`;
+- re-opened chart returned HTTP `200`;
+- the same canonical BMR `bmr_0d72e878cc634917ae2ac8430a73331f` was returned;
+- lifecycle/version remained `treatment_active · v2` because no governed write had yet occurred;
+- Founder and venture identity remained `Day Four` / `Day 4 Reasoning Venture 31189484560-1`;
+- no duplicate BMR or alternate venture identity appeared.
+
+This proves browser refresh does not become canonical state; the same record is recovered through authenticated Worker reads from QA D1.
+
 ## Next exact Human E2E target
 
-### E2E-07 — Refresh / same BMR — PENDING
-Use the currently open `Day Four` chart.
+### E2E-08 — GalviClinic note/evidence — PENDING
+Use the currently open canonical `Day Four` BMR and open the `GalviClinic Session` tab.
 Required Human proof:
-1. record the currently visible canonical BMR ID and lifecycle/version;
-2. hard-refresh the browser page;
-3. re-authentication must not be required while the active secure session remains valid;
-4. search/re-open the same `Day Four` Founder if the SPA intentionally returns to workspace home after refresh;
-5. the same canonical BMR ID `bmr_0d72e878cc634917ae2ac8430a73331f` must return;
-6. lifecycle/version must remain `treatment_active · v2` unless a governed write occurred (none has yet);
-7. no duplicate BMR or alternate venture identity may appear.
+1. enter one short bounded QA clinician note;
+2. submit once;
+3. the save must succeed through the protected Worker route;
+4. capture the returned evidence/source identifier and correlation context if surfaced;
+5. reopen Timeline and/or Evidence and prove the new note/source record is retrievable against the same BMR;
+6. the note must remain source evidence only and must not silently become a confirmed finding, recommendation, or treatment action;
+7. no duplicate evidence row may be created from the single submission.
 
-Do not change implementation code unless this exact continuity test fails. If it fails, use the observed UI/HTTP/canonical-ID discrepancy as the next remediation target.
+Recommended QA note text: `Day 8 Human E2E clinician note — continuity verified; no production action.`
+
+Do not change implementation code unless this exact note/evidence write fails. If it fails, use the observed HTTP/UI/record-persistence error as the next remediation target.
 
 ## Human E2E status
 
@@ -90,7 +105,7 @@ Do not change implementation code unless this exact continuity test fails. If it
 - [x] E2E-04 canonical BMR chart
 - [x] E2E-05 Findings
 - [x] E2E-06 Care Plan
-- [ ] E2E-07 refresh / same BMR
+- [x] E2E-07 refresh / same BMR
 - [ ] E2E-08 GalviClinic note/evidence
 - [ ] E2E-09 governed finding decision
 - [ ] E2E-10 recommendation
@@ -108,8 +123,8 @@ Do not change implementation code unless this exact continuity test fails. If it
 
 - D8-01 Secure clinician identity: **PASS for Business Physician Human proof; second-clinician coverage remains pending under E2E-16/17**
 - D8-02 Founder search + chart projection: **PASS Human E2E-03/04/05/06**
-- D8-03 Governed GalviClinic care workflow: **PENDING Human E2E-08..13**
-- D8-04 Continuity + D1 integrity: **IN PROGRESS — E2E-07 is next; E2E-14/15/16/18 remain pending**
+- D8-03 Governed GalviClinic care workflow: **IN PROGRESS — E2E-08 is next; E2E-09..13 remain pending**
+- D8-04 Continuity + D1 integrity: **PARTIAL PASS — refresh continuity E2E-07 passed; E2E-14/15/16/18 remain pending**
 - D8-05 GalviVault + GalviCare regression: **PASS automated/deployment evidence**
 - D8-06 Human E2E + evidence: **IN PROGRESS**
 
