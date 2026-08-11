@@ -1,6 +1,6 @@
 # GalviVault Day 8 Human E2E — Current Evidence
 
-Candidate under test: `a15d02df661357b9d3e9e2f2032fa146b60e6554`
+Current clinician UI candidate under Human test: `5107b4cf957131267765b5a2e068aaf21e414b63`
 QA portal: `https://galvivault-day8-qa.mrgalvipro.workers.dev/`
 Auth mode: `worker_device_ecdsa_session`
 Schema: `0006`
@@ -21,48 +21,75 @@ Observed in normal browser profile after one-time approved-device enrollment:
 - UI rendered `Signed in: Mr. GalviPro (business_physician)`.
 - Founder search became available only after successful authenticated session establishment.
 
-### E2E-03 — Founder search — IN PROGRESS / FIXTURE MISMATCH IDENTIFIED
-Human test used `Test2 Tester` and `test2@tester.com` from prior GalviCare runs.
-Observed:
-- authenticated founder-search route returned HTTP `200` for both exact name and exact email;
-- UI returned no result and therefore did not enter E2E-04.
-
-Read-only QA D1 diagnostic proved the exact cause:
-- `Test2 Tester` / `test2@tester.com` does **not** exist in the canonical GalviVault QA Founder/Venture/BMR join used by Day 8 search;
-- the search route itself is functioning and returning a valid empty bounded result;
-- HubSpot/contact presence is not proof of canonical GalviVault QA D1 presence.
-
-No implementation change is warranted for this observed result. The correct next action is to use an existing canonical QA D1 Founder/Venture/BMR fixture.
-
-Approved next fixture from QA D1:
+### E2E-03 — Founder search — PASS
+Canonical QA fixture used:
 - Founder: `Day Four`
 - Email: `founder.day4.31189484560-1@example.test`
 - founder_id: `fdr_3ba68b8ee59543c793ad735bb43a858e`
 - venture_id: `ven_82fab4017a4a473bab403755276be4ff`
 - venture_name: `Day 4 Reasoning Venture 31189484560-1`
 - bmr_id: `bmr_0d72e878cc634917ae2ac8430a73331f`
-- bmr_status: `treatment_active`
-- record_version: `2`
-- active primary founder/venture role: yes
+- BMR status/version: `treatment_active v2`
+Observed:
+- authenticated founder-search route returned HTTP `200`;
+- one bounded canonical result rendered;
+- no unrelated Founder result was displayed.
+
+### E2E-04 — Canonical BMR chart — PASS
+Observed after selecting the E2E-03 result:
+- chart request returned HTTP `200`;
+- canonical BMR `bmr_0d72e878cc634917ae2ac8430a73331f` opened;
+- lifecycle/version rendered as `treatment_active · v2`;
+- chart tabs rendered Overview, Timeline, Evidence, Findings, Care Plan, GalviClinic Session, and Outcomes / Follow-up;
+- venture identity matched the selected canonical result.
+
+### E2E-05 — Findings projection — PASS
+Human recheck after the bounded clinician-UI projection remediation showed structured current reasoning rather than a raw JSON blob.
+Observed:
+- Current Reasoning rendered separate Observations, Hypotheses, and Findings sections;
+- canonical IDs were visible;
+- statements were visible;
+- status/confirmation state was visible;
+- confidence was visible;
+- source/version context was visible;
+- support counts were visible;
+- Business Physician Finding Governance form was present below the read projection;
+- no finding mutation was submitted during this read-only proof.
+
+### E2E-06 — Care Plan projection — PASS
+Human recheck showed structured current care rather than a raw JSON blob.
+Observed:
+- Recommendations rendered separately with canonical ID, title, status, code, version, and created timestamp;
+- Treatment Plans rendered separately with canonical ID, title, status, version, and created timestamp;
+- Treatment Events rendered as their own record class;
+- Outcomes displayed an explicit empty state when none were recorded;
+- Feedback / Follow-up displayed an explicit empty state when none were recorded;
+- Recommendation/Treatment Plan action forms were present below the read projection;
+- no clinical mutation was submitted during this read-only proof.
 
 ## Next exact Human E2E target
 
-### E2E-03 retry — canonical QA D1 fixture
-Search the exact email `founder.day4.31189484560-1@example.test`.
-Pass proof required:
-- one correct bounded result;
-- returned IDs match the recorded canonical fixture;
-- no unrelated Founder records leaked.
-Then open that result to begin E2E-04 and prove the canonical BMR chart.
+### E2E-07 — Refresh / same BMR — PENDING
+Use the currently open `Day Four` chart.
+Required Human proof:
+1. record the currently visible canonical BMR ID and lifecycle/version;
+2. hard-refresh the browser page;
+3. re-authentication must not be required while the active secure session remains valid;
+4. search/re-open the same `Day Four` Founder if the SPA intentionally returns to workspace home after refresh;
+5. the same canonical BMR ID `bmr_0d72e878cc634917ae2ac8430a73331f` must return;
+6. lifecycle/version must remain `treatment_active · v2` unless a governed write occurred (none has yet);
+7. no duplicate BMR or alternate venture identity may appear.
+
+Do not change implementation code unless this exact continuity test fails. If it fails, use the observed UI/HTTP/canonical-ID discrepancy as the next remediation target.
 
 ## Human E2E status
 
 - [x] E2E-01 fresh-session login screen
 - [x] E2E-02 Business Physician enrollment/authentication
-- [ ] E2E-03 Founder search — fixture corrected; Human retry pending
-- [ ] E2E-04 canonical BMR chart
-- [ ] E2E-05 Findings
-- [ ] E2E-06 Care Plan
+- [x] E2E-03 Founder search
+- [x] E2E-04 canonical BMR chart
+- [x] E2E-05 Findings
+- [x] E2E-06 Care Plan
 - [ ] E2E-07 refresh / same BMR
 - [ ] E2E-08 GalviClinic note/evidence
 - [ ] E2E-09 governed finding decision
@@ -80,10 +107,10 @@ Then open that result to begin E2E-04 and prove the canonical BMR chart.
 ## Day 8 gate status
 
 - D8-01 Secure clinician identity: **PASS for Business Physician Human proof; second-clinician coverage remains pending under E2E-16/17**
-- D8-02 Founder search + chart projection: **IN PROGRESS — search implementation healthy; canonical fixture retry pending**
+- D8-02 Founder search + chart projection: **PASS Human E2E-03/04/05/06**
 - D8-03 Governed GalviClinic care workflow: **PENDING Human E2E-08..13**
-- D8-04 Continuity + D1 integrity: **PENDING Human E2E-07/14/15/16/18**
+- D8-04 Continuity + D1 integrity: **IN PROGRESS — E2E-07 is next; E2E-14/15/16/18 remain pending**
 - D8-05 GalviVault + GalviCare regression: **PASS automated/deployment evidence**
 - D8-06 Human E2E + evidence: **IN PROGRESS**
 
-Final declaration remains blocked until every mandatory Human E2E and D1 assertion passes on the same Day 8 QA candidate.
+Final declaration remains blocked until every mandatory Human E2E and D1 assertion passes on the same Day 8 QA build lineage.
