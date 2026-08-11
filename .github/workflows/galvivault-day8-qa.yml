@@ -111,12 +111,13 @@ jobs:
         run: |
           set -euo pipefail
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day8.json \
-            --command="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0001','0002','0003','0004','0005','0006','0007') ORDER BY migration_id; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS active_operator_credentials FROM gv8_operator_credentials WHERE status='active'; SELECT COUNT(*) AS pending_second_clinician_invites FROM gv8_operator_invitations WHERE operator_id='op_galviclinician_qa_01' AND role='clinician' AND used_at IS NULL;" \
+            --command="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0001','0002','0003','0004','0005','0006','0007') ORDER BY migration_id; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS active_operator_credentials FROM gv8_operator_credentials WHERE status='active'; SELECT COUNT(*) AS active_second_clinician_credentials FROM gv8_operator_credentials WHERE operator_id='op_galviclinician_qa_01' AND role='clinician' AND status='active'; SELECT COUNT(*) AS used_second_clinician_invites FROM gv8_operator_invitations WHERE operator_id='op_galviclinician_qa_01' AND role='clinician' AND used_at IS NOT NULL;" \
             --json | tee /tmp/day8-d1-proof.json
           grep -q '"migration_id": "0006"' /tmp/day8-d1-proof.json
           grep -q '"migration_id": "0007"' /tmp/day8-d1-proof.json
           grep -q '"duplicate_bmr_ventures": 0' /tmp/day8-d1-proof.json
-          grep -q '"pending_second_clinician_invites": 1' /tmp/day8-d1-proof.json
+          grep -q '"active_second_clinician_credentials": 1' /tmp/day8-d1-proof.json
+          grep -q '"used_second_clinician_invites": 1' /tmp/day8-d1-proof.json
 
       - name: Prove public login shell and protected API fail-closed
         id: preauth
