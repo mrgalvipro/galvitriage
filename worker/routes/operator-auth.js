@@ -1,4 +1,4 @@
-import { GVError, clean, newId } from '../day5-common.js';
+import { GVError, clean, newId, jsonBody } from '../day5-common.js';
 
 const enc=new TextEncoder();
 const b64u=(bytes)=>btoa(String.fromCharCode(...new Uint8Array(bytes))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
@@ -9,12 +9,7 @@ const sha256=async(v)=>b64u(await crypto.subtle.digest('SHA-256',enc.encode(Stri
 const randomToken=(n=32)=>{const b=new Uint8Array(n);crypto.getRandomValues(b);return b64u(b)};
 const cookie=(request)=>Object.fromEntries((request.headers.get('Cookie')||'').split(';').map(x=>x.trim()).filter(Boolean).map(x=>{const i=x.indexOf('=');return i<0?[x,'']:[x.slice(0,i),x.slice(i+1)]}));
 const sessionCookie=(value,maxAge)=>`gv8_session=${value}; Path=/; HttpOnly; Secure; SameSite=Strict; Max-Age=${maxAge}`;
-
-async function body(request){
-  let value; try{value=await request.json()}catch{throw new GVError('GV_REQ_SCHEMA','A valid JSON body is required.',422)}
-  if(!value||typeof value!=='object'||Array.isArray(value))throw new GVError('GV_REQ_SCHEMA','A JSON object is required.',422);
-  return value;
-}
+const body=(request)=>jsonBody(request);
 async function one(db,sql,...args){return db.prepare(sql).bind(...args).first()}
 async function run(db,sql,...args){return db.prepare(sql).bind(...args).run()}
 
@@ -46,7 +41,7 @@ export async function handleOperatorAuth(request,env,ctx,path,success){
     const p=await body(request), email=normEmail(p.email), token=clean(p.enrollment_token), credentialId=clean(p.credential_id), publicJwk=p.public_jwk;
     if(!email||!token||!credentialId||!publicJwk)throw new GVError('GV_REQ_SCHEMA','email, enrollment_token, credential_id, and public_jwk are required.',422);
     if(clean(publicJwk.kty)!=='EC'||clean(publicJwk.crv)!=='P-256'||!clean(publicJwk.x)||!clean(publicJwk.y))throw new GVError('GV_REQ_SCHEMA','A P-256 public credential is required.',422);
-    const existing=await one(env.DB,`SELECT credential_id FROM gv8_operator_credentials WHERE email_normalized=? AND status='active'`,email);
+    const existing=await one(env.DB,`SELECT credential_id FROM gv8_operator_credentials WHERE email_normalized=?`,email);
     if(existing)throw new GVError('GV_AUTH_FORBIDDEN','This operator is already enrolled.',403);
     const tokenHash=await sha256(token);
     let operator=null, invitation=null;
