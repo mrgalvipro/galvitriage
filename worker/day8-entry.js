@@ -1,8 +1,10 @@
 import day5Worker from './day5-entry.js';
-import { GVError, context, failure, headers } from './day5-common.js';
+import { GVError, context, failure, headers, success } from './day5-common.js';
 import { requireClinicianIdentity, asLegacyOperatorHeaders } from './auth/operator-identity.js';
+import { handleOperatorAuth } from './routes/operator-auth.js';
 import { handleOperatorWorkspace } from './routes/operator-workspace.js';
 
+const authPath=(path)=>path.startsWith('/api/v1/operator/auth/');
 const protectedPath=(path)=> path.startsWith('/api/v1/operator/') ||
   /^\/api\/v1\/business-medical-records\/[^/]+\/(timeline|reasoning|care|transitions|evidence)/.test(path) ||
   path==='/api/v1/evidence' || path.startsWith('/api/v1/evidence/') ||
@@ -17,11 +19,14 @@ const worker={async fetch(request,env,executionContext){
   try{
     if(ctx.origin&&!ctx.allowedOrigins.includes(ctx.origin)) throw new GVError('GV_CORS_DENIED','The request origin is not allowed.',403);
     if(request.method==='OPTIONS'&&path.startsWith('/api/v1/')) return new Response(null,{status:204,headers:headers(ctx)});
+    if(authPath(path)){
+      const response=await handleOperatorAuth(request,env,ctx,path,success);
+      if(response)return response;
+    }
     if(!isApi(path)){
-      await requireClinicianIdentity(request,env);
       if(!env?.ASSETS?.fetch) throw new GVError('GV_NOT_READY','Clinician portal assets are unavailable.',503);
       const response=await env.ASSETS.fetch(request);
-      const h=new Headers(response.headers); h.set('Cache-Control','no-store');
+      const h=new Headers(response.headers); h.set('Cache-Control','no-store'); h.set('X-Content-Type-Options','nosniff'); h.set('Referrer-Policy','no-referrer');
       return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});
     }
     if(!protectedPath(path)) return day5Worker.fetch(request,env,executionContext);
