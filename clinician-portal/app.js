@@ -93,7 +93,12 @@ function careForms(){
   const recommendationForm=confirmed.length
     ? form('rec','Recommendation',`<label>Confirmed finding<select name="finding_id" required>${findingOptions}</select></label>`+field('title','Title')+field('action','Action','textarea')+field('rationale','Rationale','textarea')+`<label>Priority<input name="priority" type="number" min="0" step="1" value="1" required></label>`)
     : `<section class="card"><h3>Recommendation</h3><p>A confirmed governed finding is required before a recommendation can be created.</p></section>`;
-  return recommendationForm+form('plan','Treatment Plan',field('bmr_id','BMR ID')+field('recommendation_id','Recommendation ID')+field('finding_id','Finding ID')+field('title','Title')+field('objective','Objective','textarea'));
+  const eligibleRecommendations=arr(chart?.care?.recommendations).filter(x=>['proposed','approved'].includes(String(first(x,['status'],'')).toLowerCase()));
+  const recommendationOptions=eligibleRecommendations.map(x=>`<option value="${esc(first(x,['recommendation_id','id'],''))}">${esc(first(x,['title','recommendation_text','recommendation_id']))} — ${esc(first(x,['status']))} — ${esc(first(x,['recommendation_id','id']))}</option>`).join('');
+  const treatmentForm=eligibleRecommendations.length&&confirmed.length
+    ? form('plan','Treatment Plan',`<label>BMR ID<input name="bmr_id" value="${esc(chart.identity.bmr.bmr_id)}" readonly required></label>`+`<label>Recommendation<select name="recommendation_id" required>${recommendationOptions}</select></label>`+`<label>Confirmed finding<select name="finding_id" required>${findingOptions}</select></label>`+field('title','Title')+field('objective','Objective','textarea'))
+    : `<section class="card"><h3>Treatment Plan</h3><p>A canonical recommendation and confirmed governed finding from this BMR are required before a treatment plan can be created.</p></section>`;
+  return recommendationForm+treatmentForm;
 }
 function outcomeForms(){return form('outcome','Outcome',field('bmr_id','BMR ID')+field('outcome_code','Outcome code')+field('observed_value','Observed value')+field('observed_at','Observed at'))+form('feedback','Feedback / Follow-up',field('target_type','Target type')+field('target_id','Target ID')+field('feedback_type','Feedback type')+field('comment','Comment','textarea'))}
 const key=(name,payload)=>{const raw=JSON.stringify(payload);const prev=retry.get(name);if(prev?.raw===raw)return prev.key;const k=`d8_${crypto.randomUUID().replaceAll('-','')}`;retry.set(name,{raw,key:k});return k};
