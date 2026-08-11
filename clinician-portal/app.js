@@ -1,21 +1,35 @@
-const API=globalThis.GALVIVAULT_API_BASE||'https://galvivault-day8-qa.mrgalvipro.workers.dev';
+const API=globalThis.GALVIVAULT_API_BASE||'';
 const $=s=>document.querySelector(s); let chart=null, selected=null, retry=new Map();
 const tabs=['Overview','Timeline','Evidence','Findings','Care Plan','GalviClinic Session','Outcomes / Follow-up'];
+const enc=new TextEncoder();
+const b64u=b=>btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+const vals=f=>Object.fromEntries(new FormData(f));
+
 async function api(path,opt={}){
   const res=await fetch(API+path,{credentials:'include',cache:'no-store',...opt,headers:{'Content-Type':'application/json',...(opt.headers||{})}});
   const body=await res.json().catch(()=>({}));
-  if(res.status===401){clear(); $('#status').textContent='Secure clinician sign-in is required.';}
   if(!res.ok){const e=new Error(body?.error?.message||`Request failed (${res.status})`);e.status=res.status;throw e;} return body.data;
 }
-const key=(name,payload)=>{const raw=JSON.stringify(payload);const prev=retry.get(name);if(prev?.raw===raw)return prev.key;const k=`d8_${crypto.randomUUID().replaceAll('-','')}`;retry.set(name,{raw,key:k});return k};
-function clear(){chart=null;selected=null;$('#workspace').hidden=true;$('#chart').hidden=true;$('#results').replaceChildren();}
+
+function db(){return new Promise((resolve,reject)=>{const r=indexedDB.open('galvivault-day8-auth',1);r.onupgradeneeded=()=>r.result.createObjectStore('keys');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
+async function putKey(id,key){const d=await db();await new Promise((resolve,reject)=>{const t=d.transaction('keys','readwrite');t.objectStore('keys').put(key,id);t.oncomplete=resolve;t.onerror=()=>reject(t.error)})}
+async function getKey(id){const d=await db();return new Promise((resolve,reject)=>{const r=d.transaction('keys').objectStore('keys').get(id);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error)})}
+async function createDeviceKey(){const pair=await crypto.subtle.generateKey({name:'ECDSA',namedCurve:'P-256'},true,['sign','verify']);const public_jwk=await crypto.subtle.exportKey('jwk',pair.publicKey);const pkcs8=await crypto.subtle.exportKey('pkcs8',pair.privateKey);const privateKey=await crypto.subtle.importKey('pkcs8',pkcs8,{name:'ECDSA',namedCurve:'P-256'},false,['sign']);return {public_jwk,privateKey}}
+
+function clear(){chart=null;selected=null;$('#workspace').hidden=true;$('#chart').hidden=true;$('#results').replaceChildren();$('#logout').hidden=true;}
+function showAuth(message){clear();$('#status').textContent=message;$('#authForms').hidden=false;}
 async function load(){
-  try{const me=await api('/api/v1/operator/me');$('#status').textContent=`Signed in: ${me.display_name} (${me.role})`;$('#workspace').hidden=false;window.operator=me;}
-  catch(e){$('#status').textContent=e.message;}
+  try{const me=await api('/api/v1/operator/me');$('#status').textContent=`Signed in: ${me.display_name} (${me.role})`;$('#authForms').hidden=true;$('#workspace').hidden=false;$('#logout').hidden=false;window.operator=me;}
+  catch(e){showAuth(e.status===401?'Secure clinician sign-in is required.':e.message);}
 }
-$('#search').addEventListener('submit',async e=>{e.preventDefault();try{const d=await api(`/api/v1/operator/founders?query=${encodeURIComponent($('#query').value)}&limit=25`);$('#results').innerHTML=d.items.map(x=>`<button class="card result" data-bmr="${x.bmr_id}">${x.first_name||''} ${x.last_name||''} — ${x.venture_name} — ${x.bmr_status} v${x.record_version}</button>`).join('');}catch(e){$('#results').textContent=e.message;}});
+
+$('#enroll').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,msg=f.querySelector('.msg'),p=vals(f);f.querySelector('button').disabled=true;try{const credential_id=`cred_${crypto.randomUUID().replaceAll('-','')}`;const {public_jwk,privateKey}=await createDeviceKey();await api('/api/v1/operator/auth/enroll',{method:'POST',body:JSON.stringify({email:p.email,enrollment_token:p.enrollment_token,credential_id,public_jwk})});await putKey(credential_id,privateKey);f.reset();msg.textContent='Device enrolled securely.';await load();}catch(err){msg.textContent=err.message;}finally{f.querySelector('button').disabled=false}});
+
+$('#login').addEventListener('submit',async e=>{e.preventDefault();const f=e.currentTarget,msg=f.querySelector('.msg'),p=vals(f);f.querySelector('button').disabled=true;try{const options=await api('/api/v1/operator/auth/login/options',{method:'POST',body:JSON.stringify({email:p.email})});const key=await getKey(options.credential_id);if(!key)throw new Error('This browser is not enrolled for that clinician. Use the one-time enrollment flow on this approved device.');const sig=await crypto.subtle.sign({name:'ECDSA',hash:'SHA-256'},key,enc.encode(options.challenge));await api('/api/v1/operator/auth/login/verify',{method:'POST',body:JSON.stringify({challenge_id:options.challenge_id,credential_id:options.credential_id,signature:b64u(sig)})});msg.textContent='';await load();}catch(err){msg.textContent=err.message;}finally{f.querySelector('button').disabled=false}});
+
+$('#search').addEventListener('submit',async e=>{e.preventDefault();try{const d=await api(`/api/v1/operator/founders?query=${encodeURIComponent($('#query').value)}&limit=25`);$('#results').innerHTML=d.items.map(x=>`<button class="card result" data-bmr="${x.bmr_id}">${x.first_name||''} ${x.last_name||''} — ${x.venture_name} — ${x.bmr_status} v${x.record_version}</button>`).join('');}catch(e){if(e.status===401)return load();$('#results').textContent=e.message;}});
 $('#results').addEventListener('click',e=>{const b=e.target.closest('[data-bmr]');if(b)openChart(b.dataset.bmr)});
-async function openChart(id){selected=id;$('#panel').textContent='Loading…';chart=await api(`/api/v1/operator/business-medical-records/${encodeURIComponent(id)}/chart`);if(selected!==id)return;$('#chart').hidden=false;$('#chartTitle').textContent=`${chart.identity.founder.first_name||''} ${chart.identity.founder.last_name||''} — ${chart.identity.venture.venture_name}`;$('#tabs').innerHTML=tabs.map((t,i)=>`<button data-tab="${i}">${t}</button>`).join('');render(0)}
+async function openChart(id){selected=id;$('#panel').textContent='Loading…';try{chart=await api(`/api/v1/operator/business-medical-records/${encodeURIComponent(id)}/chart`);}catch(e){if(e.status===401)return load();throw e}if(selected!==id)return;$('#chart').hidden=false;$('#chartTitle').textContent=`${chart.identity.founder.first_name||''} ${chart.identity.founder.last_name||''} — ${chart.identity.venture.venture_name}`;$('#tabs').innerHTML=tabs.map((t,i)=>`<button data-tab="${i}">${t}</button>`).join('');render(0)}
 $('#tabs').addEventListener('click',e=>{if(e.target.dataset.tab)render(Number(e.target.dataset.tab))});
 function esc(x){return String(x??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function render(i){const p=$('#panel');if(!chart)return;
@@ -34,8 +48,8 @@ function noteForm(){return form('note','GalviClinic Note',field('value_text','Cl
 function governanceForm(){return form('gov','Finding Governance',field('finding_id','Finding ID')+`<label>Decision<select name=decision><option value="">Choose</option><option>confirmed</option><option>rejected</option></select></label>`+field('expected_version','Expected version'))}
 function careForms(){return form('rec','Recommendation',field('bmr_id','BMR ID')+field('finding_id','Confirmed finding ID')+field('title','Title')+field('action','Action','textarea'))+form('plan','Treatment Plan',field('bmr_id','BMR ID')+field('recommendation_id','Recommendation ID')+field('finding_id','Finding ID')+field('title','Title')+field('objective','Objective','textarea'))}
 function outcomeForms(){return form('outcome','Outcome',field('bmr_id','BMR ID')+field('outcome_code','Outcome code')+field('observed_value','Observed value')+field('observed_at','Observed at'))+form('feedback','Feedback / Follow-up',field('target_type','Target type')+field('target_id','Target ID')+field('feedback_type','Feedback type')+field('comment','Comment','textarea'))}
-function vals(f){return Object.fromEntries(new FormData(f))}
-async function postForm(f,path,payload){const name=f.id;f.querySelector('button').disabled=true;try{await api(path,{method:'POST',headers:{'Idempotency-Key':key(name,payload)},body:JSON.stringify(payload)});retry.delete(name);await openChart(selected);return true}catch(e){f.querySelector('.msg').textContent=e.status===409?'Record changed. Canonical chart refreshed; review before retry.':e.message;if(e.status===409)await openChart(selected);return false}finally{f.querySelector('button').disabled=false}}
+const key=(name,payload)=>{const raw=JSON.stringify(payload);const prev=retry.get(name);if(prev?.raw===raw)return prev.key;const k=`d8_${crypto.randomUUID().replaceAll('-','')}`;retry.set(name,{raw,key:k});return k};
+async function postForm(f,path,payload){const name=f.id;f.querySelector('button').disabled=true;try{await api(path,{method:'POST',headers:{'Idempotency-Key':key(name,payload)},body:JSON.stringify(payload)});retry.delete(name);await openChart(selected);return true}catch(e){f.querySelector('.msg').textContent=e.status===409?'Record changed. Canonical chart refreshed; review before retry.':e.message;if(e.status===409)await openChart(selected);if(e.status===401)await load();return false}finally{f.querySelector('button').disabled=false}}
 function bindActions(){
  const note=$('#note');if(note)note.onsubmit=e=>{e.preventDefault();const v=vals(note);postForm(note,'/api/v1/evidence',{bmr_id:selected,session_id:chart.identity.bmr.current_session_id,evidence_type:'facilitator_capture',source_product:'galviclinic',source_reference:`galviclinic_note_${Date.now()}`,content:{value_text:v.value_text},observed_at:new Date().toISOString(),consent_status:'confirmed'})};
  const gov=$('#gov');if(gov)gov.onsubmit=e=>{e.preventDefault();const v=vals(gov);postForm(gov,'/api/v1/governance/confirmations',{bmr_id:selected,finding_id:v.finding_id,decision:v.decision,expected_version:Number(v.expected_version)})};
@@ -44,4 +58,4 @@ function bindActions(){
  const out=$('#outcome');if(out)out.onsubmit=e=>{e.preventDefault();const v=vals(out);postForm(out,'/api/v1/outcomes',{...v,bmr_id:selected,outcome_type:'observed',source_type:'clinician',source_reference:'galviclinic_day8'})};
  const fb=$('#feedback');if(fb)fb.onsubmit=e=>{e.preventDefault();const v=vals(fb);postForm(fb,'/api/v1/feedback',{...v,bmr_id:selected,disposition:'follow_up',source:'clinician'})};
 }
-$('#logout').addEventListener('click',()=>{clear();location.assign('/cdn-cgi/access/logout')}); load();
+$('#logout').addEventListener('click',async()=>{try{await api('/api/v1/operator/auth/logout',{method:'POST',body:'{}'})}finally{showAuth('Signed out securely.');}});load();
