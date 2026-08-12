@@ -54,7 +54,6 @@ jobs:
           test "$(git rev-parse "$DAY9_FROZEN_COMMIT^")" = "$DAY9_BASE_COMMIT"
           test "$(git rev-parse "$DAY9_FROZEN_COMMIT^{tree}")" = "$DAY9_FROZEN_TREE"
 
-          # The frozen Day 9 implementation is exactly ten application/release paths.
           expected="$(mktemp)"
           actual="$(mktemp)"
           cat > "$expected" <<'EOF'
@@ -73,7 +72,6 @@ jobs:
           sort "$expected" -o "$expected"
           diff -u "$expected" "$actual"
 
-          # Protected GalviCare runtime/workflow surfaces are unchanged by Day 9.
           git diff --exit-code "$DAY9_BASE_COMMIT" "$DAY9_FROZEN_COMMIT" -- \
             index.html worker/worker.js worker/production-entry.js \
             worker/day7d-engine.js worker/day7d-runtime.js \
@@ -101,10 +99,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run day9:import:dry-run -- --input data/day9/fhr-identity-manifest.example.json | tee /tmp/day9-dry-run.json
-          test "$(jq -r '.status // .result // empty' /tmp/day9-dry-run.json)" = "PASS"
-          test "$(jq -r '.ready_count' /tmp/day9-dry-run.json)" = "1"
-          test "$(jq -r '.expected_evidence_items' /tmp/day9-dry-run.json)" = "1"
-          test "$(jq -r '.expected_observations' /tmp/day9-dry-run.json)" = "6"
+          jq -e '.dry_run == true and .mutated == false and (.rows|length) == 1 and .rows[0].disposition == "ready" and .rows[0].expected_evidence_count == 1 and .rows[0].expected_observation_count == 6 and .rows[0].source_checksum_status == "valid" and .rows[0].email == "[REDACTED]" and .rows[0].source_narrative == "[REDACTED]"' /tmp/day9-dry-run.json >/dev/null
           ! grep -Eqi '@(gmail|hotmail|yahoo|outlook)\.' /tmp/day9-dry-run.json
 
       - name: Run Day 8 clinician and inherited GalviCare regressions
