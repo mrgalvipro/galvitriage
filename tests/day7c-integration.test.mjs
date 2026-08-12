@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const wrangler = readFileSync(new URL('../wrangler.json', import.meta.url), 'utf8');
+const wrangler = readFileSync(new URL('../wrangler.day7d.json', import.meta.url), 'utf8');
 const builder = readFileSync(new URL('../scripts/day7b-build-qa-frontend.mjs', import.meta.url), 'utf8');
 const obs = readFileSync(new URL('../day7c-browser-observability.js', import.meta.url), 'utf8');
 const migration = readFileSync(new URL('../migrations/0005_day7c_integration_trace.sql', import.meta.url), 'utf8');
