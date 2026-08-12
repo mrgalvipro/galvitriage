@@ -457,6 +457,22 @@ async function getVenture(db, ventureId) {
   );
 }
 
+async function resolveFounderVentureByExactName(db, founderId, ventureName) {
+  const normalized = clean(ventureName).toLowerCase().replace(/\s+/g, ' ');
+  if (!founderId || !normalized) return null;
+  const result = await all(db,
+    `SELECT v.venture_id, v.venture_name, v.stage, v.website, v.industry, v.revenue_range,
+            v.profile_json, v.status, v.record_version, v.created_at, v.updated_at
+     FROM gv1_founder_venture_roles r
+     JOIN gv1_ventures v ON v.venture_id = r.venture_id
+     WHERE r.founder_id = ? AND r.status = 'active'
+       AND lower(trim(v.venture_name)) = ?
+     ORDER BY v.venture_id LIMIT 2`, founderId, normalized);
+  const rows = result?.results || [];
+  if (rows.length > 1) throw new GVError('GV_VENTURE_AMBIGUOUS', 'Venture identity is ambiguous; canonical ownership was not changed.', 409);
+  return rows[0] || null;
+}
+
 async function getRole(db, founderId, ventureId) {
   return first(
     db,
@@ -1100,6 +1116,9 @@ async function createOrResumeSession(request, config, corr, origin, bodyOverride
 
   let venture = input.ventureId ? await getVenture(config.db, input.ventureId) : null;
   if (input.ventureId && !venture) throw new GVError('GV_NOT_FOUND', 'Venture not found.', 404);
+  if (!venture && founder && input.ventureInput.venture_name) {
+    venture = await resolveFounderVentureByExactName(config.db, founder.founder_id, input.ventureInput.venture_name);
+  }
 
   const timestamp = now();
   const creatingFounder = !founder;

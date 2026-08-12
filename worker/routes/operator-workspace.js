@@ -2,6 +2,7 @@ import { GVError, clean, success } from '../day5-common.js';
 import { getReasoning } from '../domain/reasoning-service.js';
 import { getCare } from '../domain/care-service.js';
 import { getDay5Timeline } from '../domain/day5-timeline-service.js';
+import { composeFounderIntelligenceContext, getFounderHealthProjection, importHistoricalFounder, planHistoricalImport } from '../domain/founder-history-service.js';
 
 const first=(db,sql,...p)=>db.prepare(sql).bind(...p).first();
 const all=async(db,sql,...p)=>(await db.prepare(sql).bind(...p).all()).results||[];
@@ -26,6 +27,21 @@ export async function handleOperatorWorkspace(request,env,ctx,path,identity){
     const more=rows.length>limit, items=rows.slice(0,limit);
     return success(ctx,{items,next_cursor:more?items.at(-1)?.bmr_id:null,limit});
   }
+  if(request.method==='POST'&&path==='/api/v1/operator/day9/historical-import/plan'){
+    const body=await request.json();
+    return success(ctx,{plan:await planHistoricalImport(env,body)});
+  }
+  if(request.method==='POST'&&path==='/api/v1/operator/day9/historical-import'){
+    const body=await request.json();
+    return success(ctx,{import:await importHistoricalFounder(env,ctx,identity,body.row||body,{batchId:body.import_batch_id||null})},201,'created');
+  }
+  const fhr=path.match(/^\/api\/v1\/operator\/business-medical-records\/([^/]+)\/founder-health-record$/);
+  if(request.method==='GET'&&fhr)return success(ctx,{fhr:await getFounderHealthProjection(env,decodeURIComponent(fhr[1]))});
+  const intelligence=path.match(/^\/api\/v1\/operator\/business-medical-records\/([^/]+)\/founder-intelligence-context$/);
+  if(request.method==='GET'&&intelligence){
+    const bmrId=decodeURIComponent(intelligence[1]),u=new URL(request.url);
+    return success(ctx,{context:await composeFounderIntelligenceContext(env,identity,{founderId:clean(u.searchParams.get('founder_id')),ventureId:clean(u.searchParams.get('venture_id')),bmrId})});
+  }
   const m=path.match(/^\/api\/v1\/operator\/business-medical-records\/([^/]+)\/chart$/);
   if(request.method==='GET'&&m){
     const bmrId=decodeURIComponent(m[1]);
@@ -42,7 +58,9 @@ export async function handleOperatorWorkspace(request,env,ctx,path,identity){
     const evidence=await all(env.DB,`SELECT evidence_id,session_id,evidence_type,source_product,source_reference,confidence,evidence_version,created_at FROM gv1_evidence_items WHERE bmr_id=? ORDER BY created_at DESC LIMIT 50`,bmrId);
     const [reasoning,care,timelineProjection]=await Promise.all([getReasoning(env,bmrId,{history:false}),getCare(env,bmrId,{history:false,limit:100}),getDay5Timeline(env,bmrId,{limit:100})]);
     const timeline=Array.isArray(timelineProjection)?timelineProjection:(timelineProjection?.entries||[]);
-    return success(ctx,{identity:{founder:{founder_id:core.founder_id,first_name:core.first_name,last_name:core.last_name,email:core.email},venture:{venture_id:core.venture_id,venture_name:core.venture_name,stage:core.stage,industry:core.industry},bmr:{bmr_id:core.bmr_id,lifecycle_status:core.lifecycle_status,record_version:core.record_version,current_session_id:core.current_session_id,opened_at:core.opened_at,updated_at:core.updated_at}},sessions,evidence,reasoning,care,timeline});
+    let historical_founder_context=null,historical_context_error=null;
+    try{historical_founder_context=await getFounderHealthProjection(env,bmrId);}catch(error){historical_context_error={code:'GV_OPTIONAL_PROJECTION_UNAVAILABLE',correlation_id:ctx.correlation};}
+    return success(ctx,{identity:{founder:{founder_id:core.founder_id,first_name:core.first_name,last_name:core.last_name,email:core.email},venture:{venture_id:core.venture_id,venture_name:core.venture_name,stage:core.stage,industry:core.industry},bmr:{bmr_id:core.bmr_id,lifecycle_status:core.lifecycle_status,record_version:core.record_version,current_session_id:core.current_session_id,opened_at:core.opened_at,updated_at:core.updated_at}},sessions,evidence,reasoning,care,timeline,historical_founder_context,historical_context_error});
   }
   return null;
 }

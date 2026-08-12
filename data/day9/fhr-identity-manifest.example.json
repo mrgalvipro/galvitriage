@@ -1,0 +1,26 @@
+{
+  "manifest_version": "day9-fhr-v1",
+  "rows": [
+    {
+      "source_row_key": "synthetic-founder-001",
+      "display_name": "Synthetic Founder",
+      "email": "synthetic.founder@example.invalid",
+      "venture_name": "Synthetic Continuity Labs",
+      "source_ref": "private://approved-sources/synthetic-galvishot-v1.pdf",
+      "source_artifact_version": "synthetic-v1",
+      "source_artifact_checksum": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "source_event_at": "2025-01-15T00:00:00.000Z",
+      "import_disposition": "canonical_fhr_backfill",
+      "snapshot": {
+        "archetype": "Synthetic builder",
+        "trajectory": "Historical growth context"
+      },
+      "genome": {
+        "decision_style": "Evidence-led",
+        "communication_style": "Direct"
+      },
+      "historical_growth_opportunities": ["Synthetic delegation practice"],
+      "historical_next_steps": ["Historical next step; not active care"]
+    }
+  ]
+}
