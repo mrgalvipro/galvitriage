@@ -1,8 +1,8 @@
 import { GVError, clean, success } from '../day5-common.js';
 import { getReasoning } from '../domain/reasoning-service.js';
-import { getCare } from '../domain/care-service.js';
+import { getCare, createLearningCandidate } from '../domain/care-service.js';
 import { getDay5Timeline } from '../domain/day5-timeline-service.js';
-import { composeFounderIntelligenceContext, getFounderHealthProjection, importHistoricalFounder, planHistoricalImport } from '../domain/founder-history-service.js';
+import { composeFounderIntelligenceContext, getFounderHealthProjection, importHistoricalFounder, planHistoricalImport, sanitizeIntelligenceReference } from '../domain/founder-history-service.js';
 
 const first=(db,sql,...p)=>db.prepare(sql).bind(...p).first();
 const all=async(db,sql,...p)=>(await db.prepare(sql).bind(...p).all()).results||[];
@@ -34,6 +34,15 @@ export async function handleOperatorWorkspace(request,env,ctx,path,identity){
   if(request.method==='POST'&&path==='/api/v1/operator/day9/historical-import'){
     const body=await request.json();
     return success(ctx,{import:await importHistoricalFounder(env,ctx,identity,body.row||body,{batchId:body.import_batch_id||null})},201,'created');
+  }
+  if(request.method==='POST'&&path==='/api/v1/operator/day9/intelligence-reference'){
+    const body=await request.json();
+    const sanitized=sanitizeIntelligenceReference(body);
+    if(!sanitized.accepted_sections.length) throw new GVError('GV_IMPORT_QUARANTINED','No source-safe intelligence-reference sections remain after quarantine.',422);
+    const key=clean(request.headers.get('Idempotency-Key'))||`day9-intelligence-reference-${await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(sanitized))).then(b=>[...new Uint8Array(b)].slice(0,8).map(x=>x.toString(16).padStart(2,'0')).join(''))}`;
+    const proposal={candidate_type:sanitized.candidate_type,title:'Historical founder pattern reference',proposed_change:{accepted_sections:sanitized.accepted_sections,quarantined_count:sanitized.quarantined_count,canonical_profile_created:false,source_bmr_ids:[]},rationale:'Day 9 governed intelligence-reference only; no canonical founder profile or runtime rule.',risk_summary:sanitized.quarantined_count?'Mixed-source sections were excluded before proposal creation.':'No mixed-source contamination detected.'};
+    const created=await createLearningCandidate(env,ctx,{role:'operator',id:identity.operator_id},key,proposal);
+    return success(ctx,{sanitized,learning_candidate:created.learning_candidate,idempotent_replay:created.idempotent_replay},created.idempotent_replay?200:201,created.idempotent_replay?'no_change':'created');
   }
   const fhr=path.match(/^\/api\/v1\/operator\/business-medical-records\/([^/]+)\/founder-health-record$/);
   if(request.method==='GET'&&fhr)return success(ctx,{fhr:await getFounderHealthProjection(env,decodeURIComponent(fhr[1]))});

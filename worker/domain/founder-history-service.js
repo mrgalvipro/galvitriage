@@ -6,6 +6,7 @@ const CONTAMINATION=/\b(harry|duplex|microbeads|\bamr\b|hospital|healthcare[- ]r
 const first=(db,sql,...p)=>db.prepare(sql).bind(...p).first();
 const all=async(db,sql,...p)=>(await db.prepare(sql).bind(...p).all()).results||[];
 const bounded=(value,max=1000)=>{const v=clean(value);return v?v.slice(0,max):null;};
+const actorId=(actor)=>actor?.operator_id||actor?.id||'operator';
 
 export const normalizeFounderEmail=(value)=>clean(value).toLowerCase();
 export const normalizeVentureName=(value)=>clean(value).toLowerCase().replace(/\s+/g,' ');
@@ -41,13 +42,35 @@ export async function planHistoricalImport(env,row){
   return {source_row_key:r.source_row_key,disposition:ventures.length>1?'quarantine':'ready',founder:founder?'existing':'create',venture:ventures[0]?'existing':'create',bmr:ventures[0]?.bmr_id?'existing':'create',historical_session:'new_or_replay',expected_evidence_count:1,expected_observation_count:r.observations.length,source_checksum_status:'valid',identity_venture_conflict:ventures.length>1,email:'[REDACTED]'};
 }
 
+async function reconcileQuarantinedHistoricalRow(env,ctx,actor,{batchId,r,validation,fingerprint,timestamp}){
+  const sourceRowKey=r.source_row_key||'invalid';
+  const reasons=validation.issues.length?validation.issues:['source_pending'];
+  const result={import_batch_id:batchId,source_row_key:sourceRowKey,disposition:'quarantine',result_type:'skipped',reasons,idempotent_replay:false};
+  const safeMessage=`Historical row quarantined: ${reasons.join(',')}.`;
+  await env.DB.batch([
+    env.DB.prepare(`INSERT OR IGNORE INTO gv1_import_batches
+      (import_batch_id,source_system,source_reference,status,row_count,accepted_count,rejected_count,started_at,completed_at,created_at,source_name,source_checksum,environment,expected_count,processed_count,imported_count,skipped_count,error_count,created_by,updated_at)
+      VALUES (?,'historical_galvishot',?,'completed',1,0,1,?,?,?,?,?,?,1,1,0,1,0,?,?)`)
+      .bind(batchId,r.source_ref,timestamp,timestamp,timestamp,'FCD/GalviShot',r.source_artifact_checksum||null,ctx.environment,actorId(actor),timestamp),
+    env.DB.prepare(`INSERT INTO gv1_import_errors
+      (import_error_id,import_batch_id,source_row_reference,error_code,safe_error_message,safe_error_json,created_at,source_row_key,field_name,quarantined_payload_json,correlation_id)
+      VALUES (?,?,?,?,?,?,?,?,NULL,?,?)`)
+      .bind(newId('ime'),batchId,sourceRowKey,'GV_IMPORT_QUARANTINED',safeMessage,JSON.stringify({reasons}),timestamp,sourceRowKey,JSON.stringify({source_row_key:sourceRowKey,disposition:'quarantine',reasons}),ctx.correlation),
+    env.DB.prepare(`INSERT INTO gv1_import_row_receipts
+      (import_batch_id,source_row_key,request_fingerprint,result_type,canonical_entity_id,error_code,response_json,created_at)
+      VALUES (?,?,?,'skipped',NULL,'GV_IMPORT_QUARANTINED',?,?)`)
+      .bind(batchId,sourceRowKey,fingerprint,JSON.stringify(result),timestamp)
+  ]);
+  return result;
+}
+
 export async function importHistoricalFounder(env,ctx,actor,row,{batchId=null}={}){
   const validation=await validateHistoricalRow(row), r=validation.normalized, timestamp=now();
   batchId=batchId?requireId('import_batch_id',batchId):newId('imp');
   const fingerprint=await hash('day9:fhr-row',r);
   const receipt=await first(env.DB,'SELECT request_fingerprint,response_json FROM gv1_import_row_receipts WHERE import_batch_id=? AND source_row_key=?',batchId,r.source_row_key||'invalid');
   if(receipt){if(receipt.request_fingerprint!==fingerprint)throw new GVError('GV_IMPORT_FINGERPRINT_CONFLICT','The source row changed after it was reconciled.',409);return {...JSON.parse(receipt.response_json),idempotent_replay:true};}
-  if(!validation.valid||r.import_disposition==='source_pending')throw new GVError('GV_IMPORT_QUARANTINED',`Historical row quarantined: ${(validation.issues.length?validation.issues:['source_pending']).join(',')}.`,422);
+  if(!validation.valid||r.import_disposition==='source_pending')return reconcileQuarantinedHistoricalRow(env,ctx,actor,{batchId,r,validation,fingerprint,timestamp});
   if(r.import_disposition!=='canonical_fhr_backfill')throw new GVError('GV_IMPORT_DISPOSITION','Canonical import requires canonical_fhr_backfill disposition.',422);
   let founder=await first(env.DB,'SELECT founder_id FROM gv1_founders WHERE normalized_email=?',r.email), creatingFounder=!founder;
   if(!founder)founder={founder_id:newId('fdr')};
@@ -58,7 +81,7 @@ export async function importHistoricalFounder(env,ctx,actor,row,{batchId=null}={
   const sessionId=newId('ses'), evidenceId=newId('evi');
   const result={import_batch_id:batchId,source_row_key:r.source_row_key,founder_id:founder.founder_id,venture_id:venture.venture_id,bmr_id:bmr.bmr_id,historical_session_id:sessionId,evidence_id:evidenceId,observation_ids:r.observations.map(()=>newId('obs')),idempotent_replay:false};
   const statements=[];
-  statements.push(env.DB.prepare(`INSERT OR IGNORE INTO gv1_import_batches (import_batch_id,source_system,source_reference,status,row_count,accepted_count,rejected_count,started_at,created_at,source_name,source_checksum,environment,expected_count,processed_count,imported_count,skipped_count,error_count,created_by,updated_at) VALUES (?,'historical_galvishot',?,'completed',1,1,0,?,?,?,?,?,1,1,1,0,0,?,?)`).bind(batchId,r.source_ref,timestamp,timestamp,'FCD/GalviShot',r.source_artifact_checksum,ctx.environment,actor.operator_id||actor.id||'operator',timestamp));
+  statements.push(env.DB.prepare(`INSERT OR IGNORE INTO gv1_import_batches (import_batch_id,source_system,source_reference,status,row_count,accepted_count,rejected_count,started_at,created_at,source_name,source_checksum,environment,expected_count,processed_count,imported_count,skipped_count,error_count,created_by,updated_at) VALUES (?,'historical_galvishot',?,'completed',1,1,0,?,?,?,?,?,1,1,1,0,0,?,?)`).bind(batchId,r.source_ref,timestamp,timestamp,'FCD/GalviShot',r.source_artifact_checksum,ctx.environment,actorId(actor),timestamp));
   if(creatingFounder)statements.push(env.DB.prepare(`INSERT INTO gv1_founders (founder_id,first_name,last_name,email,normalized_email,consent_status,status,record_version,created_at,updated_at) VALUES (?,?,?,?,?,'approved','active',1,?,?)`).bind(founder.founder_id,r.display_name,null,r.email,r.email,timestamp,timestamp));
   if(creatingVenture){statements.push(env.DB.prepare(`INSERT INTO gv1_ventures (venture_id,venture_name,status,record_version,created_at,updated_at) VALUES (?,?,'active',1,?,?)`).bind(venture.venture_id,r.venture_name,timestamp,timestamp));statements.push(env.DB.prepare(`INSERT INTO gv1_founder_venture_roles (founder_id,venture_id,role_code,is_primary,status,created_at,updated_at) VALUES (?,?,'founder',1,'active',?,?)`).bind(founder.founder_id,venture.venture_id,timestamp,timestamp));statements.push(env.DB.prepare(`INSERT INTO gv1_business_medical_records (bmr_id,venture_id,status,record_version,current_session_id,opened_at,created_at,updated_at) VALUES (?,?,'active',1,NULL,?,?,?)`).bind(bmr.bmr_id,venture.venture_id,timestamp,timestamp,timestamp));}
   statements.push(env.DB.prepare(`INSERT INTO gv1_assessment_sessions (session_id,bmr_id,venture_id,founder_id,client_session_key,source,current_stage,status,started_at,completed_at,created_at,updated_at) VALUES (?,?,?,?,?,'historical_galvishot','Historical Founder Context','completed',?,?,?,?)`).bind(sessionId,bmr.bmr_id,venture.venture_id,founder.founder_id,`day9:${batchId}:${r.source_row_key}`,r.source_event_at||timestamp,r.source_event_at||timestamp,timestamp,timestamp));
@@ -82,9 +105,57 @@ export async function getFounderHealthProjection(env,bmrId,{limit=40}={}){
 
 export async function composeFounderIntelligenceContext(env,actor,{founderId,ventureId,bmrId,maxEvidenceRefs=25}={}){
   if(!actor||!['business_physician','clinician','operator','admin','internal_service'].includes(actor.role))throw new GVError('GV_AUTH_FORBIDDEN','Founder Intelligence Context is internal only.',403);
-  const fhr=await getFounderHealthProjection(env,bmrId,{limit:Math.min(100,maxEvidenceRefs*4)});
+  const maxRefs=Math.max(1,Math.min(50,Number(maxEvidenceRefs)||25));
+  const fhr=await getFounderHealthProjection(env,bmrId,{limit:Math.min(100,maxRefs*4)});
   if(fhr.founder_id!==founderId||fhr.venture_id!==ventureId)throw new GVError('GV_SCOPE_MISMATCH','Founder Intelligence scope does not match the canonical BMR.',403);
-  return {context_version:'day9-founder-intelligence-v1',founder_identity_ref:founderId,venture_ref:ventureId,bmr_ref:bmrId,continuity_status:fhr.historical_sessions.length?'returning_same_venture':'new',historical_fhr:fhr,current_business_health:{source:'canonical_bmr',bmr_id:bmrId},current_findings_summary:[],treatment_outcome_summary:[],evidence_refs:fhr.provenance.evidence_refs.slice(0,Math.min(50,maxEvidenceRefs)),source_versions:fhr.provenance.source_artifact_checksums,contradictions_or_staleness:[],generated_at:now()};
+
+  const currentSession=await first(env.DB,`SELECT session_id,source,current_stage,status,started_at,completed_at,updated_at
+    FROM gv1_assessment_sessions
+    WHERE bmr_id=? AND lower(coalesce(source,'')) NOT IN ('historical_galvishot','historical_fcd_galvishot')
+    ORDER BY updated_at DESC LIMIT 1`,bmrId);
+  const currentEvidence=currentSession?await all(env.DB,`SELECT evidence_id,session_id,source_product,source_type,source_ref,evidence_version,status,captured_at,created_at
+    FROM gv1_evidence_items
+    WHERE bmr_id=? AND session_id=? AND lower(coalesce(source_type,'')) NOT IN ('historical_galvishot','historical_fcd_galvishot')
+    ORDER BY created_at DESC LIMIT ?`,bmrId,currentSession.session_id,maxRefs):[];
+  const currentFindings=await all(env.DB,`SELECT finding_id,finding_code,confirmation_status,status,confidence,source_type,source_version
+    FROM gv1_findings
+    WHERE bmr_id=? AND status IN ('draft','active')
+    ORDER BY created_at DESC LIMIT 10`,bmrId);
+  const treatmentPlans=await all(env.DB,`SELECT treatment_plan_id,treatment_code,status,version_no
+    FROM gv1_treatment_plans
+    WHERE bmr_id=? AND status NOT IN ('cancelled','superseded','archived')
+    ORDER BY created_at DESC LIMIT 10`,bmrId);
+  const outcomes=await all(env.DB,`SELECT outcome_id,outcome_code,status,measured_at
+    FROM gv1_outcomes
+    WHERE bmr_id=? AND status NOT IN ('rejected','superseded','archived')
+    ORDER BY measured_at DESC LIMIT 10`,bmrId);
+
+  const currentEvidenceRefs=currentEvidence.map(x=>x.evidence_id);
+  const historicalRefs=fhr.provenance.evidence_refs||[];
+  return {
+    context_version:'day9-founder-intelligence-v1',
+    founder_identity_ref:founderId,
+    venture_ref:ventureId,
+    bmr_ref:bmrId,
+    continuity_status:currentSession&&fhr.historical_sessions.length?'returning_same_venture':fhr.historical_sessions.length?'historical_only':'current_only',
+    historical_fhr:fhr,
+    current_business_health:{
+      source:'canonical_bmr',
+      bmr_id:bmrId,
+      current_session_ref:currentSession?.session_id||null,
+      current_session:currentSession||null,
+      current_evidence_refs:currentEvidenceRefs
+    },
+    current_findings_summary:currentFindings,
+    treatment_outcome_summary:{
+      treatment_plan_refs:treatmentPlans.map(x=>x.treatment_plan_id),
+      outcome_refs:outcomes.map(x=>x.outcome_id)
+    },
+    evidence_refs:[...new Set([...historicalRefs,...currentEvidenceRefs])].slice(0,maxRefs),
+    source_versions:fhr.provenance.source_artifact_checksums,
+    contradictions_or_staleness:[],
+    generated_at:now()
+  };
 }
 
 export function sanitizeIntelligenceReference(input){const sections=(Array.isArray(input?.sections)?input.sections:[]).map(value=>bounded(value)).filter(Boolean);const accepted=sections.filter(x=>!CONTAMINATION.test(x));return {candidate_type:'historical_founder_pattern_reference',status:'proposed',source_bmr_ids:[],accepted_sections:accepted,quarantined_count:sections.length-accepted.length,canonical_profile_created:false};}
