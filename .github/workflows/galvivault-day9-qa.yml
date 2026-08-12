@@ -98,7 +98,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm run day9:import:dry-run -- --input data/day9/fhr-identity-manifest.example.json | tee /tmp/day9-dry-run.json
+          node scripts/day9-fhr-backfill.mjs --input data/day9/fhr-identity-manifest.example.json | tee /tmp/day9-dry-run.json
           jq -e '.dry_run == true and .mutated == false and (.rows|length) == 1 and .rows[0].disposition == "ready" and .rows[0].expected_evidence_count == 1 and .rows[0].expected_observation_count == 6 and .rows[0].source_checksum_status == "valid" and .rows[0].email == "[REDACTED]" and .rows[0].source_narrative == "[REDACTED]"' /tmp/day9-dry-run.json >/dev/null
           ! grep -Eqi '@(gmail|hotmail|yahoo|outlook)\.' /tmp/day9-dry-run.json
 
