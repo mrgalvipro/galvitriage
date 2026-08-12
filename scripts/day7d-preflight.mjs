@@ -21,7 +21,24 @@ if(!pkg.scripts?.['test:day7d']?.includes('day7d-customer-path-contract.test.mjs
 
 const wrangler=JSON.parse(fs.readFileSync('wrangler.day7d.json','utf8'));
 if(wrangler.name!=='galvicare-triage-intake') failures.push(`API Worker name mismatch: ${wrangler.name}`);
-if(wrangler.main!=='worker/day7d-engine.js') failures.push(`wrangler.day7d.json main must be worker/day7d-engine.js, got ${wrangler.main}`);
+const continuityBridge=wrangler.vars?.GALVIVAULT_DAY9_CONTINUITY_BRIDGE==='true';
+const expectedMain=continuityBridge?'worker/day9-galvicare-continuity.js':'worker/day7d-engine.js';
+if(wrangler.main!==expectedMain) failures.push(`wrangler.day7d.json main must be ${expectedMain}, got ${wrangler.main}`);
+if(continuityBridge){
+  if(wrangler.vars?.ENVIRONMENT!=='qa') failures.push('Day 9 GalviCare continuity wrapper is QA-only.');
+  if(!fs.existsSync('worker/day9-galvicare-continuity.js')) failures.push('Day 9 continuity bridge is enabled but worker/day9-galvicare-continuity.js is missing.');
+  else {
+    const bridge=fs.readFileSync('worker/day9-galvicare-continuity.js','utf8');
+    for(const token of [
+      "import day7dWorker from './day7d-engine.js'",
+      "import day2Worker from './day2.js'",
+      'GALVIVAULT_DAY9_CONTINUITY_BRIDGE',
+      'DAY9_CANONICAL_CONTINUITY_FAILED',
+      'GALVICARE_SESSION_IDENTITY_CONFLICT',
+      'X-GalviVault-Day9-Continuity'
+    ]) if(!bridge.includes(token)) failures.push(`Day 9 continuity wrapper missing required guardrail token: ${token}`);
+  }
+}
 const db=(wrangler.d1_databases||[]).find(x=>x.binding==='DB');
 if(!db) failures.push('wrangler.day7d.json must expose existing QA D1 as binding DB');
 else {
@@ -77,5 +94,6 @@ console.log(JSON.stringify({
   galviscore_clarification_server_owned:true,objective_score_immutable:true,progressive_followups:true,dynamic_question_count:true,approved_low_confidence_question_count:3,
   prior_product_results_in_clinical_file:true,bounded_multi_question_submit:true,collision_safe_followup_save:true,legacy_generation_bypass_closed:true,
   atomic_followup_save:true,server_selected_question_validation:true,save_returns_regenerated_result:true,evidence_versioned_results:true,
-  matched_worker_and_frontend_release:true,day1_isolated:true,day7c_compatibility_only:true,production_untouched:true
+  matched_worker_and_frontend_release:true,day1_isolated:true,day7c_compatibility_only:true,production_untouched:true,
+  day9_canonical_continuity_bridge:continuityBridge
 },null,2));
