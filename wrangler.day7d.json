@@ -1,12 +1,13 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvicare-triage-intake",
-  "main": "worker/day7d-engine.js",
+  "main": "worker/day9-galvicare-continuity.js",
   "compatibility_date": "2026-07-23",
   "vars": {
     "ENVIRONMENT": "qa",
     "APP_ENV": "qa",
     "GALVIVAULT_NAME": "galvivault-0-5-qa",
+    "GALVIVAULT_DAY9_CONTINUITY_BRIDGE": "true",
     "HUBSPOT_ENABLED": "true",
     "GA4_MEASUREMENT_ID": "G-V5ZPM5L19T",
     "CLARITY_PROJECT_ID": "xswd8m446z",
