@@ -10,10 +10,19 @@ on:
       - 'worker/domain/founder-history-service.js'
       - 'worker/routes/operator-workspace.js'
       - 'worker/day2.js'
+      - 'worker/day9-galvicare-continuity.js'
       - 'clinician-portal/app.js'
       - 'scripts/day9-fhr-backfill.mjs'
+      - 'scripts/day7b-build-qa-frontend.mjs'
       - 'tests/day9-fhr-bhr-integration.test.mjs'
+      - 'tests/day7c-integration.test.mjs'
+      - 'tests/day7d-customer-intelligence.test.mjs'
+      - 'tests/day7d-customer-path-contract.test.mjs'
       - 'data/day9/fhr-identity-manifest.example.json'
+      - 'day7d-browser-customer-intelligence.js'
+      - 'qa-frontend-worker.js'
+      - 'wrangler.day7d.json'
+      - 'wrangler.qa-frontend.jsonc'
       - 'package.json'
 
 permissions:
@@ -108,6 +117,14 @@ jobs:
           set -euo pipefail
           npm run day8:gate | tee /tmp/day9-day8-regression.txt
 
+      - name: F14 exact-current-SHA GalviCare continuity regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/day9-galvicare-continuity.js
+          npm run test:day7c | tee /tmp/day9-f14-day7c.txt
+          npm run test:day7d | tee /tmp/day9-f14-day7d.txt
+
       - name: Verify Cloudflare QA credentials
         shell: bash
         run: |
@@ -186,6 +203,8 @@ jobs:
             /tmp/day9-gate.txt
             /tmp/day9-dry-run.json
             /tmp/day9-day8-regression.txt
+            /tmp/day9-f14-day7c.txt
+            /tmp/day9-f14-day7d.txt
             /tmp/day9-deploy.txt
             /tmp/day9-d1-baseline.json
             /tmp/day9-shell.html
@@ -206,6 +225,7 @@ jobs:
           echo "- Clinician QA: $PORTAL_URL" >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 9 focused gate: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 8/inherited regression: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- F14 exact-current-SHA GalviCare continuity regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- QA D1 integrity baseline: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Public Day 9 API negatives: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Public GalviCare smoke: PASS' >> "$GITHUB_STEP_SUMMARY"
