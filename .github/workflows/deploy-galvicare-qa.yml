@@ -98,6 +98,18 @@ jobs:
           packageManager: npm
           command: d1 execute galvivault-0-5-qa --remote --file=migrations/0006_day7d_customer_intelligence.sql --config wrangler.day7d.json
 
+      - name: Generate bounded Day 9 QA runtime config
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq '.main="worker/day9-galvicare-continuity.js" | .vars.GALVIVAULT_DAY9_CONTINUITY_BRIDGE="true" | .vars.DAY7D_DEPLOY_SHA=env.DAY7D_RELEASE_ID | .vars.DAY7D_DEPLOY_TARGET="galvicare-triage-intake"' \
+            wrangler.day7d.json > wrangler.day9-runtime.generated.json
+          test "$(jq -r '.name' wrangler.day9-runtime.generated.json)" = "galvicare-triage-intake"
+          test "$(jq -r '.main' wrangler.day9-runtime.generated.json)" = "worker/day9-galvicare-continuity.js"
+          test "$(jq -r '.vars.ENVIRONMENT' wrangler.day9-runtime.generated.json)" = "qa"
+          test "$(jq -r '.vars.GALVIVAULT_DAY9_CONTINUITY_BRIDGE' wrangler.day9-runtime.generated.json)" = "true"
+          test "$(jq -r '.d1_databases[] | select(.binding=="DB") | .database_name' wrangler.day9-runtime.generated.json)" = "galvivault-0-5-qa"
+
       - name: Deploy authoritative Day 7D Worker with Day 9 QA continuity bridge
         uses: cloudflare/wrangler-action@v3
         with:
@@ -105,7 +117,12 @@ jobs:
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4"
           packageManager: npm
-          command: deploy worker/day9-galvicare-continuity.js --config wrangler.day7d.json --var GALVIVAULT_DAY9_CONTINUITY_BRIDGE:true --var DAY7D_DEPLOY_SHA:${{ env.DAY7D_RELEASE_ID }} --var DAY7D_DEPLOY_TARGET:galvicare-triage-intake
+          command: deploy --config wrangler.day9-runtime.generated.json
+
+      - name: Remove generated Day 9 QA runtime config
+        if: always()
+        shell: bash
+        run: rm -f wrangler.day9-runtime.generated.json
 
       - name: Deploy authoritative QA frontend
         uses: cloudflare/wrangler-action@v3
