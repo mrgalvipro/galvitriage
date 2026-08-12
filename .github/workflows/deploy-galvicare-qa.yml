@@ -14,6 +14,7 @@ on:
       - "scripts/day7b-build-qa-frontend.mjs"
       - "scripts/day7d-preflight.mjs"
       - "migrations/0006_day7d_customer_intelligence.sql"
+      - "tests/day7c-integration.test.mjs"
       - "tests/day7d-customer-intelligence.test.mjs"
       - "tests/day7d-customer-path-contract.test.mjs"
       - "index.html"
@@ -63,7 +64,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RELEASE_ID="$({ sha256sum worker/worker.js worker/day7d-engine.js worker/day9-galvicare-continuity.js day7d-browser-customer-intelligence.js scripts/day7b-build-qa-frontend.mjs scripts/day7d-preflight.mjs tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs index.html qa-frontend-worker.js wrangler.day7d.json wrangler.qa-frontend.jsonc; } | sha256sum | awk '{print $1}')"
+          RELEASE_ID="$({ sha256sum worker/worker.js worker/day7d-engine.js worker/day9-galvicare-continuity.js day7d-browser-customer-intelligence.js scripts/day7b-build-qa-frontend.mjs scripts/day7d-preflight.mjs tests/day7c-integration.test.mjs tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs index.html qa-frontend-worker.js wrangler.day7d.json wrangler.qa-frontend.jsonc; } | sha256sum | awk '{print $1}')"
           test -n "$RELEASE_ID"
           echo "DAY7D_RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
           echo "Matched Day 7D QA candidate fingerprint: $RELEASE_ID"
