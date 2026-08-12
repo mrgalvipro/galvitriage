@@ -11,7 +11,12 @@ const PROD_WORKER='https://galvicare-0-5-production.mrgalvipro.workers.dev';
 const QA_GA4='G-V5ZPM5L19T';
 const QA_CLARITY='xswd8m446z';
 const QA_CALENDLY='https://calendly.com/galvilpro/galviclinic-day7c-qa';
-const TEST_STRIPE_MARKER='https://buy.stripe.com/test_';
+const STRIPE={
+  score:{live:'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00',test:'https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01'},
+  shot:{live:'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253O01',test:'https://buy.stripe.com/test_00w14odrG1QLdcu9dA53O02'},
+  sight:{live:'https://buy.stripe.com/00w14odrG1QLdcu9dA53O02',test:'https://buy.stripe.com/test_eVq3cw3R63YT6O6ahE53O03'},
+  path:{live:'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03',test:'https://buy.stripe.com/test_fZu14ofzO9jd8We1L853O05'}
+};
 const DAY7D_RELEASE_CONTRACT='day7d_cumulative_customer_intelligence_v3';
 const AUTHORITATIVE_SIGNATURE='Day 7D cumulative customer-intelligence browser adapter.';
 const LEGACY_SIGNATURE='DAY7D_CUSTOMER_INTELLIGENCE_ADAPTER_SOURCE';
@@ -22,10 +27,10 @@ const day7dBrowser=readFileSync(DAY7D_BROWSER,'utf8');
 for(const contract of [
   `const GALVICARE_INTAKE_ENDPOINT = '${PROD_WORKER}';`,
   "const GALVICARE_API_ENDPOINT = GALVICARE_INTAKE_ENDPOINT + '/api';",
-  "const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/",
-  "PAYMENT_LINK: 'https://buy.stripe.com/",
-  "const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/",
-  "const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/"
+  `const GALVISCORE_STRIPE_PAYMENT_LINK = '${STRIPE.score.live}';`,
+  `PAYMENT_LINK: '${STRIPE.shot.live}'`,
+  `const GALVISIGHT_STRIPE_PAYMENT_LINK = '${STRIPE.sight.live}';`,
+  `const GALVIPATH_STRIPE_PAYMENT_LINK = '${STRIPE.path.live}';`
 ]) if(!html.includes(contract)) throw new Error(`Canonical source contract missing: ${contract}`);
 
 for(const contract of [
@@ -39,6 +44,7 @@ for(const contract of [
 if(day7dBrowser.includes('MAX_TARGETED_QUESTIONS_PER_STAGE=1')) throw new Error('Day 7D browser must not hard-code a universal one-question rule.');
 
 html=html.replace(`const GALVICARE_INTAKE_ENDPOINT = '${PROD_WORKER}';`,`const GALVICARE_INTAKE_ENDPOINT = '${QA_WORKER}';`);
+for(const {live,test} of Object.values(STRIPE)) html=html.replaceAll(live,test);
 html=html.replaceAll('G-KXJFKN7RTS',QA_GA4).replaceAll('xjsdmprr4z',QA_CLARITY);
 html=html.replace("const GALVICARE_CANONICAL_CUSTOMER_URL = 'https://www.galvipro.com/#galvitriage';",`const GALVICARE_CANONICAL_CUSTOMER_URL = '${QA_CUSTOMER_URL}';`);
 html=html.replace(/const GALVICLINIC_FALLBACK_URL = '[^']+';/,`const GALVICLINIC_FALLBACK_URL = '${QA_CALENDLY}';`);
@@ -57,8 +63,8 @@ if(adapterCount!==1) throw new Error(`Generated QA frontend must contain exactly
 if(html.includes(LEGACY_SIGNATURE)) throw new Error('Legacy Day 7D adapter marker survived the QA build.');
 
 for(const required of [
-  DAY7D_RELEASE_CONTRACT,
-  QA_WORKER,QA_CUSTOMER_URL,TEST_STRIPE_MARKER,QA_GA4,QA_CLARITY,QA_CALENDLY,
+  DAY7D_RELEASE_CONTRACT,QA_WORKER,QA_CUSTOMER_URL,QA_GA4,QA_CLARITY,QA_CALENDLY,
+  ...Object.values(STRIPE).map(x=>x.test),
   'galviscore-followup','submit-followup','save_galviscore_followup','get_or_generate_galviscore','renderUnlockedGalviScore',
   'galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions',
   'save_galvishot_followup','save_galvisight_followup','save_galvipath_followup',
@@ -66,12 +72,12 @@ for(const required of [
   'invokeLegacyWithResponse','MAX_VISIBLE_TARGETED_QUESTIONS=3','galvipath-book-galviclinic'
 ]) if(!html.includes(required)) throw new Error(`Generated QA frontend missing cumulative journey contract: ${required}`);
 if(html.includes(PROD_WORKER)) throw new Error('Production Worker leaked into QA frontend.');
-for(const link of ['https://buy.stripe.com/14A00kbjycvpgoGfBY53O00','https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253O01','https://buy.stripe.com/00w14odrG1QLdcu9dA53O02','https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03']) if(html.includes(link)) throw new Error(`LIVE Stripe link leaked into QA frontend: ${link}`);
+for(const {live} of Object.values(STRIPE)) if(html.includes(live)) throw new Error(`LIVE Stripe link leaked into QA frontend: ${live}`);
 
 mkdirSync(OUT_DIR,{recursive:true});
 writeFileSync(OUT,html,'utf8');
 console.log(`PASS — ${OUT} is the single cumulative QA frontend candidate.`);
 console.log(`PASS — release contract ${DAY7D_RELEASE_CONTRACT} binds the generated frontend to the authoritative Worker candidate.`);
-console.log('PASS — canonical Production endpoint is transformed to the isolated QA Worker only in dist-qa.');
+console.log('PASS — canonical Production endpoints and LIVE payment links are transformed only in dist-qa.');
 console.log('PASS — GalviScore clarification is Worker-owned and objective score remains immutable.');
 console.log('PASS — Triage → Vitals → Score → Shot → Sight → Path → Clinic contract is present.');
