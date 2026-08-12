@@ -1,0 +1,217 @@
+name: GalviVault Day 9 QA FHR-BHR Integration
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - '.github/workflows/galvivault-day9-qa.yml'
+      - 'worker/domain/founder-history-service.js'
+      - 'worker/routes/operator-workspace.js'
+      - 'worker/day2.js'
+      - 'clinician-portal/app.js'
+      - 'scripts/day9-fhr-backfill.mjs'
+      - 'tests/day9-fhr-bhr-integration.test.mjs'
+      - 'data/day9/fhr-identity-manifest.example.json'
+      - 'package.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvivault-day9-qa
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DAY9_FROZEN_COMMIT: fd40ddb9cbe37f8f25c8a6eac0351638e270d07b
+  DAY9_FROZEN_TREE: a87f454249ee674d617e8ec7c0d7ccd58d381d27
+  DAY9_BASE_COMMIT: d498f42a128c5d6e8c6639850184f674cfeca1f6
+  GALVICARE_QA_URL: https://galvicare-0-5-qa.mrgalvipro.workers.dev/
+
+jobs:
+  day9:
+    name: Prove Day 9 candidate, deploy QA, and open Human E2E gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: qa
+
+    steps:
+      - name: Checkout exact QA head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Prove approved branch and exact frozen Day 9 ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
+          git merge-base --is-ancestor "$DAY9_FROZEN_COMMIT" "$GITHUB_SHA"
+          test "$(git rev-parse "$DAY9_FROZEN_COMMIT^")" = "$DAY9_BASE_COMMIT"
+          test "$(git rev-parse "$DAY9_FROZEN_COMMIT^{tree}")" = "$DAY9_FROZEN_TREE"
+
+          # The frozen Day 9 implementation is exactly ten application/release paths.
+          expected="$(mktemp)"
+          actual="$(mktemp)"
+          cat > "$expected" <<'EOF'
+          .gitignore
+          clinician-portal/app.js
+          data/day9/fhr-identity-manifest.example.json
+          package.json
+          release-evidence/day9/day9-implementation-report.md
+          scripts/day9-fhr-backfill.mjs
+          tests/day9-fhr-bhr-integration.test.mjs
+          worker/day2.js
+          worker/domain/founder-history-service.js
+          worker/routes/operator-workspace.js
+          EOF
+          git diff --name-only "$DAY9_BASE_COMMIT" "$DAY9_FROZEN_COMMIT" | sort > "$actual"
+          sort "$expected" -o "$expected"
+          diff -u "$expected" "$actual"
+
+          # Protected GalviCare runtime/workflow surfaces are unchanged by Day 9.
+          git diff --exit-code "$DAY9_BASE_COMMIT" "$DAY9_FROZEN_COMMIT" -- \
+            index.html worker/worker.js worker/production-entry.js \
+            worker/day7d-engine.js worker/day7d-runtime.js \
+            day7c-browser-observability.js day7d-browser-customer-intelligence.js \
+            qa-frontend-worker.js wrangler.production.jsonc wrangler.day7d.json \
+            wrangler.qa-frontend.jsonc .github/workflows/day7b-readiness.yml \
+            .github/workflows/qa-stabilization.yml .github/workflows/deploy-galvicare-qa.yml
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Run exact Day 9 focused gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run day9:gate | tee /tmp/day9-gate.txt
+
+      - name: Run redacted non-mutating synthetic import dry-run
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run day9:import:dry-run -- --input data/day9/fhr-identity-manifest.example.json | tee /tmp/day9-dry-run.json
+          test "$(jq -r '.status // .result // empty' /tmp/day9-dry-run.json)" = "PASS"
+          test "$(jq -r '.ready_count' /tmp/day9-dry-run.json)" = "1"
+          test "$(jq -r '.expected_evidence_items' /tmp/day9-dry-run.json)" = "1"
+          test "$(jq -r '.expected_observations' /tmp/day9-dry-run.json)" = "6"
+          ! grep -Eqi '@(gmail|hotmail|yahoo|outlook)\.' /tmp/day9-dry-run.json
+
+      - name: Run Day 8 clinician and inherited GalviCare regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run day8:gate | tee /tmp/day9-day8-regression.txt
+
+      - name: Verify Cloudflare QA credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          npx --yes wrangler@4.120.0 whoami
+
+      - name: Deploy exact Day 9-capable clinician Worker to QA
+        id: deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 deploy --config wrangler.day8.json | tee /tmp/day9-deploy.txt
+          portal_url="$(grep -Eo 'https://[^[:space:]]+\.workers\.dev/?' /tmp/day9-deploy.txt | tail -1)"
+          test -n "$portal_url"
+          portal_url="${portal_url%/}/"
+          echo "portal_url=$portal_url" >> "$GITHUB_OUTPUT"
+          echo "Day 9 QA clinician URL: $portal_url"
+
+      - name: Prove QA D1 canonical integrity read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day8.json \
+            --command="SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS orphan_observation_evidence FROM gv1_observation_evidence oe LEFT JOIN gv1_observations o ON o.observation_id=oe.observation_id LEFT JOIN gv1_evidence_items e ON e.evidence_id=oe.evidence_id WHERE o.observation_id IS NULL OR e.evidence_id IS NULL; SELECT COUNT(*) AS cross_bmr_observation_evidence FROM gv1_observation_evidence oe JOIN gv1_observations o ON o.observation_id=oe.observation_id JOIN gv1_evidence_items e ON e.evidence_id=oe.evidence_id WHERE o.bmr_id<>e.bmr_id;" \
+            --json | tee /tmp/day9-d1-baseline.json
+          test "$(jq -r '.[0].results[0].duplicate_bmr_ventures' /tmp/day9-d1-baseline.json)" = "0"
+          test "$(jq -r '.[1].results[0].orphan_observation_evidence' /tmp/day9-d1-baseline.json)" = "0"
+          test "$(jq -r '.[2].results[0].cross_bmr_observation_evidence' /tmp/day9-d1-baseline.json)" = "0"
+
+      - name: Prove protected Day 9 APIs fail closed to public caller
+        shell: bash
+        env:
+          PORTAL_URL: ${{ steps.deploy.outputs.portal_url }}
+        run: |
+          set -euo pipefail
+          test -n "$PORTAL_URL"
+          shell_status="$(curl -sS -o /tmp/day9-shell.html -w '%{http_code}' "$PORTAL_URL")"
+          test "$shell_status" = "200"
+          grep -q 'Business Physician Workspace' /tmp/day9-shell.html
+
+          for path in \
+            'api/v1/operator/day9/historical-import/plan' \
+            'api/v1/operator/day9/historical-import' \
+            'api/v1/operator/business-medical-records/synthetic/founder-health-record' \
+            'api/v1/operator/business-medical-records/synthetic/founder-intelligence-context'
+          do
+            if [[ "$path" == *historical-import* ]]; then
+              status="$(curl -sS -o /tmp/day9-protected.json -w '%{http_code}' -X POST -H 'content-type: application/json' --data '{}' "${PORTAL_URL}${path}")"
+            else
+              status="$(curl -sS -o /tmp/day9-protected.json -w '%{http_code}' "${PORTAL_URL}${path}")"
+            fi
+            test "$status" = "401"
+            grep -q 'GV_AUTH_REQUIRED' /tmp/day9-protected.json
+            ! grep -Eqi 'historical_founder_context|founder_intelligence|source_artifact|genome' /tmp/day9-protected.json
+          done
+
+      - name: Prove public GalviCare QA remains healthy
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl -L -sS -o /tmp/day9-galvicare.html -D /tmp/day9-galvicare.headers -w '%{http_code}' "$GALVICARE_QA_URL")"
+          test "$status" = "200"
+          grep -qi 'GalviCare' /tmp/day9-galvicare.html
+          grep -qi 'GalviTriage' /tmp/day9-galvicare.html
+          grep -qi 'GalviVitals' /tmp/day9-galvicare.html
+
+      - name: Capture Day 9 pre-Human-E2E evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: galvivault-day9-pre-human-e2e-${{ github.sha }}
+          if-no-files-found: ignore
+          path: |
+            /tmp/day9-gate.txt
+            /tmp/day9-dry-run.json
+            /tmp/day9-day8-regression.txt
+            /tmp/day9-deploy.txt
+            /tmp/day9-d1-baseline.json
+            /tmp/day9-shell.html
+            /tmp/day9-protected.json
+            /tmp/day9-galvicare.headers
+            /tmp/day9-galvicare.html
+
+      - name: READY FOR DAY 9 SYNTHETIC HUMAN E2E
+        if: success()
+        shell: bash
+        env:
+          PORTAL_URL: ${{ steps.deploy.outputs.portal_url }}
+        run: |
+          echo '## GALVIVAULT DAY 9 PRE-HUMAN-E2E: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "- QA head: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Frozen implementation commit: $DAY9_FROZEN_COMMIT" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Frozen implementation tree: $DAY9_FROZEN_TREE" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Clinician QA: $PORTAL_URL" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 9 focused gate: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 8/inherited regression: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA D1 integrity baseline: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Public Day 9 API negatives: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Public GalviCare smoke: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR DAY 9 SYNTHETIC HUMAN E2E — Human E2E is not auto-claimed by this workflow.**' >> "$GITHUB_STEP_SUMMARY"
