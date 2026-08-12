@@ -20,13 +20,13 @@ let html=readFileSync(SOURCE,'utf8');
 const day7dBrowser=readFileSync(DAY7D_BROWSER,'utf8');
 
 for(const contract of [
-  `const GALVICARE_INTAKE_ENDPOINT = '${QA_WORKER}';`,
-  "const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_",
-  "PAYMENT_LINK: 'https://buy.stripe.com/test_",
-  "const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_",
-  "const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/test_"
-]) if(!html.includes(contract)) throw new Error(`QA source contract missing: ${contract}`);
-if(html.includes(PROD_WORKER)) throw new Error('Production Worker endpoint is present in QA source.');
+  `const GALVICARE_INTAKE_ENDPOINT = '${PROD_WORKER}';`,
+  "const GALVICARE_API_ENDPOINT = GALVICARE_INTAKE_ENDPOINT + '/api';",
+  "const GALVISCORE_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/",
+  "PAYMENT_LINK: 'https://buy.stripe.com/",
+  "const GALVISIGHT_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/",
+  "const GALVIPATH_STRIPE_PAYMENT_LINK = 'https://buy.stripe.com/"
+]) if(!html.includes(contract)) throw new Error(`Canonical source contract missing: ${contract}`);
 
 for(const contract of [
   AUTHORITATIVE_SIGNATURE,'needs_followup',
@@ -38,6 +38,7 @@ for(const contract of [
 ]) if(!day7dBrowser.includes(contract)) throw new Error(`Day 7D browser contract missing: ${contract}`);
 if(day7dBrowser.includes('MAX_TARGETED_QUESTIONS_PER_STAGE=1')) throw new Error('Day 7D browser must not hard-code a universal one-question rule.');
 
+html=html.replace(`const GALVICARE_INTAKE_ENDPOINT = '${PROD_WORKER}';`,`const GALVICARE_INTAKE_ENDPOINT = '${QA_WORKER}';`);
 html=html.replaceAll('G-KXJFKN7RTS',QA_GA4).replaceAll('xjsdmprr4z',QA_CLARITY);
 html=html.replace("const GALVICARE_CANONICAL_CUSTOMER_URL = 'https://www.galvipro.com/#galvitriage';",`const GALVICARE_CANONICAL_CUSTOMER_URL = '${QA_CUSTOMER_URL}';`);
 html=html.replace(/const GALVICLINIC_FALLBACK_URL = '[^']+';/,`const GALVICLINIC_FALLBACK_URL = '${QA_CALENDLY}';`);
@@ -71,5 +72,6 @@ mkdirSync(OUT_DIR,{recursive:true});
 writeFileSync(OUT,html,'utf8');
 console.log(`PASS — ${OUT} is the single cumulative QA frontend candidate.`);
 console.log(`PASS — release contract ${DAY7D_RELEASE_CONTRACT} binds the generated frontend to the authoritative Worker candidate.`);
+console.log('PASS — canonical Production endpoint is transformed to the isolated QA Worker only in dist-qa.');
 console.log('PASS — GalviScore clarification is Worker-owned and objective score remains immutable.');
 console.log('PASS — Triage → Vitals → Score → Shot → Sight → Path → Clinic contract is present.');
