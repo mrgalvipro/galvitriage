@@ -11,6 +11,7 @@ const PROD_WORKER='https://galvicare-0-5-production.mrgalvipro.workers.dev';
 const QA_GA4='G-V5ZPM5L19T';
 const QA_CLARITY='xswd8m446z';
 const QA_CALENDLY='https://calendly.com/galvilpro/galviclinic-day7c-qa';
+const TEST_STRIPE_MARKER='https://buy.stripe.com/test_';
 const STRIPE={
   score:{live:'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00',test:'https://buy.stripe.com/test_bJe7sM5Ze9jdc8qgG253O01'},
   shot:{live:'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253O01',test:'https://buy.stripe.com/test_00w14odrG1QLdcu9dA53O02'},
@@ -63,7 +64,7 @@ if(adapterCount!==1) throw new Error(`Generated QA frontend must contain exactly
 if(html.includes(LEGACY_SIGNATURE)) throw new Error('Legacy Day 7D adapter marker survived the QA build.');
 
 for(const required of [
-  DAY7D_RELEASE_CONTRACT,QA_WORKER,QA_CUSTOMER_URL,QA_GA4,QA_CLARITY,QA_CALENDLY,
+  DAY7D_RELEASE_CONTRACT,QA_WORKER,QA_CUSTOMER_URL,QA_GA4,QA_CLARITY,QA_CALENDLY,TEST_STRIPE_MARKER,
   ...Object.values(STRIPE).map(x=>x.test),
   'galviscore-followup','submit-followup','save_galviscore_followup','get_or_generate_galviscore','renderUnlockedGalviScore',
   'galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions',
