@@ -4,6 +4,21 @@ import day2Worker from './day2.js';
 const text = (value) => String(value ?? '').trim();
 const enabled = (value) => text(value).toLowerCase() === 'true';
 
+function isDay9BridgeEnabled(env) {
+  return text(env?.ENVIRONMENT).toLowerCase() === 'qa' &&
+    enabled(env?.GALVIVAULT_DAY9_CONTINUITY_BRIDGE);
+}
+
+function withHeaders(response, extraHeaders = {}) {
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(extraHeaders)) headers.set(name, value);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers
+  });
+}
+
 export function buildDay9CanonicalContinuityInput(payload = {}) {
   const legacySessionId = text(payload?.session?.session_id || payload?.session_id);
   const founder = payload?.founder && typeof payload.founder === 'object' ? payload.founder : {};
@@ -94,7 +109,18 @@ export default {
     try { payload = await request.clone().json(); }
     catch { return day7dWorker.fetch(request, env, ctx); }
 
-    if (text(payload?.action) !== 'submit_triage') {
+    const action = text(payload?.action);
+    const bridgeEnabled = isDay9BridgeEnabled(env);
+    const runtimeHeaders = bridgeEnabled
+      ? { 'X-GalviVault-Day9-Continuity-Runtime': 'active' }
+      : {};
+
+    if (action === 'health_check') {
+      const response = await day7dWorker.fetch(request, env, ctx);
+      return bridgeEnabled ? withHeaders(response, runtimeHeaders) : response;
+    }
+
+    if (action !== 'submit_triage') {
       return day7dWorker.fetch(request, env, ctx);
     }
 
@@ -108,13 +134,11 @@ export default {
           status: 'conflict',
           error_code: 'GALVICARE_SESSION_IDENTITY_CONFLICT',
           message: 'This browser session is already bound to a different founder identity. Start a fresh GalviCare session and resubmit; no canonical Day 9 continuity record was created.'
-        }, 409, { 'X-GalviVault-Day9-Continuity': 'fresh-session-required' });
+        }, 409, { ...runtimeHeaders, 'X-GalviVault-Day9-Continuity': 'fresh-session-required' });
       }
-      return galviCareResponse;
+      return bridgeEnabled ? withHeaders(galviCareResponse, runtimeHeaders) : galviCareResponse;
     }
 
-    const bridgeEnabled = text(env?.ENVIRONMENT).toLowerCase() === 'qa' &&
-      enabled(env?.GALVIVAULT_DAY9_CONTINUITY_BRIDGE);
     if (!bridgeEnabled) return galviCareResponse;
     if (!env?.DB) {
       return safeJson({
@@ -122,7 +146,7 @@ export default {
         status: 'error',
         error_code: 'DAY9_CANONICAL_CONTINUITY_UNAVAILABLE',
         message: 'GalviCare submission succeeded, but the QA canonical continuity bridge is unavailable.'
-      }, 503, { 'X-GalviVault-Day9-Continuity': 'unavailable' });
+      }, 503, { ...runtimeHeaders, 'X-GalviVault-Day9-Continuity': 'unavailable' });
     }
 
     try {
@@ -134,15 +158,12 @@ export default {
         status: 'error',
         error_code: 'DAY9_CANONICAL_CONTINUITY_FAILED',
         message: 'GalviCare submission could not be attached to the canonical QA Business Health Record. The run stopped safely.'
-      }, 500, { 'X-GalviVault-Day9-Continuity': 'failed' });
+      }, 500, { ...runtimeHeaders, 'X-GalviVault-Day9-Continuity': 'failed' });
     }
 
-    const headers = new Headers(galviCareResponse.headers);
-    headers.set('X-GalviVault-Day9-Continuity', 'attached');
-    return new Response(galviCareResponse.body, {
-      status: galviCareResponse.status,
-      statusText: galviCareResponse.statusText,
-      headers
+    return withHeaders(galviCareResponse, {
+      ...runtimeHeaders,
+      'X-GalviVault-Day9-Continuity': 'attached'
     });
   }
 };
