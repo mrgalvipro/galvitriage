@@ -33,7 +33,7 @@ test('missing source and checksum are explicitly reconciled as a skipped quarant
   assert.equal(batch.expected_count,1);assert.equal(batch.processed_count,1);assert.equal(batch.imported_count,0);assert.equal(batch.skipped_count,1);assert.equal(batch.error_count,0);
   assert.equal(batch.processed_count,batch.imported_count+batch.skipped_count+batch.error_count);
   const receipt=sqlite.prepare(`SELECT result_type,error_code FROM gv1_import_row_receipts WHERE import_batch_id='imp_day9_quarantine'`).get();
-  assert.deepEqual(receipt,{result_type:'skipped',error_code:'GV_IMPORT_QUARANTINED'});
+  assert.equal(receipt.result_type,'skipped');assert.equal(receipt.error_code,'GV_IMPORT_QUARANTINED');
   assert.equal(sqlite.prepare(`SELECT COUNT(*) n FROM gv1_import_errors WHERE import_batch_id='imp_day9_quarantine'`).get().n,1);
   assert.equal(sqlite.prepare(`SELECT COUNT(*) n FROM gv1_founders WHERE normalized_email='synthetic.quarantine@example.invalid'`).get().n,0);
   assert.equal(sqlite.prepare(`SELECT COUNT(*) n FROM gv1_ventures WHERE lower(venture_name)='synthetic quarantine labs'`).get().n,0);
