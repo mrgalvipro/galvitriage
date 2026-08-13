@@ -72,6 +72,14 @@ jobs:
           const ids=[]; const walk=x=>{if(!x||typeof x!=='object')return; if(typeof x.version_id==='string')ids.push([x.version_id,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); if(typeof x.versionId==='string')ids.push([x.versionId,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); for(const v of Object.values(x))walk(v)}; walk(d);
           const v=(ids.find(x=>x[1]===100)||ids[0])?.[0]; if(!v) throw new Error('No prior Production Worker version resolved'); fs.appendFileSync(process.env.GITHUB_ENV,`OLD_VERSION=${v}\n`);
           NODE
+          npx wrangler@${WRANGLER_VERSION} versions list --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/versions-before.json
+          OLD_VERSION="$OLD_VERSION" node <<'NODE'
+          const d=require('/tmp/prod-e2e-evidence/versions-before.json'),old=process.env.OLD_VERSION;
+          const a=Array.isArray(d)?d:(d.versions||[]);
+          const ids=a.map(x=>x?.id||x?.version_id||x?.versionId).filter(Boolean);
+          if(!ids.includes(old)) throw new Error(`Rollback target ${old} is not redeployable; refusing to alter Production traffic.`);
+          console.log(`rollback_target_redeployable=${old}`);
+          NODE
           SQL="SELECT (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('gv1_founders','gv1_ventures','gv1_founder_venture_roles','gv1_business_medical_records','gv1_assessment_sessions','gv1_observations','gv1_evidence_items','gv1_observation_evidence','gv1_schema_migrations')) core_table_count,(SELECT COUNT(*) FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1)) duplicate_bmr_ventures,(SELECT COUNT(*) FROM gv1_observation_evidence oe LEFT JOIN gv1_observations o ON o.observation_id=oe.observation_id LEFT JOIN gv1_evidence_items e ON e.evidence_id=oe.evidence_id WHERE o.observation_id IS NULL OR e.evidence_id IS NULL) orphan_observation_evidence,(SELECT COUNT(*) FROM gv1_observation_evidence oe JOIN gv1_observations o ON o.observation_id=oe.observation_id JOIN gv1_evidence_items e ON e.evidence_id=oe.evidence_id WHERE o.bmr_id<>e.bmr_id) cross_bmr_observation_evidence;"
           npx wrangler@${WRANGLER_VERSION} d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --command "$SQL" --json > /tmp/prod-e2e-evidence/d1-preflight.json
           node - <<'NODE'
@@ -197,12 +205,22 @@ jobs:
         run: |
           set -euo pipefail
           npx wrangler@${WRANGLER_VERSION} versions deploy "$NEW_VERSION@100%" --name "$PROD_WORKER" --message "GalviCare → GalviVault Production PASS $GITHUB_SHA" -y | tee /tmp/prod-e2e-evidence/deploy-100.txt
-          curl -sS -D /tmp/prod-e2e-evidence/post-health.h -o /tmp/prod-e2e-evidence/post-health.json -H 'Origin: https://www.galvipro.com' "$PROD_URL/health"
-          grep -qi '^X-GalviVault-Day9-Continuity-Runtime: active' /tmp/prod-e2e-evidence/post-health.h
-          curl -sS -D /tmp/prod-e2e-evidence/post-ready.h -o /tmp/prod-e2e-evidence/post-ready.json "$PROD_URL/ready"
-          grep -qi '^X-GalviVault-Production-Schema: 0006' /tmp/prod-e2e-evidence/post-ready.h
-          STATUS=$(curl -sS -o /tmp/prod-e2e-evidence/post-protected-negative.json -w '%{http_code}' "$PROD_URL/api/v1/operator/business-medical-records/$CANARY_BMR_ID/founder-health-record")
-          test "$STATUS" = 401
+          CONVERGED=0
+          for ATTEMPT in $(seq 1 20); do
+            curl -sS -D /tmp/prod-e2e-evidence/post-health.h -o /tmp/prod-e2e-evidence/post-health.json -H 'Origin: https://www.galvipro.com' "$PROD_URL/health" || true
+            curl -sS -D /tmp/prod-e2e-evidence/post-ready.h -o /tmp/prod-e2e-evidence/post-ready.json "$PROD_URL/ready" || true
+            STATUS=$(curl -sS -o /tmp/prod-e2e-evidence/post-protected-negative.json -w '%{http_code}' "$PROD_URL/api/v1/operator/business-medical-records/$CANARY_BMR_ID/founder-health-record" || true)
+            if grep -qi '^X-GalviVault-Day9-Continuity-Runtime: active' /tmp/prod-e2e-evidence/post-health.h \
+              && grep -qi '^X-GalviVault-Production-Integration: day9-production-v1' /tmp/prod-e2e-evidence/post-health.h \
+              && grep -qi '^X-GalviVault-Production-Schema: 0006' /tmp/prod-e2e-evidence/post-ready.h \
+              && [ "$STATUS" = 401 ]; then
+              CONVERGED=1
+              break
+            fi
+            sleep 2
+          done
+          test "$CONVERGED" = 1
+          node -e "const x=require('/tmp/prod-e2e-evidence/post-protected-negative.json');if(x?.error?.code!=='GV_AUTH_REQUIRED')throw new Error(JSON.stringify(x))"
           echo '## GalviCare → GalviVault Production automated promotion PASS' >> "$GITHUB_STEP_SUMMARY"
           echo "- Candidate: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
           echo "- Rollback version: $OLD_VERSION" >> "$GITHUB_STEP_SUMMARY"
