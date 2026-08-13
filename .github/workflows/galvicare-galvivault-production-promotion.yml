@@ -67,11 +67,14 @@ jobs:
           set -euo pipefail
           test -n "$CLOUDFLARE_ACCOUNT_ID"; test -n "$CLOUDFLARE_API_TOKEN"
           npx wrangler@${WRANGLER_VERSION} deployments status --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/deployment-before.json
-          node <<'NODE'
-          const fs=require('fs'), d=require('/tmp/prod-e2e-evidence/deployment-before.json');
+          OLD_VERSION=$(node <<'NODE'
+          const d=require('/tmp/prod-e2e-evidence/deployment-before.json');
           const ids=[]; const walk=x=>{if(!x||typeof x!=='object')return; if(typeof x.version_id==='string')ids.push([x.version_id,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); if(typeof x.versionId==='string')ids.push([x.versionId,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); for(const v of Object.values(x))walk(v)}; walk(d);
-          const v=(ids.find(x=>x[1]===100)||ids[0])?.[0]; if(!v) throw new Error('No prior Production Worker version resolved'); fs.appendFileSync(process.env.GITHUB_ENV,`OLD_VERSION=${v}\n`);
+          const v=(ids.find(x=>x[1]===100)||ids[0])?.[0]; if(!v) throw new Error('No prior Production Worker version resolved'); process.stdout.write(v);
           NODE
+          )
+          test -n "$OLD_VERSION"
+          echo "OLD_VERSION=$OLD_VERSION" >> "$GITHUB_ENV"
           npx wrangler@${WRANGLER_VERSION} versions list --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/versions-before.json
           OLD_VERSION="$OLD_VERSION" node <<'NODE'
           const d=require('/tmp/prod-e2e-evidence/versions-before.json'),old=process.env.OLD_VERSION;
@@ -204,6 +207,7 @@ jobs:
       - name: Promote exact proven version and verify Production
         run: |
           set -euo pipefail
+          echo "PROMOTION_ATTEMPTED=true" >> "$GITHUB_ENV"
           npx wrangler@${WRANGLER_VERSION} versions deploy "$NEW_VERSION@100%" --name "$PROD_WORKER" --message "GalviCare → GalviVault Production PASS $GITHUB_SHA" -y | tee /tmp/prod-e2e-evidence/deploy-100.txt
           CONVERGED=0
           for ATTEMPT in $(seq 1 20); do
@@ -230,7 +234,7 @@ jobs:
           echo '- READY FOR PRODUCT OWNER PRODUCTION HUMAN CUSTOMER-JOURNEY CONFIRMATION' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Roll back Worker version if any release checkpoint fails
-        if: failure()
+        if: failure() && env.PROMOTION_ATTEMPTED == 'true'
         run: |
           set +e
           if [ -n "${OLD_VERSION:-}" ]; then
