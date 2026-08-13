@@ -103,6 +103,16 @@ function isClinicianApi(pathname) {
   return pathname.startsWith('/api/v1/operator/');
 }
 
+function localProductionHealthRequest(request) {
+  const url = new URL(request.url);
+  url.pathname = '/health';
+  url.search = '';
+  return new Request(url.toString(), {
+    method: 'GET',
+    headers: request.headers
+  });
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -115,7 +125,7 @@ export default {
       : {};
 
     if (url.pathname === '/ready' && bridgeEnabled) {
-      const base = await productionWorker.fetch(request, env, ctx);
+      const base = await productionWorker.fetch(localProductionHealthRequest(request), env, ctx);
       if (!base.ok) return withHeaders(base, runtimeHeaders);
       let ready = false;
       try { ready = await integrationReady(env); } catch {}
