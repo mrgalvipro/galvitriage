@@ -93,14 +93,16 @@ jobs:
           set -euo pipefail
           TAG="galvicare-galvivault-${GITHUB_SHA:0:12}"
           PREVIEW_ALIAS="prod-e2e-${GITHUB_SHA:0:12}"
+          PREVIEW_CONFIG="wrangler.production-galvivault-preview.runtime.jsonc"
           node <<'NODE'
           const fs=require('fs');
           const source=fs.readFileSync(process.env.PROD_CONFIG,'utf8');
           const preview=source.replace('"preview_urls": false','"preview_urls": true');
           if(preview===source) throw new Error('Production candidate config did not contain the expected preview_urls=false safety baseline.');
-          fs.writeFileSync('/tmp/wrangler.production-galvivault-preview.jsonc',preview);
+          fs.writeFileSync('wrangler.production-galvivault-preview.runtime.jsonc',preview);
           NODE
-          npx wrangler@${WRANGLER_VERSION} versions upload --config /tmp/wrangler.production-galvivault-preview.jsonc --preview-alias "$PREVIEW_ALIAS" --tag "$TAG" --message "GalviCare → GalviVault Production candidate $GITHUB_SHA" 2>&1 | tee /tmp/prod-e2e-evidence/version-upload.txt
+          npx wrangler@${WRANGLER_VERSION} versions upload --config "$PREVIEW_CONFIG" --preview-alias "$PREVIEW_ALIAS" --tag "$TAG" --message "GalviCare → GalviVault Production candidate $GITHUB_SHA" 2>&1 | tee /tmp/prod-e2e-evidence/version-upload.txt
+          rm -f "$PREVIEW_CONFIG"
           npx wrangler@${WRANGLER_VERSION} versions list --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/versions.json
           NEW_VERSION=$(CANDIDATE_TAG="$TAG" node - <<'NODE'
           const d=require('/tmp/prod-e2e-evidence/versions.json'),a=Array.isArray(d)?d:(d.versions||[]),tag=process.env.CANDIDATE_TAG,r=a.find(x=>x.tag===tag||x.version_tag===tag||x.annotations?.['workers/tag']===tag)||a[0],v=r?.id||r?.version_id||r?.versionId; if(!v) throw new Error('Uploaded version ID unresolved'); process.stdout.write(v)
