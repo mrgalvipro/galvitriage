@@ -28,6 +28,8 @@ function safeJson(body, status, extraHeaders = {}) {
     headers: {
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'no-referrer',
       'X-GalviCare-Environment': 'production',
       ...extraHeaders
     }
@@ -103,16 +105,6 @@ function isClinicianApi(pathname) {
   return pathname.startsWith('/api/v1/operator/');
 }
 
-function localProductionHealthRequest(request) {
-  const url = new URL(request.url);
-  url.pathname = '/health';
-  url.search = '';
-  return new Request(url.toString(), {
-    method: 'GET',
-    headers: request.headers
-  });
-}
-
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
@@ -125,19 +117,26 @@ export default {
       : {};
 
     if (url.pathname === '/ready' && bridgeEnabled) {
-      const base = await productionWorker.fetch(localProductionHealthRequest(request), env, ctx);
-      if (!base.ok) return withHeaders(base, runtimeHeaders);
       let ready = false;
       try { ready = await integrationReady(env); } catch {}
       if (!ready) {
         return safeJson({
           success: false,
           status: 'unavailable',
+          environment: 'production',
+          service: 'galvicare-galvivault-production-integration',
           error_code: 'PRODUCTION_GALVIVAULT_INTEGRATION_NOT_READY',
           message: 'Production GalviVault integration schema is not ready.'
         }, 503, { ...runtimeHeaders, 'X-GalviVault-Production-Schema': 'not-ready' });
       }
-      return withHeaders(base, { ...runtimeHeaders, 'X-GalviVault-Production-Schema': '0006' });
+      return safeJson({
+        success: true,
+        status: 'ready',
+        environment: 'production',
+        service: 'galvicare-galvivault-production-integration',
+        required_schema_version: '0006',
+        db_bound: true
+      }, 200, { ...runtimeHeaders, 'X-GalviVault-Production-Schema': '0006' });
     }
 
     if (isClinicianApi(url.pathname)) {
