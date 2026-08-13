@@ -18,12 +18,14 @@ test('Production integration is additive around the accepted GalviCare entrypoin
   assert.doesNotMatch(productionEntry, /GALVIVAULT_DAY9_CONTINUITY_BRIDGE/);
 });
 
-test('Production readiness stays inside the exact candidate runtime before direct D1 verification', () => {
-  assert.match(worker, /function localProductionHealthRequest\(request\)/);
-  assert.match(worker, /url\.pathname = '\/health'/);
-  assert.match(worker, /productionWorker\.fetch\(localProductionHealthRequest\(request\), env, ctx\)/);
+test('Production readiness is D1-local and does not re-enter inherited Worker readiness', () => {
+  assert.match(worker, /if \(url\.pathname === '\/ready' && bridgeEnabled\)/);
   assert.match(worker, /integrationReady\(env\)/);
-  assert.doesNotMatch(worker, /url\.pathname === '\/ready'[\s\S]*productionWorker\.fetch\(request, env, ctx\)/);
+  assert.match(worker, /X-GalviVault-Production-Schema': '0006'/);
+  const readyBlock = worker.slice(worker.indexOf("if (url.pathname === '/ready' && bridgeEnabled)"), worker.indexOf("if (isClinicianApi(url.pathname))"));
+  assert.ok(readyBlock.length > 0);
+  assert.doesNotMatch(readyBlock, /productionWorker\.fetch/);
+  assert.doesNotMatch(readyBlock, /fetch\(/);
 });
 
 test('Production continuity is explicitly production-only and fixture-disabled', () => {
