@@ -92,12 +92,15 @@ jobs:
         run: |
           set -euo pipefail
           TAG="galvicare-galvivault-${GITHUB_SHA:0:12}"
-          npx wrangler@${WRANGLER_VERSION} versions upload --config "$PROD_CONFIG" --tag "$TAG" --message "GalviCare → GalviVault Production candidate $GITHUB_SHA" | tee /tmp/prod-e2e-evidence/version-upload.txt
+          npx wrangler@${WRANGLER_VERSION} versions upload --config "$PROD_CONFIG" --tag "$TAG" --message "GalviCare → GalviVault Production candidate $GITHUB_SHA" 2>&1 | tee /tmp/prod-e2e-evidence/version-upload.txt
           npx wrangler@${WRANGLER_VERSION} versions list --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/versions.json
-          CANDIDATE_TAG="$TAG" node - <<'NODE'
-          const fs=require('fs'),d=require('/tmp/prod-e2e-evidence/versions.json'),a=Array.isArray(d)?d:(d.versions||[]),tag=process.env.CANDIDATE_TAG,r=a.find(x=>x.tag===tag||x.version_tag===tag||x.annotations?.['workers/tag']===tag)||a[0],v=r?.id||r?.version_id||r?.versionId; if(!v) throw new Error('Uploaded version ID unresolved'); fs.appendFileSync(process.env.GITHUB_ENV,`NEW_VERSION=${v}\n`)
+          NEW_VERSION=$(CANDIDATE_TAG="$TAG" node - <<'NODE'
+          const d=require('/tmp/prod-e2e-evidence/versions.json'),a=Array.isArray(d)?d:(d.versions||[]),tag=process.env.CANDIDATE_TAG,r=a.find(x=>x.tag===tag||x.version_tag===tag||x.annotations?.['workers/tag']===tag)||a[0],v=r?.id||r?.version_id||r?.versionId; if(!v) throw new Error('Uploaded version ID unresolved'); process.stdout.write(v)
           NODE
-          npx wrangler@${WRANGLER_VERSION} versions deploy "$OLD_VERSION@100%" "$NEW_VERSION@0%" --name "$PROD_WORKER" --message "0% Production smoke $GITHUB_SHA" -y | tee /tmp/prod-e2e-evidence/deploy-zero.txt
+          )
+          test -n "$NEW_VERSION"
+          echo "NEW_VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
+          npx wrangler@${WRANGLER_VERSION} versions deploy "$OLD_VERSION@100%" "$NEW_VERSION@0%" --name "$PROD_WORKER" --message "0% Production smoke $GITHUB_SHA" -y 2>&1 | tee /tmp/prod-e2e-evidence/deploy-zero.txt
 
       - name: Smoke exact candidate and execute bounded Production continuity canary
         run: |
