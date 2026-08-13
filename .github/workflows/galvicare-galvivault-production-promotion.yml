@@ -1,0 +1,175 @@
+name: GalviCare → GalviVault Production Promotion
+
+on:
+  push:
+    branches: [qa-revamped-galvicare-0-5]
+    paths:
+      - '.github/workflows/galvicare-galvivault-production-promotion.yml'
+      - 'worker/production-galvivault-integration.js'
+      - 'wrangler.production-galvivault.jsonc'
+      - 'migrations/production/0006_operator_device_auth.sql'
+      - 'scripts/production-galvivault-canary.mjs'
+      - 'scripts/production-galvivault-operator-canary.mjs'
+      - 'tests/production-galvivault-integration.test.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvicare-galvivault-production-promotion
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      PROD_URL: https://galvicare-0-5-production.mrgalvipro.workers.dev
+      PROD_WORKER: galvicare-0-5-production
+      PROD_DB: galvivault-0-5-production
+      PROD_CONFIG: wrangler.production-galvivault.jsonc
+      WRANGLER_VERSION: 4.120.0
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Freeze candidate and run inherited regression
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/prod-e2e-evidence
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          printf 'candidate_sha=%s\nproduction_worker=%s\nproduction_db=%s\n' "$GITHUB_SHA" "$PROD_WORKER" "$PROD_DB" | tee /tmp/prod-e2e-evidence/release-manifest.txt
+          npm ci --ignore-scripts || npm install --ignore-scripts
+          node --check worker/production-galvivault-integration.js
+          node --check scripts/production-galvivault-canary.mjs
+          node --check scripts/production-galvivault-operator-canary.mjs
+          node --test tests/production-galvivault-integration.test.mjs | tee /tmp/prod-e2e-evidence/integration-test.txt
+          npm run day7b:gate | tee /tmp/prod-e2e-evidence/day7b-galvicare.txt
+          npm run day8:gate | tee /tmp/prod-e2e-evidence/day8-clinician.txt
+          npm run day9:gate | tee /tmp/prod-e2e-evidence/day9-continuity.txt
+          git diff --check
+          ! grep -q 'buy.stripe.com/test_' index.html
+          grep -q 'https://buy.stripe.com/14A00kbjycvpgoGfBY53O00' index.html
+          grep -q 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253O01' index.html
+          grep -q 'https://buy.stripe.com/00w14odrG1QLdcu9dA53O02' index.html
+          grep -q 'https://buy.stripe.com/eVq3cw3R63YT6O6ahE53O03' index.html
+
+      - name: Capture rollback target and Production D1 integrity baseline
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_ACCOUNT_ID"; test -n "$CLOUDFLARE_API_TOKEN"
+          npx wrangler@${WRANGLER_VERSION} deployments status --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/deployment-before.json
+          node <<'NODE'
+          const fs=require('fs'), d=require('/tmp/prod-e2e-evidence/deployment-before.json');
+          const ids=[]; const walk=x=>{if(!x||typeof x!=='object')return; if(typeof x.version_id==='string')ids.push([x.version_id,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); if(typeof x.versionId==='string')ids.push([x.versionId,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); for(const v of Object.values(x))walk(v)}; walk(d);
+          const v=(ids.find(x=>x[1]===100)||ids[0])?.[0]; if(!v) throw new Error('No prior Production Worker version resolved'); fs.appendFileSync(process.env.GITHUB_ENV,`OLD_VERSION=${v}\n`);
+          NODE
+          SQL="SELECT (SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('gv1_founders','gv1_ventures','gv1_founder_venture_roles','gv1_business_medical_records','gv1_assessment_sessions','gv1_observations','gv1_evidence_items','gv1_observation_evidence','gv1_schema_migrations')) core_table_count,(SELECT COUNT(*) FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1)) duplicate_bmr_ventures,(SELECT COUNT(*) FROM gv1_observation_evidence oe LEFT JOIN gv1_observations o ON o.observation_id=oe.observation_id LEFT JOIN gv1_evidence_items e ON e.evidence_id=oe.evidence_id WHERE o.observation_id IS NULL OR e.evidence_id IS NULL) orphan_observation_evidence,(SELECT COUNT(*) FROM gv1_observation_evidence oe JOIN gv1_observations o ON o.observation_id=oe.observation_id JOIN gv1_evidence_items e ON e.evidence_id=oe.evidence_id WHERE o.bmr_id<>e.bmr_id) cross_bmr_observation_evidence;"
+          npx wrangler@${WRANGLER_VERSION} d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --command "$SQL" --json > /tmp/prod-e2e-evidence/d1-preflight.json
+          node - <<'NODE'
+          const d=require('/tmp/prod-e2e-evidence/d1-preflight.json'),r=(Array.isArray(d)?d:[d]).flatMap(x=>x.results||[])[0]; for(const [k,v] of Object.entries({core_table_count:9,duplicate_bmr_ventures:0,orphan_observation_evidence:0,cross_bmr_observation_evidence:0})) if(Number(r?.[k])!==v) throw new Error(`${k}=${r?.[k]} expected ${v}`); console.log(r)
+          NODE
+
+      - name: Apply additive Production operator-auth prerequisite
+        run: |
+          set -euo pipefail
+          npx wrangler@${WRANGLER_VERSION} d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --file migrations/production/0006_operator_device_auth.sql --yes | tee /tmp/prod-e2e-evidence/migration-0006.txt
+          SQL="SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id='0006'; SELECT COUNT(*) auth_table_count FROM sqlite_master WHERE type='table' AND name IN ('gv8_operator_credentials','gv8_operator_invitations','gv8_auth_challenges','gv8_operator_sessions');"
+          npx wrangler@${WRANGLER_VERSION} d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --command "$SQL" --json > /tmp/prod-e2e-evidence/migration-0006-verify.json
+          node - <<'NODE'
+          const d=require('/tmp/prod-e2e-evidence/migration-0006-verify.json'),a=(Array.isArray(d)?d:[d]).map(x=>x.results||[]),m=a[0]?.[0],t=a[1]?.[0]; if(m?.migration_id!=='0006'||m?.name!=='day8_operator_device_auth'||m?.environment!=='production'||m?.checksum!=='prod-day8-operator-device-auth-v1'||Number(t?.auth_table_count)!==4) throw new Error(JSON.stringify({m,t}));
+          NODE
+
+      - name: Upload and stage candidate at zero percent traffic
+        run: |
+          set -euo pipefail
+          TAG="galvicare-galvivault-${GITHUB_SHA:0:12}"
+          npx wrangler@${WRANGLER_VERSION} versions upload --config "$PROD_CONFIG" --tag "$TAG" --message "GalviCare → GalviVault Production candidate $GITHUB_SHA" | tee /tmp/prod-e2e-evidence/version-upload.txt
+          npx wrangler@${WRANGLER_VERSION} versions list --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/versions.json
+          CANDIDATE_TAG="$TAG" node - <<'NODE'
+          const fs=require('fs'),d=require('/tmp/prod-e2e-evidence/versions.json'),a=Array.isArray(d)?d:(d.versions||[]),tag=process.env.CANDIDATE_TAG,r=a.find(x=>x.tag===tag||x.version_tag===tag||x.annotations?.['workers/tag']===tag)||a[0],v=r?.id||r?.version_id||r?.versionId; if(!v) throw new Error('Uploaded version ID unresolved'); fs.appendFileSync(process.env.GITHUB_ENV,`NEW_VERSION=${v}\n`)
+          NODE
+          npx wrangler@${WRANGLER_VERSION} versions deploy "$OLD_VERSION@100%" "$NEW_VERSION@0%" --name "$PROD_WORKER" --message "0% Production smoke $GITHUB_SHA" -y | tee /tmp/prod-e2e-evidence/deploy-zero.txt
+
+      - name: Smoke exact candidate and execute bounded Production continuity canary
+        run: |
+          set -euo pipefail
+          OVR="Cloudflare-Workers-Version-Overrides: $PROD_WORKER=\"$NEW_VERSION\""
+          curl -sS -D /tmp/prod-e2e-evidence/health.h -o /tmp/prod-e2e-evidence/health.json -H 'Origin: https://www.galvipro.com' -H "$OVR" "$PROD_URL/health"
+          grep -qi '^X-GalviVault-Day9-Continuity-Runtime: active' /tmp/prod-e2e-evidence/health.h
+          grep -qi '^X-GalviVault-Production-Integration: day9-production-v1' /tmp/prod-e2e-evidence/health.h
+          curl -sS -D /tmp/prod-e2e-evidence/ready.h -o /tmp/prod-e2e-evidence/ready.json -H "$OVR" "$PROD_URL/ready"
+          grep -qi '^X-GalviVault-Production-Schema: 0006' /tmp/prod-e2e-evidence/ready.h
+          STATUS=$(curl -sS -o /tmp/prod-e2e-evidence/protected-negative.json -w '%{http_code}' -H "$OVR" "$PROD_URL/api/v1/operator/business-medical-records/bmr_probe/founder-health-record")
+          test "$STATUS" = 401
+          node -e "const x=require('/tmp/prod-e2e-evidence/protected-negative.json');if(x?.error?.code!=='GV_AUTH_REQUIRED')throw new Error(JSON.stringify(x))"
+          VERSION_ID="$NEW_VERSION" CANARY_SUFFIX="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" CANARY_OUTPUT=/tmp/prod-e2e-evidence/customer-canary.json node scripts/production-galvivault-canary.mjs
+
+      - name: Prove Founder Venture BMR continuity and global D1 integrity
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('fs'),x=require('/tmp/prod-e2e-evidence/customer-canary.json'),q=s=>String(s).replaceAll("'","''"); fs.writeFileSync('/tmp/canary.sql',`SELECT f.founder_id,v.venture_id,v.venture_name,b.bmr_id,COUNT(s.session_id) session_count FROM gv1_founders f JOIN gv1_founder_venture_roles r ON r.founder_id=f.founder_id AND r.status='active' JOIN gv1_ventures v ON v.venture_id=r.venture_id JOIN gv1_business_medical_records b ON b.venture_id=v.venture_id LEFT JOIN gv1_assessment_sessions s ON s.bmr_id=b.bmr_id WHERE f.normalized_email='${q(x.email)}' AND v.venture_name IN ('${q(x.primary_venture)}','${q(x.secondary_venture)}') GROUP BY f.founder_id,v.venture_id,v.venture_name,b.bmr_id; SELECT (SELECT COUNT(DISTINCT founder_id) FROM gv1_founders WHERE normalized_email='${q(x.email)}') founder_count,(SELECT COUNT(*) FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1)) duplicate_bmr_ventures,(SELECT COUNT(*) FROM gv1_observation_evidence oe LEFT JOIN gv1_observations o ON o.observation_id=oe.observation_id LEFT JOIN gv1_evidence_items e ON e.evidence_id=oe.evidence_id WHERE o.observation_id IS NULL OR e.evidence_id IS NULL) orphan_observation_evidence,(SELECT COUNT(*) FROM gv1_observation_evidence oe JOIN gv1_observations o ON o.observation_id=oe.observation_id JOIN gv1_evidence_items e ON e.evidence_id=oe.evidence_id WHERE o.bmr_id<>e.bmr_id) cross_bmr_observation_evidence;`)
+          NODE
+          npx wrangler@${WRANGLER_VERSION} d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --file /tmp/canary.sql --json > /tmp/prod-e2e-evidence/canary-d1.json
+          node <<'NODE'
+          const fs=require('fs'),c=require('/tmp/prod-e2e-evidence/customer-canary.json'),d=require('/tmp/prod-e2e-evidence/canary-d1.json'),a=(Array.isArray(d)?d:[d]).map(x=>x.results||[]),r=a[0],s=a[1]?.[0]; if(r.length!==2||new Set(r.map(x=>x.founder_id)).size!==1||new Set(r.map(x=>x.venture_id)).size!==2||new Set(r.map(x=>x.bmr_id)).size!==2) throw new Error(JSON.stringify(r)); const p=r.find(x=>x.venture_name===c.primary_venture),b=r.find(x=>x.venture_name===c.secondary_venture); if(Number(p?.session_count)<2||Number(b?.session_count)<1)throw new Error(JSON.stringify({p,b})); for(const k of ['founder_count','duplicate_bmr_ventures','orphan_observation_evidence','cross_bmr_observation_evidence']) if(Number(s?.[k])!==(k==='founder_count'?1:0)) throw new Error(`${k}=${s?.[k]}`); fs.appendFileSync(process.env.GITHUB_ENV,`CANARY_FOUNDER_ID=${p.founder_id}\nCANARY_VENTURE_ID=${p.venture_id}\nCANARY_BMR_ID=${p.bmr_id}\n`)
+          NODE
+
+      - name: Verify authenticated Production clinician chart FHR and intelligence
+        run: |
+          set -euo pipefail
+          CANARY_SUFFIX="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" OPERATOR_STATE=/tmp/operator.json node scripts/production-galvivault-operator-canary.mjs prepare
+          node <<'NODE'
+          const fs=require('fs'),x=require('/tmp/operator.json'),q=s=>String(s).replaceAll("'","''"); fs.writeFileSync('/tmp/invite.sql',`INSERT INTO gv8_operator_invitations(invitation_hash,operator_id,email_normalized,display_name,role,expires_at,used_at,created_at,created_by) VALUES('${q(x.invitation_hash)}','${q(x.operator_id)}','${q(x.email)}','${q(x.display_name)}','clinician','${q(x.expires_at)}',NULL,'${q(x.created_at)}','production_release_canary');`)
+          NODE
+          npx wrangler@${WRANGLER_VERSION} d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --file /tmp/invite.sql --yes > /tmp/prod-e2e-evidence/operator-invite.txt
+          VERSION_ID="$NEW_VERSION" BMR_ID="$CANARY_BMR_ID" FOUNDER_ID="$CANARY_FOUNDER_ID" VENTURE_ID="$CANARY_VENTURE_ID" OPERATOR_STATE=/tmp/operator.json OPERATOR_RESULT=/tmp/prod-e2e-evidence/operator-result.json node scripts/production-galvivault-operator-canary.mjs verify
+          node <<'NODE'
+          const fs=require('fs'),x=require('/tmp/operator.json'),q=s=>String(s).replaceAll("'","''"),t=new Date().toISOString();fs.writeFileSync('/tmp/disable.sql',`UPDATE gv8_operator_credentials SET status='disabled',updated_at='${q(t)}' WHERE operator_id='${q(x.operator_id)}'; UPDATE gv8_operator_sessions SET revoked_at=COALESCE(revoked_at,'${q(t)}') WHERE operator_id='${q(x.operator_id)}';`)
+          NODE
+          npx wrangler@${WRANGLER_VERSION} d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --file /tmp/disable.sql --yes > /tmp/prod-e2e-evidence/operator-disabled.txt
+
+      - name: Promote exact proven version and verify Production
+        run: |
+          set -euo pipefail
+          npx wrangler@${WRANGLER_VERSION} versions deploy "$NEW_VERSION@100%" --name "$PROD_WORKER" --message "GalviCare → GalviVault Production PASS $GITHUB_SHA" -y | tee /tmp/prod-e2e-evidence/deploy-100.txt
+          curl -sS -D /tmp/prod-e2e-evidence/post-health.h -o /tmp/prod-e2e-evidence/post-health.json -H 'Origin: https://www.galvipro.com' "$PROD_URL/health"
+          grep -qi '^X-GalviVault-Day9-Continuity-Runtime: active' /tmp/prod-e2e-evidence/post-health.h
+          curl -sS -D /tmp/prod-e2e-evidence/post-ready.h -o /tmp/prod-e2e-evidence/post-ready.json "$PROD_URL/ready"
+          grep -qi '^X-GalviVault-Production-Schema: 0006' /tmp/prod-e2e-evidence/post-ready.h
+          STATUS=$(curl -sS -o /tmp/prod-e2e-evidence/post-protected-negative.json -w '%{http_code}' "$PROD_URL/api/v1/operator/business-medical-records/$CANARY_BMR_ID/founder-health-record")
+          test "$STATUS" = 401
+          echo '## GalviCare → GalviVault Production automated promotion PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Candidate: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Rollback version: $OLD_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Production version: $NEW_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Existing GalviCare regression: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production continuity + D1 + clinician/security canary: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- READY FOR PRODUCT OWNER PRODUCTION HUMAN CUSTOMER-JOURNEY CONFIRMATION' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Roll back Worker version if any release checkpoint fails
+        if: failure()
+        run: |
+          set +e
+          if [ -n "${OLD_VERSION:-}" ]; then
+            npx wrangler@${WRANGLER_VERSION} versions deploy "$OLD_VERSION@100%" --name "$PROD_WORKER" --message "Automatic rollback after failed GalviCare → GalviVault promotion $GITHUB_SHA" -y
+            echo "Rolled Production Worker traffic back to $OLD_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload promotion evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: galvicare-galvivault-production-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/prod-e2e-evidence
+          if-no-files-found: warn
+          retention-days: 30
