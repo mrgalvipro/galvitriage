@@ -18,6 +18,14 @@ test('Production integration is additive around the accepted GalviCare entrypoin
   assert.doesNotMatch(productionEntry, /GALVIVAULT_DAY9_CONTINUITY_BRIDGE/);
 });
 
+test('Production readiness stays inside the exact candidate runtime before direct D1 verification', () => {
+  assert.match(worker, /function localProductionHealthRequest\(request\)/);
+  assert.match(worker, /url\.pathname = '\/health'/);
+  assert.match(worker, /productionWorker\.fetch\(localProductionHealthRequest\(request\), env, ctx\)/);
+  assert.match(worker, /integrationReady\(env\)/);
+  assert.doesNotMatch(worker, /url\.pathname === '\/ready'[\s\S]*productionWorker\.fetch\(request, env, ctx\)/);
+});
+
 test('Production continuity is explicitly production-only and fixture-disabled', () => {
   assert.match(worker, /ENVIRONMENT.*production/s);
   assert.match(worker, /APP_ENV.*production/s);
