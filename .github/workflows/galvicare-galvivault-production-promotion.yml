@@ -99,71 +99,35 @@ jobs:
           const d=require('/tmp/prod-e2e-evidence/migration-0006-verify.json'),a=(Array.isArray(d)?d:[d]).map(x=>x.results||[]),m=a[0]?.[0],t=a[1]?.[0]; if(m?.migration_id!=='0006'||m?.name!=='day8_operator_device_auth'||m?.environment!=='production'||m?.checksum!=='prod-day8-operator-device-auth-v1'||Number(t?.auth_table_count)!==4) throw new Error(JSON.stringify({m,t}));
           NODE
 
-      - name: Enable isolated Preview URLs without changing Production traffic
-        run: |
-          set -euo pipefail
-          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PROD_WORKER/subdomain"
-          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API" > /tmp/prod-e2e-evidence/subdomain-before.json
-          node <<'NODE'
-          const fs=require('fs');
-          const d=require('/tmp/prod-e2e-evidence/subdomain-before.json');
-          if(d?.success!==true || typeof d?.result?.enabled!=='boolean') throw new Error(`Unable to resolve current Production workers.dev state: ${JSON.stringify(d)}`);
-          const enabled=d.result.enabled;
-          const previews=Boolean(d.result.previews_enabled);
-          fs.appendFileSync(process.env.GITHUB_ENV,`WORKERS_DEV_ENABLED=${enabled}\nPREVIEWS_WERE_ENABLED=${previews}\n`);
-          fs.writeFileSync('/tmp/preview-enable.json',JSON.stringify({enabled,previews_enabled:true}));
-          NODE
-          curl -fsS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/preview-enable.json "$API" > /tmp/prod-e2e-evidence/subdomain-preview-enabled.json
-          node - <<'NODE'
-          const d=require('/tmp/prod-e2e-evidence/subdomain-preview-enabled.json');
-          if(d?.success!==true || d?.result?.previews_enabled!==true) throw new Error(`Preview URL enablement failed: ${JSON.stringify(d)}`);
-          NODE
-          npx wrangler@${WRANGLER_VERSION} deployments status --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/deployment-after-preview-enable.json
-          OLD_VERSION="$OLD_VERSION" node - <<'NODE'
-          const d=require('/tmp/prod-e2e-evidence/deployment-after-preview-enable.json'),old=process.env.OLD_VERSION;
-          const ids=[]; const walk=x=>{if(!x||typeof x!=='object')return; if(typeof x.version_id==='string')ids.push([x.version_id,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); if(typeof x.versionId==='string')ids.push([x.versionId,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); for(const v of Object.values(x))walk(v)}; walk(d);
-          if(!ids.some(([id,p])=>id===old&&p===100)) throw new Error(`Production traffic changed while enabling Preview URLs: ${JSON.stringify(ids)}`);
-          NODE
-
-      - name: Upload exact candidate and create isolated version preview
+      - name: Upload exact Production candidate and stage at zero percent
         run: |
           set -euo pipefail
           TAG="galvicare-galvivault-${GITHUB_SHA:0:12}"
-          PREVIEW_ALIAS="prod-e2e-${GITHUB_SHA:0:12}"
-          PREVIEW_CONFIG="wrangler.production-galvivault-preview.runtime.jsonc"
-          node <<'NODE'
-          const fs=require('fs');
-          const source=fs.readFileSync(process.env.PROD_CONFIG,'utf8');
-          const preview=source.replace('"preview_urls": false','"preview_urls": true,\n  "compatibility_flags": ["global_fetch_strictly_public"]');
-          if(preview===source) throw new Error('Production candidate config did not contain the expected preview_urls=false safety baseline.');
-          fs.writeFileSync('wrangler.production-galvivault-preview.runtime.jsonc',preview);
-          NODE
-          npx wrangler@${WRANGLER_VERSION} versions upload --config "$PREVIEW_CONFIG" --preview-alias "$PREVIEW_ALIAS" --tag "$TAG" --message "GalviCare → GalviVault Production candidate $GITHUB_SHA" 2>&1 | tee /tmp/prod-e2e-evidence/version-upload.txt
-          rm -f "$PREVIEW_CONFIG"
+          npx wrangler@${WRANGLER_VERSION} versions upload --config "$PROD_CONFIG" --tag "$TAG" --message "GalviCare → GalviVault Production candidate $GITHUB_SHA" 2>&1 | tee /tmp/prod-e2e-evidence/version-upload.txt
           npx wrangler@${WRANGLER_VERSION} versions list --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/versions.json
           NEW_VERSION=$(CANDIDATE_TAG="$TAG" node - <<'NODE'
           const d=require('/tmp/prod-e2e-evidence/versions.json'),a=Array.isArray(d)?d:(d.versions||[]),tag=process.env.CANDIDATE_TAG,r=a.find(x=>x.tag===tag||x.version_tag===tag||x.annotations?.['workers/tag']===tag)||a[0],v=r?.id||r?.version_id||r?.versionId; if(!v) throw new Error('Uploaded version ID unresolved'); process.stdout.write(v)
           NODE
           )
-          PREVIEW_URL=$(grep -Eo 'https://[A-Za-z0-9.-]+\.workers\.dev' /tmp/prod-e2e-evidence/version-upload.txt | tail -n1)
           test -n "$NEW_VERSION"
-          test -n "$PREVIEW_URL"
           echo "NEW_VERSION=$NEW_VERSION" >> "$GITHUB_ENV"
-          echo "PREVIEW_URL=$PREVIEW_URL" >> "$GITHUB_ENV"
-          printf 'candidate_version=%s\npreview_url=%s\n' "$NEW_VERSION" "$PREVIEW_URL" | tee /tmp/prod-e2e-evidence/candidate-preview.txt
-          npx wrangler@${WRANGLER_VERSION} deployments status --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/deployment-during-preview.json
-          OLD_VERSION="$OLD_VERSION" node - <<'NODE'
-          const d=require('/tmp/prod-e2e-evidence/deployment-during-preview.json'),old=process.env.OLD_VERSION;
+          printf 'candidate_version=%s\nstaging=old@100%% candidate@0%%\n' "$NEW_VERSION" | tee /tmp/prod-e2e-evidence/candidate-staging.txt
+          echo "DEPLOYMENT_MUTATED=true" >> "$GITHUB_ENV"
+          npx wrangler@${WRANGLER_VERSION} versions deploy "$OLD_VERSION@100%" "$NEW_VERSION@0%" --name "$PROD_WORKER" --message "Stage GalviCare → GalviVault candidate $GITHUB_SHA at 0%" -y | tee /tmp/prod-e2e-evidence/stage-zero-percent.txt
+          npx wrangler@${WRANGLER_VERSION} deployments status --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/deployment-staged.json
+          OLD_VERSION="$OLD_VERSION" NEW_VERSION="$NEW_VERSION" node - <<'NODE'
+          const d=require('/tmp/prod-e2e-evidence/deployment-staged.json'),old=process.env.OLD_VERSION,nw=process.env.NEW_VERSION;
           const ids=[]; const walk=x=>{if(!x||typeof x!=='object')return; if(typeof x.version_id==='string')ids.push([x.version_id,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); if(typeof x.versionId==='string')ids.push([x.versionId,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); for(const v of Object.values(x))walk(v)}; walk(d);
-          if(!ids.some(([id,p])=>id===old&&p===100)) throw new Error(`Production traffic changed during preview staging: ${JSON.stringify(ids)}`);
+          if(!ids.some(([id,p])=>id===old&&p===100) || !ids.some(([id,p])=>id===nw&&p===0)) throw new Error(`Expected old@100/new@0 staging, got ${JSON.stringify(ids)}`);
           NODE
 
-      - name: Smoke exact preview candidate and execute bounded Production continuity canary
+      - name: Smoke exact zero-percent candidate and execute bounded Production continuity canary
         run: |
           set -euo pipefail
+          OVERRIDE="${PROD_WORKER}=\"${NEW_VERSION}\""
           READY=0
           for ATTEMPT in $(seq 1 15); do
-            curl -sS -D /tmp/prod-e2e-evidence/health.h -o /tmp/prod-e2e-evidence/health.json -H 'Origin: https://www.galvipro.com' "$PREVIEW_URL/health" || true
+            curl -sS -D /tmp/prod-e2e-evidence/health.h -o /tmp/prod-e2e-evidence/health.json -H 'Origin: https://www.galvipro.com' -H "Cloudflare-Workers-Version-Overrides: $OVERRIDE" "$PROD_URL/health" || true
             if grep -qi '^X-GalviVault-Day9-Continuity-Runtime: active' /tmp/prod-e2e-evidence/health.h && grep -qi '^X-GalviVault-Production-Integration: day9-production-v1' /tmp/prod-e2e-evidence/health.h; then
               READY=1
               break
@@ -171,12 +135,12 @@ jobs:
             sleep 2
           done
           test "$READY" = 1
-          curl -sS -D /tmp/prod-e2e-evidence/ready.h -o /tmp/prod-e2e-evidence/ready.json "$PREVIEW_URL/ready"
+          curl -sS -D /tmp/prod-e2e-evidence/ready.h -o /tmp/prod-e2e-evidence/ready.json -H "Cloudflare-Workers-Version-Overrides: $OVERRIDE" "$PROD_URL/ready"
           grep -qi '^X-GalviVault-Production-Schema: 0006' /tmp/prod-e2e-evidence/ready.h
-          STATUS=$(curl -sS -o /tmp/prod-e2e-evidence/protected-negative.json -w '%{http_code}' "$PREVIEW_URL/api/v1/operator/business-medical-records/bmr_probe/founder-health-record")
+          STATUS=$(curl -sS -o /tmp/prod-e2e-evidence/protected-negative.json -w '%{http_code}' -H "Cloudflare-Workers-Version-Overrides: $OVERRIDE" "$PROD_URL/api/v1/operator/business-medical-records/bmr_probe/founder-health-record")
           test "$STATUS" = 401
           node -e "const x=require('/tmp/prod-e2e-evidence/protected-negative.json');if(x?.error?.code!=='GV_AUTH_REQUIRED')throw new Error(JSON.stringify(x))"
-          PROD_URL="$PREVIEW_URL" VERSION_ID="$NEW_VERSION" CANARY_SUFFIX="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" CANARY_OUTPUT=/tmp/prod-e2e-evidence/customer-canary.json node scripts/production-galvivault-canary.mjs
+          PROD_URL="$PROD_URL" VERSION_ID="$NEW_VERSION" CANARY_SUFFIX="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" CANARY_OUTPUT=/tmp/prod-e2e-evidence/customer-canary.json node scripts/production-galvivault-canary.mjs
 
       - name: Prove Founder Venture BMR continuity and global D1 integrity
         run: |
@@ -198,7 +162,7 @@ jobs:
           const fs=require('fs'),x=require('/tmp/operator.json'),q=s=>String(s).replaceAll("'","''"); fs.writeFileSync('/tmp/invite.sql',`INSERT INTO gv8_operator_invitations(invitation_hash,operator_id,email_normalized,display_name,role,expires_at,used_at,created_at,created_by) VALUES('${q(x.invitation_hash)}','${q(x.operator_id)}','${q(x.email)}','${q(x.display_name)}','clinician','${q(x.expires_at)}',NULL,'${q(x.created_at)}','production_release_canary');`)
           NODE
           npx wrangler@${WRANGLER_VERSION} d1 execute "$PROD_DB" --remote --config "$PROD_CONFIG" --file /tmp/invite.sql --yes > /tmp/prod-e2e-evidence/operator-invite.txt
-          PROD_URL="$PREVIEW_URL" VERSION_ID="$NEW_VERSION" BMR_ID="$CANARY_BMR_ID" FOUNDER_ID="$CANARY_FOUNDER_ID" VENTURE_ID="$CANARY_VENTURE_ID" OPERATOR_STATE=/tmp/operator.json OPERATOR_RESULT=/tmp/prod-e2e-evidence/operator-result.json node scripts/production-galvivault-operator-canary.mjs verify
+          PROD_URL="$PROD_URL" VERSION_ID="$NEW_VERSION" BMR_ID="$CANARY_BMR_ID" FOUNDER_ID="$CANARY_FOUNDER_ID" VENTURE_ID="$CANARY_VENTURE_ID" OPERATOR_STATE=/tmp/operator.json OPERATOR_RESULT=/tmp/prod-e2e-evidence/operator-result.json node scripts/production-galvivault-operator-canary.mjs verify
           node <<'NODE'
           const fs=require('fs'),x=require('/tmp/operator.json'),q=s=>String(s).replaceAll("'","''"),t=new Date().toISOString();fs.writeFileSync('/tmp/disable.sql',`UPDATE gv8_operator_credentials SET status='disabled',updated_at='${q(t)}' WHERE operator_id='${q(x.operator_id)}'; UPDATE gv8_operator_sessions SET revoked_at=COALESCE(revoked_at,'${q(t)}') WHERE operator_id='${q(x.operator_id)}';`)
           NODE
@@ -207,7 +171,6 @@ jobs:
       - name: Promote exact proven version and verify Production
         run: |
           set -euo pipefail
-          echo "PROMOTION_ATTEMPTED=true" >> "$GITHUB_ENV"
           npx wrangler@${WRANGLER_VERSION} versions deploy "$NEW_VERSION@100%" --name "$PROD_WORKER" --message "GalviCare → GalviVault Production PASS $GITHUB_SHA" -y | tee /tmp/prod-e2e-evidence/deploy-100.txt
           CONVERGED=0
           for ATTEMPT in $(seq 1 20); do
@@ -230,36 +193,16 @@ jobs:
           echo "- Rollback version: $OLD_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo "- Production version: $NEW_VERSION" >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing GalviCare regression: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Exact preview candidate continuity + D1 + clinician/security canary: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Exact zero-percent candidate continuity + D1 + clinician/security canary: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- READY FOR PRODUCT OWNER PRODUCTION HUMAN CUSTOMER-JOURNEY CONFIRMATION' >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Roll back Worker version if any release checkpoint fails
-        if: failure() && env.PROMOTION_ATTEMPTED == 'true'
+      - name: Roll back Worker deployment if any release checkpoint fails
+        if: failure() && env.DEPLOYMENT_MUTATED == 'true'
         run: |
           set +e
           if [ -n "${OLD_VERSION:-}" ]; then
             npx wrangler@${WRANGLER_VERSION} versions deploy "$OLD_VERSION@100%" --name "$PROD_WORKER" --message "Automatic rollback after failed GalviCare → GalviVault promotion $GITHUB_SHA" -y
             echo "Rolled Production Worker traffic back to $OLD_VERSION" >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Restore prior Preview URL setting
-        if: always()
-        run: |
-          set +e
-          if [ -n "${PREVIEWS_WERE_ENABLED:-}" ] && [ -n "${WORKERS_DEV_ENABLED:-}" ]; then
-            API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PROD_WORKER/subdomain"
-            WORKERS_DEV_ENABLED="$WORKERS_DEV_ENABLED" PREVIEWS_WERE_ENABLED="$PREVIEWS_WERE_ENABLED" node <<'NODE'
-          const fs=require('fs');
-          fs.writeFileSync('/tmp/preview-restore.json',JSON.stringify({
-            enabled: process.env.WORKERS_DEV_ENABLED==='true',
-            previews_enabled: process.env.PREVIEWS_WERE_ENABLED==='true'
-          }));
-          NODE
-            curl -fsS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/preview-restore.json "$API" > /tmp/prod-e2e-evidence/subdomain-restored.json
-            node - <<'NODE'
-          const d=require('/tmp/prod-e2e-evidence/subdomain-restored.json');
-          if(d?.success!==true) process.exit(1);
-          NODE
           fi
 
       - name: Upload promotion evidence
