@@ -1,4 +1,7 @@
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { webcrypto } from 'node:crypto';
 
 const { subtle, getRandomValues } = webcrypto;
@@ -42,34 +45,70 @@ if (!prodUrl || !versionId || !bmrId || !founderId || !ventureId) throw new Erro
 const state = JSON.parse(readFileSync(statePath, 'utf8'));
 const override = `galvicare-0-5-production="${versionId}"`;
 
-const enroll = await fetch(`${prodUrl}/api/v1/operator/auth/enroll`, {
+function headerValue(rawHeaders, name) {
+  const target = `${String(name).toLowerCase()}:`;
+  return rawHeaders.split(/\r?\n/).reverse().find((line) => line.toLowerCase().startsWith(target))?.slice(target.length).trim() || null;
+}
+
+function requestJson(url, { method = 'GET', headers = {}, body = undefined } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'galvivault-prod-operator-'));
+  const headerPath = join(dir, 'headers.txt');
+  const bodyPath = join(dir, 'body.txt');
+  try {
+    const args = ['-sS', '-D', headerPath, '-o', bodyPath, '-w', '%{http_code}', '-X', method];
+    for (const [name, value] of Object.entries(headers)) args.push('-H', `${name}: ${value}`);
+    if (body !== undefined) args.push('--data-binary', body);
+    args.push(url);
+    const result = spawnSync('curl', args, { encoding: 'utf8' });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`curl failed (${result.status}): ${result.stderr || result.stdout}`);
+    const status = Number(String(result.stdout || '').trim());
+    const rawHeaders = readFileSync(headerPath, 'utf8');
+    const rawBody = readFileSync(bodyPath, 'utf8');
+    let parsed = {};
+    try { parsed = rawBody ? JSON.parse(rawBody) : {}; } catch { parsed = { raw: rawBody }; }
+    return { status, body: parsed, rawHeaders };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+const enroll = requestJson(`${prodUrl}/api/v1/operator/auth/enroll`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json', 'Cloudflare-Workers-Version-Overrides': override },
+  headers: {
+    'Content-Type': 'application/json',
+    'Cloudflare-Workers-Version-Overrides': override
+  },
   body: JSON.stringify({ email: state.email, enrollment_token: state.invitation_token, credential_id: state.credential_id, public_jwk: state.public_jwk })
 });
-const enrollBody = await enroll.json().catch(() => ({}));
-if (enroll.status !== 201 || enrollBody?.success !== true) throw new Error(`Operator enroll failed: HTTP ${enroll.status} ${JSON.stringify(enrollBody)}`);
-const cookieHeader = enroll.headers.get('set-cookie') || '';
+if (enroll.status !== 201 || enroll.body?.success !== true) throw new Error(`Operator enroll failed: HTTP ${enroll.status} ${JSON.stringify(enroll.body)}`);
+const cookieHeader = headerValue(enroll.rawHeaders, 'set-cookie') || '';
 const cookie = cookieHeader.split(';')[0];
 if (!cookie.startsWith('gv8_session=')) throw new Error('Operator enroll did not issue gv8_session cookie');
 
-async function get(path) {
-  const response = await fetch(`${prodUrl}${path}`, {
-    headers: { Cookie: cookie, 'Cloudflare-Workers-Version-Overrides': override }
+function get(path) {
+  const response = requestJson(`${prodUrl}${path}`, {
+    headers: {
+      Cookie: cookie,
+      'Cloudflare-Workers-Version-Overrides': override
+    }
   });
-  const body = await response.json().catch(() => ({}));
-  if (response.status !== 200 || body?.success !== true) throw new Error(`Operator route failed ${path}: HTTP ${response.status} ${JSON.stringify(body)}`);
+  if (response.status !== 200 || response.body?.success !== true) throw new Error(`Operator route failed ${path}: HTTP ${response.status} ${JSON.stringify(response.body)}`);
   return { path, http_status: response.status, success: true };
 }
 
 const checks = [];
-checks.push(await get(`/api/v1/operator/business-medical-records/${encodeURIComponent(bmrId)}/chart`));
-checks.push(await get(`/api/v1/operator/business-medical-records/${encodeURIComponent(bmrId)}/founder-health-record`));
-checks.push(await get(`/api/v1/operator/business-medical-records/${encodeURIComponent(bmrId)}/founder-intelligence-context?founder_id=${encodeURIComponent(founderId)}&venture_id=${encodeURIComponent(ventureId)}`));
+checks.push(get(`/api/v1/operator/business-medical-records/${encodeURIComponent(bmrId)}/chart`));
+checks.push(get(`/api/v1/operator/business-medical-records/${encodeURIComponent(bmrId)}/founder-health-record`));
+checks.push(get(`/api/v1/operator/business-medical-records/${encodeURIComponent(bmrId)}/founder-intelligence-context?founder_id=${encodeURIComponent(founderId)}&venture_id=${encodeURIComponent(ventureId)}`));
 
-const logout = await fetch(`${prodUrl}/api/v1/operator/auth/logout`, {
+const logout = requestJson(`${prodUrl}/api/v1/operator/auth/logout`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json', Cookie: cookie, 'Cloudflare-Workers-Version-Overrides': override },
+  headers: {
+    'Content-Type': 'application/json',
+    Cookie: cookie,
+    'Cloudflare-Workers-Version-Overrides': override
+  },
   body: '{}'
 });
 if (logout.status !== 200) throw new Error(`Operator logout failed: HTTP ${logout.status}`);
