@@ -134,7 +134,7 @@ jobs:
           node <<'NODE'
           const fs=require('fs');
           const source=fs.readFileSync(process.env.PROD_CONFIG,'utf8');
-          const preview=source.replace('"preview_urls": false','"preview_urls": true');
+          const preview=source.replace('"preview_urls": false','"preview_urls": true,\n  "compatibility_flags": ["global_fetch_strictly_public"]');
           if(preview===source) throw new Error('Production candidate config did not contain the expected preview_urls=false safety baseline.');
           fs.writeFileSync('wrangler.production-galvivault-preview.runtime.jsonc',preview);
           NODE
