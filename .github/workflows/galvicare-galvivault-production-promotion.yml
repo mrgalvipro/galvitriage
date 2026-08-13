@@ -88,6 +88,32 @@ jobs:
           const d=require('/tmp/prod-e2e-evidence/migration-0006-verify.json'),a=(Array.isArray(d)?d:[d]).map(x=>x.results||[]),m=a[0]?.[0],t=a[1]?.[0]; if(m?.migration_id!=='0006'||m?.name!=='day8_operator_device_auth'||m?.environment!=='production'||m?.checksum!=='prod-day8-operator-device-auth-v1'||Number(t?.auth_table_count)!==4) throw new Error(JSON.stringify({m,t}));
           NODE
 
+      - name: Enable isolated Preview URLs without changing Production traffic
+        run: |
+          set -euo pipefail
+          API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PROD_WORKER/subdomain"
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" "$API" > /tmp/prod-e2e-evidence/subdomain-before.json
+          node <<'NODE'
+          const fs=require('fs');
+          const d=require('/tmp/prod-e2e-evidence/subdomain-before.json');
+          if(d?.success!==true || typeof d?.result?.enabled!=='boolean') throw new Error(`Unable to resolve current Production workers.dev state: ${JSON.stringify(d)}`);
+          const enabled=d.result.enabled;
+          const previews=Boolean(d.result.previews_enabled);
+          fs.appendFileSync(process.env.GITHUB_ENV,`WORKERS_DEV_ENABLED=${enabled}\nPREVIEWS_WERE_ENABLED=${previews}\n`);
+          fs.writeFileSync('/tmp/preview-enable.json',JSON.stringify({enabled,previews_enabled:true}));
+          NODE
+          curl -fsS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/preview-enable.json "$API" > /tmp/prod-e2e-evidence/subdomain-preview-enabled.json
+          node - <<'NODE'
+          const d=require('/tmp/prod-e2e-evidence/subdomain-preview-enabled.json');
+          if(d?.success!==true || d?.result?.previews_enabled!==true) throw new Error(`Preview URL enablement failed: ${JSON.stringify(d)}`);
+          NODE
+          npx wrangler@${WRANGLER_VERSION} deployments status --name "$PROD_WORKER" --json > /tmp/prod-e2e-evidence/deployment-after-preview-enable.json
+          OLD_VERSION="$OLD_VERSION" node - <<'NODE'
+          const d=require('/tmp/prod-e2e-evidence/deployment-after-preview-enable.json'),old=process.env.OLD_VERSION;
+          const ids=[]; const walk=x=>{if(!x||typeof x!=='object')return; if(typeof x.version_id==='string')ids.push([x.version_id,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); if(typeof x.versionId==='string')ids.push([x.versionId,Number(x.percentage??x.percent??x.traffic??x.weight??NaN)]); for(const v of Object.values(x))walk(v)}; walk(d);
+          if(!ids.some(([id,p])=>id===old&&p===100)) throw new Error(`Production traffic changed while enabling Preview URLs: ${JSON.stringify(ids)}`);
+          NODE
+
       - name: Upload exact candidate and create isolated version preview
         run: |
           set -euo pipefail
@@ -192,6 +218,26 @@ jobs:
           if [ -n "${OLD_VERSION:-}" ]; then
             npx wrangler@${WRANGLER_VERSION} versions deploy "$OLD_VERSION@100%" --name "$PROD_WORKER" --message "Automatic rollback after failed GalviCare → GalviVault promotion $GITHUB_SHA" -y
             echo "Rolled Production Worker traffic back to $OLD_VERSION" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Restore prior Preview URL setting
+        if: always()
+        run: |
+          set +e
+          if [ -n "${PREVIEWS_WERE_ENABLED:-}" ] && [ -n "${WORKERS_DEV_ENABLED:-}" ]; then
+            API="https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/$PROD_WORKER/subdomain"
+            WORKERS_DEV_ENABLED="$WORKERS_DEV_ENABLED" PREVIEWS_WERE_ENABLED="$PREVIEWS_WERE_ENABLED" node <<'NODE'
+          const fs=require('fs');
+          fs.writeFileSync('/tmp/preview-restore.json',JSON.stringify({
+            enabled: process.env.WORKERS_DEV_ENABLED==='true',
+            previews_enabled: process.env.PREVIEWS_WERE_ENABLED==='true'
+          }));
+          NODE
+            curl -fsS -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' --data-binary @/tmp/preview-restore.json "$API" > /tmp/prod-e2e-evidence/subdomain-restored.json
+            node - <<'NODE'
+          const d=require('/tmp/prod-e2e-evidence/subdomain-restored.json');
+          if(d?.success!==true) process.exit(1);
+          NODE
           fi
 
       - name: Upload promotion evidence
