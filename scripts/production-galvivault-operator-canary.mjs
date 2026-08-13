@@ -4,11 +4,11 @@ import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { webcrypto } from 'node:crypto';
 
-const { subtle, getRandomValues } = webcrypto;
+const { subtle } = webcrypto;
 const enc = new TextEncoder();
 const b64u = (bytes) => Buffer.from(bytes).toString('base64url');
 const sha256 = async (value) => b64u(await subtle.digest('SHA-256', enc.encode(String(value))));
-const randomToken = (n = 32) => { const bytes = new Uint8Array(n); getRandomValues(bytes); return b64u(bytes); };
+const randomToken = (n = 32) => { const bytes = new Uint8Array(n); webcrypto.getRandomValues(bytes); return b64u(bytes); };
 
 const mode = process.argv[2];
 const statePath = process.env.OPERATOR_STATE || '/tmp/production-galvivault-operator.json';
