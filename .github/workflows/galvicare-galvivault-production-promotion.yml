@@ -106,9 +106,16 @@ jobs:
         run: |
           set -euo pipefail
           OVR="Cloudflare-Workers-Version-Overrides: $PROD_WORKER=\"$NEW_VERSION\""
-          curl -sS -D /tmp/prod-e2e-evidence/health.h -o /tmp/prod-e2e-evidence/health.json -H 'Origin: https://www.galvipro.com' -H "$OVR" "$PROD_URL/health"
-          grep -qi '^X-GalviVault-Day9-Continuity-Runtime: active' /tmp/prod-e2e-evidence/health.h
-          grep -qi '^X-GalviVault-Production-Integration: day9-production-v1' /tmp/prod-e2e-evidence/health.h
+          READY=0
+          for ATTEMPT in $(seq 1 15); do
+            curl -sS -D /tmp/prod-e2e-evidence/health.h -o /tmp/prod-e2e-evidence/health.json -H 'Origin: https://www.galvipro.com' -H "$OVR" "$PROD_URL/health" || true
+            if grep -qi '^X-GalviVault-Day9-Continuity-Runtime: active' /tmp/prod-e2e-evidence/health.h && grep -qi '^X-GalviVault-Production-Integration: day9-production-v1' /tmp/prod-e2e-evidence/health.h; then
+              READY=1
+              break
+            fi
+            sleep 2
+          done
+          test "$READY" = 1
           curl -sS -D /tmp/prod-e2e-evidence/ready.h -o /tmp/prod-e2e-evidence/ready.json -H "$OVR" "$PROD_URL/ready"
           grep -qi '^X-GalviVault-Production-Schema: 0006' /tmp/prod-e2e-evidence/ready.h
           STATUS=$(curl -sS -o /tmp/prod-e2e-evidence/protected-negative.json -w '%{http_code}' -H "$OVR" "$PROD_URL/api/v1/operator/business-medical-records/bmr_probe/founder-health-record")
