@@ -1,4 +1,7 @@
-import { writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnSync } from 'node:child_process';
 
 const prodUrl = String(process.env.PROD_URL || '').replace(/\/$/, '');
 const versionId = String(process.env.VERSION_ID || '').trim();
@@ -55,8 +58,36 @@ function payload(sessionId, ventureName) {
   };
 }
 
+function headerValue(rawHeaders, name) {
+  const target = `${String(name).toLowerCase()}:`;
+  return rawHeaders.split(/\r?\n/).reverse().find((line) => line.toLowerCase().startsWith(target))?.slice(target.length).trim() || null;
+}
+
+function requestJson(url, { method = 'GET', headers = {}, body = undefined } = {}) {
+  const dir = mkdtempSync(join(tmpdir(), 'galvivault-prod-canary-'));
+  const headerPath = join(dir, 'headers.txt');
+  const bodyPath = join(dir, 'body.txt');
+  try {
+    const args = ['-sS', '-D', headerPath, '-o', bodyPath, '-w', '%{http_code}', '-X', method];
+    for (const [name, value] of Object.entries(headers)) args.push('-H', `${name}: ${value}`);
+    if (body !== undefined) args.push('--data-binary', body);
+    args.push(url);
+    const result = spawnSync('curl', args, { encoding: 'utf8' });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`curl failed (${result.status}): ${result.stderr || result.stdout}`);
+    const status = Number(String(result.stdout || '').trim());
+    const rawHeaders = readFileSync(headerPath, 'utf8');
+    const rawBody = readFileSync(bodyPath, 'utf8');
+    let parsed = {};
+    try { parsed = rawBody ? JSON.parse(rawBody) : {}; } catch { parsed = { raw: rawBody }; }
+    return { status, body: parsed, rawHeaders };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
 async function submit(sessionId, ventureName) {
-  const response = await fetch(`${prodUrl}/api`, {
+  const response = requestJson(`${prodUrl}/api`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -65,11 +96,10 @@ async function submit(sessionId, ventureName) {
     },
     body: JSON.stringify(payload(sessionId, ventureName))
   });
-  const body = await response.json().catch(() => ({}));
-  const continuity = response.headers.get('X-GalviVault-Day9-Continuity');
-  const runtime = response.headers.get('X-GalviVault-Day9-Continuity-Runtime');
-  if (response.status !== 200 || body?.success !== true || continuity !== 'attached' || runtime !== 'active') {
-    throw new Error(`Production canary failed for ${ventureName}: HTTP ${response.status}; continuity=${continuity}; runtime=${runtime}; body=${JSON.stringify(body)}`);
+  const continuity = headerValue(response.rawHeaders, 'X-GalviVault-Day9-Continuity');
+  const runtime = headerValue(response.rawHeaders, 'X-GalviVault-Day9-Continuity-Runtime');
+  if (response.status !== 200 || response.body?.success !== true || continuity !== 'attached' || runtime !== 'active') {
+    throw new Error(`Production canary failed for ${ventureName}: HTTP ${response.status}; continuity=${continuity}; runtime=${runtime}; body=${JSON.stringify(response.body)}`);
   }
   return { session_id: sessionId, venture_name: ventureName, http_status: response.status, continuity, runtime };
 }
