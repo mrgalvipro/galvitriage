@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const engine=fs.readFileSync('worker/day7d-engine.js','utf8');
+const legacyWorker=fs.readFileSync('worker/worker.js','utf8');
 const browser=fs.readFileSync('day7d-browser-customer-intelligence.js','utf8');
 const builder=fs.readFileSync('scripts/day7b-build-qa-frontend.mjs','utf8');
 const preflight=fs.readFileSync('scripts/day7d-preflight.mjs','utf8');
@@ -33,7 +34,7 @@ test('GalviScore clarification is Worker-owned and objective score remains immut
   has(engine,'GalviScore:{','GalviScore question bank');
   has(engine,'objective_score_unchanged_by_clarification:true','score immutability result contract');
   has(engine,'galviscore_clarification_server_owned:true','runtime ownership capability');
-  has(engine,'objective_score_immutable:true','runtime score capability');
+  has(engine,'objective_score_immutable:true','score immutability capability');
   has(browser,'save_galviscore_followup','browser Worker submission');
   has(browser,'get_or_generate_galviscore','browser Worker regeneration');
   has(browser,'routeByGalviScoreConfidence=async','authoritative route interception');
@@ -133,4 +134,17 @@ test('one automatic deployer owns Worker and frontend; Day 7C is compatibility-o
   has(compatibility,'workflow_dispatch:','manual compatibility trigger');
   lacks(compatibility,'push:','no competing push deployment');
   lacks(compatibility,'wrangler-action','no competing Cloudflare deployment');
+});
+
+test('legacy GalviSight prerequisite check binds GalviShot explicitly and never passes undefined product to D1',()=>{
+  has(
+    legacyWorker,
+    "hasProductEntitlement(db, sessionId, 'GalviShot') || hasQaOverride(env, payload)",
+    'GalviSight GalviShot entitlement prerequisite'
+  );
+  lacks(
+    legacyWorker,
+    'hasProductEntitlement(db, sessionId) || hasQaOverride(env, payload)',
+    'undefined-product D1 binding regression'
+  );
 });
