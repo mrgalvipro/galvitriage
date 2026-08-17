@@ -1,0 +1,58 @@
+name: GalviSight D1 Hotfix
+
+on:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - ".github/workflows/galvisight-d1-hotfix.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: galvisight-d1-hotfix
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact QA branch
+        uses: actions/checkout@v4
+        with:
+          ref: qa-revamped-galvicare-0-5
+          fetch-depth: 0
+
+      - name: Apply exact GalviSight entitlement fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('worker/worker.js')
+          source = path.read_text()
+          old = "const entitled = await hasProductEntitlement(db, sessionId) || hasQaOverride(env, payload);"
+          new = "const entitled = await hasProductEntitlement(db, sessionId, 'GalviShot') || hasQaOverride(env, payload);"
+          count = source.count(old)
+          if count != 1:
+              raise SystemExit(f'Expected exactly one defective entitlement call, found {count}')
+          path.write_text(source.replace(old, new, 1))
+          PY
+          grep -F "hasProductEntitlement(db, sessionId, 'GalviShot')" worker/worker.js
+          ! grep -F "hasProductEntitlement(db, sessionId) || hasQaOverride(env, payload)" worker/worker.js
+          node --check worker/worker.js
+          git diff --check
+
+      - name: Commit exact one-file repair
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git diff --name-only | wc -l)" -eq 1
+          test "$(git diff --name-only)" = "worker/worker.js"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add worker/worker.js
+          git commit -m "Fix GalviSight GalviShot entitlement D1 binding"
+          git push origin HEAD:qa-revamped-galvicare-0-5
