@@ -145,3 +145,12 @@ test('Production config contains no QA-only D1 or test-payment authority', () =>
     '"FIXTURE_MODE": "true"'
   ]);
 });
+
+test('Production GalviSight prerequisite always binds the exact GalviShot product', () => {
+  expectIncludes(qaWorker, [
+    "await hasProductEntitlement(db, sessionId, 'GalviShot')"
+  ]);
+  expectExcludes(qaWorker, [
+    'await hasProductEntitlement(db, sessionId) || hasQaOverride(env, payload)'
+  ]);
+});
