@@ -2048,7 +2048,7 @@ async function writeDay4Result(db, sessionId, product, result) {
   );
 }
 async function getPaidGalviShotForDay4(db, env, payload, sessionId) {
-  const entitled = await hasProductEntitlement(db, sessionId) || hasQaOverride(env, payload);
+  const entitled = await hasProductEntitlement(db, sessionId, 'GalviShot') || hasQaOverride(env, payload);
   if (!entitled) return { locked:true, response:{ success:false, status:'locked', message:'GalviShot is locked until server-side entitlement is verified.', session_id:sessionId, payment_required:true } };
   const stored = await storedGalviShot(db, sessionId);
   if (!stored) return { missing:true, response:{ success:false, status:'not_found', message:'Generate GalviShot before requesting Day 4.', session_id:sessionId } };
