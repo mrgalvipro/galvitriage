@@ -7,10 +7,12 @@ on:
       - qa-revamped-galvicare-0-5
     paths:
       - index.html
+      - day1-prefounder-customer.js
       - day1-prefounder-qa.js
       - qa-frontend-worker.js
       - wrangler.qa-frontend.jsonc
       - scripts/day7b-build-qa-frontend.mjs
+      - tests/day1-prefounder-customer.test.mjs
       - .github/workflows/deploy-qa-frontend.yml
 
 permissions:
@@ -33,10 +35,13 @@ jobs:
         with:
           node-version: '22'
 
+      - name: Verify Idea-only customer Pre-Founder contract
+        run: node --test tests/day1-prefounder-customer.test.mjs
+
       - name: Generate isolated QA frontend
         run: node scripts/day7b-build-qa-frontend.mjs
 
-      - name: QA isolation and Day 1 Human E2E visibility gate
+      - name: QA isolation and Day 1 customer/Human E2E gate
         shell: bash
         run: |
           set -euo pipefail
@@ -45,6 +50,15 @@ jobs:
           grep -Fq 'https://galvicare-triage-intake.mrgalvipro.workers.dev' dist-qa/index.html
           grep -Fq 'https://galvicare-0-5-qa.mrgalvipro.workers.dev/#galvitriage' dist-qa/index.html
           grep -Fq 'https://buy.stripe.com/test_' dist-qa/index.html
+          grep -Fq 'Day 1 customer Pre-Founder pathway adapter.' dist-qa/index.html
+          grep -Fq "const IDEA_STAGE='Idea'" dist-qa/index.html
+          grep -Fq 'prefounder-customer-pathway' dist-qa/index.html
+          grep -Fq 'GALVICARE™ | PRE-FOUNDER PATHWAY' dist-qa/index.html
+          grep -Fq 'What is a Founder?' dist-qa/index.html
+          grep -Fq 'Founder Development Institute' dist-qa/index.html
+          grep -Fq "input.required=false" dist-qa/index.html
+          grep -Fq 'optional at the Idea stage' dist-qa/index.html
+          ! grep -Fiq 'dreamer' day1-prefounder-customer.js
           grep -Fq 'Day 1 Human E2E Pre-Founder QA adapter.' dist-qa/index.html
           grep -Fq 'day1-human-e2e-qa-visibility' dist-qa/index.html
           grep -Fq '#day1-human-e2e-panel[data-qa-only="true"]' dist-qa/index.html
@@ -64,7 +78,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Verify QA frontend runtime exposes Day 1 Human E2E controls
+      - name: Verify QA runtime exposes Idea-only customer path and Human E2E controls
         shell: bash
         run: |
           set -euo pipefail
@@ -79,6 +93,11 @@ jobs:
           grep -Fq 'GALVICARE QA / TEST ENVIRONMENT' qa-runtime.html
           grep -Fq 'https://galvicare-triage-intake.mrgalvipro.workers.dev' qa-runtime.html
           grep -Fq 'https://buy.stripe.com/test_' qa-runtime.html
+          grep -Fq 'Day 1 customer Pre-Founder pathway adapter.' qa-runtime.html
+          grep -Fq "const IDEA_STAGE='Idea'" qa-runtime.html
+          grep -Fq 'prefounder-customer-pathway' qa-runtime.html
+          grep -Fq 'GALVICARE™ | PRE-FOUNDER PATHWAY' qa-runtime.html
+          grep -Fq 'Founder Development Institute' qa-runtime.html
           grep -Fq 'Day 1 Human E2E Pre-Founder QA adapter.' qa-runtime.html
           grep -Fq 'day1-human-e2e-qa-visibility' qa-runtime.html
           grep -Fq '#day1-human-e2e-panel[data-qa-only="true"]' qa-runtime.html
@@ -97,11 +116,15 @@ jobs:
 
       - name: QA browser E2E readiness summary
         run: |
-          echo '## GalviCare 0.5 QA Browser E2E' >> "$GITHUB_STEP_SUMMARY"
+          echo '## GalviCare 1.0 Day 1 QA Browser E2E' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR DAY 1 HUMAN QA E2E**' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR FINAL DAY 1 HUMAN QA E2E**' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo '- Browser: https://galvicare-0-5-qa.mrgalvipro.workers.dev/#galvitriage' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Customer Pre-Founder education: IDEA-STAGE ONLY' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Non-Idea customer stages: Pre-Founder education HIDDEN' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Customer terminology: PRE-FOUNDER; no customer-facing Dreamer label' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Idea-stage venture name: OPTIONAL; no fabricated venture required' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 1 Human E2E controls H3-H14: PRESENT + QA VISIBILITY OVERRIDE VERIFIED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 1 API: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing GalviCare API: https://galvicare-triage-intake.mrgalvipro.workers.dev/api' >> "$GITHUB_STEP_SUMMARY"
