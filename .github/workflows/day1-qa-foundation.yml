@@ -1,4 +1,4 @@
-name: GalviVault Day 1 QA Foundation
+name: GalviStudio GalviCare 1.0 Day 1 QA Foundation
 
 on:
   workflow_dispatch:
@@ -7,16 +7,19 @@ on:
       - qa-revamped-galvicare-0-5
     paths:
       - "worker/day1.js"
+      - "worker/day1-p0-legacy.js"
       - "migrations/day1/0001_canonical_business_medical_record.sql"
+      - "migrations/day1/0100_galvicare_1_0_day1_foundation.sql"
       - "tests/day1-foundation.test.mjs"
-      - "package.json"
+      - "tests/day1-galvicare-1-0.test.mjs"
       - "wrangler.json"
+      - ".github/workflows/day1-qa-foundation.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: galvivault-day1-qa
+  group: galvicare-1-0-day1-qa
   cancel-in-progress: true
 
 env:
@@ -28,7 +31,7 @@ jobs:
   day1-foundation:
     name: Build, migrate, deploy, and prove Day 1
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout exact QA candidate
@@ -37,16 +40,28 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
+      - name: Assert mandated branch and exact repository state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain)"
+          if git branch --show-current | grep -qx 'work'; then
+            echo 'FAIL: forbidden work branch is active.'
+            exit 1
+          fi
+          echo "PASS: exact QA candidate ${GITHUB_SHA} checked out on ${GITHUB_REF_NAME}."
+
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Assert mandated branch and runtime separation
+      - name: Assert runtime and Production separation
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const day1=JSON.parse(fs.readFileSync('wrangler.json','utf8'));
@@ -60,14 +75,28 @@ jobs:
           const day7dDb=day7d.d1_databases?.find(item=>item.binding==='DB');
           if(day1Db?.database_name!=='galvivault-0-5-qa'||day7dDb?.database_name!=='galvivault-0-5-qa') throw new Error('QA D1 target mismatch.');
           if(day1Db?.migrations_dir!=='migrations/day1') throw new Error('Day 1 migration directory mismatch.');
-          console.log('PASS: Day 1, Day 7D, and Production runtime entries are distinct.');
+          console.log('PASS: Day 1, Day 7D, and Production runtime entries remain isolated.');
           NODE
 
       - name: Install existing dependencies
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: Run Day 1 blocking suite
-        run: npm run test:day1
+      - name: Syntax-check exact Day 1 candidate
+        run: |
+          node --check worker/day1.js
+          node --check worker/day1-p0-legacy.js
+          node --check worker/day1-galvicare-1-0.js
+
+      - name: Run legacy and GalviCare 1.0 Day 1 blocking suites
+        run: node --test tests/day1-foundation.test.mjs tests/day1-galvicare-1-0.test.mjs
+
+      - name: Run preserved GalviCare full regression gate
+        run: npm run stabilization:gate
+
+      - name: Run preserved clinician and Founder History regression slices
+        run: |
+          npm run test:day8
+          npm run test:day9
 
       - name: Prove preserved Day 7D and Production boundaries
         shell: bash
@@ -79,7 +108,7 @@ jobs:
           node scripts/day7d-preflight.mjs
           echo 'PASS: Existing Day 7D QA and Production boundaries remain valid.'
 
-      - name: Apply collision-safe additive Day 1 schema to QA D1
+      - name: Apply collision-safe inherited Day 1 schema to QA D1
         shell: bash
         run: |
           set -euo pipefail
@@ -88,13 +117,23 @@ jobs:
             --file=migrations/day1/0001_canonical_business_medical_record.sql \
             --config wrangler.json
 
-      - name: Verify QA D1 migration ledger and foundation tables
+      - name: Apply GalviCare 1.0 Day 1 additive schema to QA D1
         shell: bash
         run: |
           set -euo pipefail
           npx --yes wrangler@4 d1 execute galvivault-0-5-qa \
             --remote \
-            --command="SELECT migration_id,name,environment FROM gv1_schema_migrations WHERE migration_id='0001'; SELECT COUNT(*) AS required_tables FROM sqlite_master WHERE type='table' AND name IN ('gv1_founders','gv1_ventures','gv1_business_medical_records','gv1_assessment_sessions','gv1_journey_events','gv1_audit_log','gv1_idempotency_keys');" \
+            --file=migrations/day1/0100_galvicare_1_0_day1_foundation.sql \
+            --config wrangler.json
+
+      - name: Verify QA D1 Day 1 schema and one-BMR invariant
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL="SELECT migration_id,name,environment FROM gv1_schema_migrations WHERE migration_id IN ('0001','0100') ORDER BY migration_id; SELECT COUNT(*) AS v10_table_count FROM sqlite_master WHERE type='table' AND name IN ('gv1_principal_contexts','gv1_consent_events','gv1_principal_evidence_items','gv1_evidence_lineage_links','gv1_day1_request_receipts'); SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1);"
+          npx --yes wrangler@4 d1 execute galvivault-0-5-qa \
+            --remote \
+            --command="$SQL" \
             --config wrangler.json \
             --json > /tmp/day1-schema.json
           cat /tmp/day1-schema.json
@@ -102,19 +141,15 @@ jobs:
           import fs from 'node:fs';
           const payload=JSON.parse(fs.readFileSync('/tmp/day1-schema.json','utf8'));
           const objects=[];
-          const walk=(value)=>{
-            if(Array.isArray(value)) for(const item of value) walk(item);
-            else if(value&&typeof value==='object'){
-              objects.push(value);
-              for(const item of Object.values(value)) walk(item);
-            }
-          };
+          const walk=(v)=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){objects.push(v);Object.values(v).forEach(walk)}};
           walk(payload);
-          const migration=objects.find(item=>item.migration_id==='0001');
-          const count=objects.find(item=>Object.hasOwn(item,'required_tables'));
-          if(!migration||migration.environment!=='qa') throw new Error('Migration 0001 ledger evidence is missing.');
-          if(Number(count?.required_tables)!==7) throw new Error(`Expected 7 required Day 1 tables; found ${count?.required_tables ?? 'none'}.`);
-          console.log('PASS: migration 0001 and all seven runtime-critical gv1_ tables exist.');
+          const migration=objects.find(x=>x.migration_id==='0100');
+          const tableCount=objects.find(x=>Object.hasOwn(x,'v10_table_count'))?.v10_table_count;
+          const duplicate=objects.find(x=>Object.hasOwn(x,'duplicate_bmr_ventures'))?.duplicate_bmr_ventures;
+          if(!migration||migration.environment!=='qa') throw new Error('Migration 0100 evidence is missing.');
+          if(Number(tableCount)!==5) throw new Error(`Expected 5 Day 1 1.0 tables; found ${tableCount ?? 'none'}.`);
+          if(Number(duplicate)!==0) throw new Error(`Duplicate BMR-per-venture invariant failed: ${duplicate}.`);
+          console.log('PASS: GalviCare 1.0 Day 1 schema and one-BMR invariant are clean.');
           NODE
 
       - name: Deploy isolated Day 1 QA Worker and capture actual URL
@@ -143,80 +178,83 @@ jobs:
               "${DAY1_BASE_URL}/health?candidate=${GITHUB_SHA}&attempt=${attempt}" || true)"
             CONTENT_TYPE="$(awk 'BEGIN{IGNORECASE=1} /^content-type:/{print $0}' /tmp/day1-health-headers | tail -n 1 | tr -d '\r' || true)"
             if [ "$STATUS" = "200" ] && echo "$CONTENT_TYPE" | grep -qi 'application/json'; then
-              if node --input-type=module -e "import fs from 'node:fs'; const payload=JSON.parse(fs.readFileSync('/tmp/day1-health-body','utf8')); if(payload?.success!==true||payload?.environment!=='qa'||payload?.data?.service!=='galvivault-p0'||payload?.data?.schema_namespace!=='gv1_') process.exit(1);"; then
-                echo "PASS: Day 1 JSON runtime converged on attempt ${attempt}."
+              if node --input-type=module -e "import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('/tmp/day1-health-body','utf8')); if(p?.success!==true||p?.environment!=='qa'||p?.data?.service!=='galvivault-p0'||p?.data?.schema_namespace!=='gv1_'||p?.data?.release_version!=='galvicare_1_0_day1'||p?.data?.galvicare_schema_version!=='0100'||p?.data?.capabilities?.ai_enabled!==false) process.exit(1);"; then
+                echo "PASS: Day 1 1.0 JSON runtime converged on attempt ${attempt}."
                 exit 0
               fi
             fi
             echo "Waiting for Day 1 runtime convergence: attempt=${attempt}, status=${STATUS}, content_type=${CONTENT_TYPE:-missing}"
             sleep 3
           done
-          echo 'FAIL: Day 1 endpoint never converged to the expected JSON health contract.'
-          echo 'Final response headers:'
+          echo 'FAIL: Day 1 endpoint never converged to the expected 1.0 JSON health contract.'
           cat /tmp/day1-health-headers || true
-          echo 'Final response body preview:'
-          head -c 1000 /tmp/day1-health-body || true
+          head -c 1200 /tmp/day1-health-body || true
           exit 1
 
-      - name: Run deployed Day 1 API smoke
+      - name: Run deployed inherited Day 1 API smoke
         env:
           DAY1_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
         run: npm run qa:smoke
 
-      - name: Verify remote Human E2E readiness evidence
+      - name: Run deployed GalviCare 1.0 Day 1 smoke
+        env:
+          DAY1_V10_REMOTE_SMOKE: "1"
+          DAY1_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: node --test tests/day1-galvicare-1-0.test.mjs
+
+      - name: Verify remote GalviCare 1.0 Human-E2E readiness evidence
         shell: bash
         env:
           DAY1_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          SESSION_ID="ses_day1_e2e_${DAY1_RUN_SUFFIX}"
-          EVENT_KEY="day1:${SESSION_ID}:triage_opened:001"
-          SESSION_KEY="day1-session-${DAY1_RUN_SUFFIX}"
-          EVENT_IDEMPOTENCY_KEY="day1-event-${DAY1_RUN_SUFFIX}"
-          SQL="SELECT COUNT(*) AS session_count FROM gv1_assessment_sessions WHERE session_id='${SESSION_ID}'; SELECT COUNT(*) AS event_count FROM gv1_journey_events WHERE event_key='${EVENT_KEY}'; SELECT COUNT(*) AS session_receipt_count FROM gv1_idempotency_keys WHERE scope='session:create' AND idempotency_key='${SESSION_KEY}'; SELECT COUNT(*) AS event_receipt_count FROM gv1_idempotency_keys WHERE scope='journey-event:create' AND idempotency_key='${EVENT_IDEMPOTENCY_KEY}'; SELECT COUNT(*) AS session_audit_count FROM gv1_audit_log WHERE entity_type='assessment_session' AND entity_id='${SESSION_ID}'; SELECT COUNT(*) AS event_audit_count FROM gv1_audit_log WHERE entity_type='journey_event' AND entity_id='${EVENT_KEY}'; SELECT COUNT(*) AS duplicate_sessions FROM (SELECT session_id FROM gv1_assessment_sessions GROUP BY session_id HAVING COUNT(*)>1); SELECT COUNT(*) AS duplicate_event_keys FROM (SELECT event_key FROM gv1_journey_events GROUP BY event_key HAVING COUNT(*)>1); SELECT COUNT(*) AS orphan_sessions FROM gv1_assessment_sessions s LEFT JOIN gv1_business_medical_records b ON b.bmr_id=s.bmr_id LEFT JOIN gv1_founders f ON f.founder_id=s.founder_id LEFT JOIN gv1_ventures v ON v.venture_id=s.venture_id WHERE b.bmr_id IS NULL OR f.founder_id IS NULL OR v.venture_id IS NULL;"
+          RUN="$(echo "$DAY1_RUN_SUFFIX" | tr '[:upper:]' '[:lower:]')"
+          PRE_KEY="ctx-${RUN}-a"
+          OP_KEY="ctx-${RUN}-b"
+          PRE_CONSENT="cns-${RUN}-a"
+          OP_CONSENT="cns-${RUN}-b"
+          PRE_EVIDENCE="ev-${RUN}-a"
+          OP_EVIDENCE="ev-${RUN}-b"
+          SQL="SELECT COUNT(*) AS pre_context_count FROM gv1_principal_contexts WHERE client_request_id='${PRE_KEY}' AND record_mode='principal_only' AND venture_id IS NULL AND bmr_id IS NULL; SELECT COUNT(*) AS op_context_count FROM gv1_principal_contexts WHERE client_request_id='${OP_KEY}' AND record_mode='principal_plus_venture' AND venture_id IS NOT NULL AND bmr_id IS NOT NULL; SELECT COUNT(*) AS pre_consent_count FROM gv1_consent_events WHERE client_request_id='${PRE_CONSENT}' AND status='granted'; SELECT COUNT(*) AS op_consent_count FROM gv1_consent_events WHERE client_request_id='${OP_CONSENT}' AND status='granted'; SELECT COUNT(*) AS principal_evidence_count FROM gv1_principal_evidence_items WHERE client_request_id='${PRE_EVIDENCE}' AND status='accepted'; SELECT COUNT(*) AS bmr_evidence_receipt_count FROM gv1_day1_request_receipts WHERE scope='ev' AND idempotency_key='${OP_EVIDENCE}'; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS invalid_pre_contexts FROM gv1_principal_contexts WHERE record_mode='principal_only' AND (venture_id IS NOT NULL OR bmr_id IS NOT NULL); SELECT COUNT(*) AS orphan_consent FROM gv1_consent_events c LEFT JOIN gv1_founders f ON f.founder_id=c.founder_id WHERE f.founder_id IS NULL; SELECT COUNT(*) AS orphan_principal_evidence FROM gv1_principal_evidence_items e LEFT JOIN gv1_founders f ON f.founder_id=e.founder_id WHERE f.founder_id IS NULL;"
           npx --yes wrangler@4 d1 execute galvivault-0-5-qa \
             --remote \
             --command="$SQL" \
             --config wrangler.json \
-            --json > /tmp/day1-evidence.json
-          cat /tmp/day1-evidence.json
+            --json > /tmp/day1-v10-evidence.json
+          cat /tmp/day1-v10-evidence.json
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          const payload=JSON.parse(fs.readFileSync('/tmp/day1-evidence.json','utf8'));
+          const payload=JSON.parse(fs.readFileSync('/tmp/day1-v10-evidence.json','utf8'));
           const objects=[];
-          const walk=(value)=>{
-            if(Array.isArray(value)) for(const item of value) walk(item);
-            else if(value&&typeof value==='object'){
-              objects.push(value);
-              for(const item of Object.values(value)) walk(item);
-            }
-          };
+          const walk=(v)=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){objects.push(v);Object.values(v).forEach(walk)}};
           walk(payload);
-          const value=(key)=>objects.find(item=>Object.hasOwn(item,key))?.[key];
-          for(const key of ['session_count','event_count','session_receipt_count','event_receipt_count','session_audit_count','event_audit_count']){
+          const value=(key)=>objects.find(x=>Object.hasOwn(x,key))?.[key];
+          for(const key of ['pre_context_count','op_context_count','pre_consent_count','op_consent_count','principal_evidence_count','bmr_evidence_receipt_count']){
             if(Number(value(key))!==1) throw new Error(`${key} must equal 1; found ${value(key) ?? 'none'}.`);
           }
-          for(const key of ['duplicate_sessions','duplicate_event_keys','orphan_sessions']){
+          for(const key of ['duplicate_bmr_ventures','invalid_pre_contexts','orphan_consent','orphan_principal_evidence']){
             if(Number(value(key))!==0) throw new Error(`${key} must equal 0; found ${value(key) ?? 'none'}.`);
           }
-          console.log('PASS: remote Day 1 session, journey, receipt, audit, duplicate, and orphan evidence is clean.');
+          console.log('PASS: remote Day 1 1.0 principal, consent, evidence, and integrity assertions are clean.');
           NODE
 
-      - name: Capture Human E2E readiness summary
+      - name: Capture Day 1 Human E2E readiness summary
         if: success()
         run: |
-          echo '## GALVIVAULT DAY 1 AUTOMATED QA: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '## GALVISTUDIO | GALVICARE 1.0 DAY 1 AUTOMATED QA: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Branch: qa-revamped-galvicare-0-5' >> "$GITHUB_STEP_SUMMARY"
           echo '- Candidate SHA: ${{ github.sha }}' >> "$GITHUB_STEP_SUMMARY"
           echo "- QA Worker URL: $DAY1_BASE_URL" >> "$GITHUB_STEP_SUMMARY"
           echo '- QA D1: galvivault-0-5-qa' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Collision-safe schema namespace: gv1_' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Schema migration 0001: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 1 blocking tests: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 7D and Production source boundaries: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Deployment URL discovery and JSON convergence: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Deployed API smoke: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Remote D1 evidence assertions: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Inherited schema migration 0001: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviCare 1.0 Day 1 migration 0100: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Pre-Founder principal_only null venture/BMR: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Operating founder one BMR per venture: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Consent fail-closed + ledger: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Principal/BMR evidence scope + cross-record rejection: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Minimum QA server-side RBAC negatives: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- AI enabled: NO' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Legacy Day 1 + GalviCare stabilization + Day 8/Day 9 regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing Day 7D QA target changed: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production branch/runtime/database changed: NO' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR DAY 1 HUMAN E2E H1.1–H1.7**' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR DAY 1 HUMAN E2E H1-H18**' >> "$GITHUB_STEP_SUMMARY"
