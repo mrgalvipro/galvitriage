@@ -22,7 +22,7 @@ if(!pkg.scripts?.['test:day7d']?.includes('day7d-customer-path-contract.test.mjs
 const wrangler=JSON.parse(fs.readFileSync('wrangler.day7d.json','utf8'));
 if(wrangler.name!=='galvicare-triage-intake') failures.push(`API Worker name mismatch: ${wrangler.name}`);
 const continuityBridge=wrangler.vars?.GALVIVAULT_DAY9_CONTINUITY_BRIDGE==='true';
-const expectedMain=continuityBridge?'worker/day9-galvicare-continuity.js':'worker/day7d-day3-critical-path.js';
+const expectedMain=continuityBridge?'worker/day9-galvicare-continuity.js':'worker/day7d-engine.js';
 if(wrangler.main!==expectedMain) failures.push(`wrangler.day7d.json main must be ${expectedMain}, got ${wrangler.main}`);
 if(continuityBridge){
   if(wrangler.vars?.ENVIRONMENT!=='qa') failures.push('Day 9 GalviCare continuity wrapper is QA-only.');
