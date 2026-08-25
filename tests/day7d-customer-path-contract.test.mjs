@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 
 const engine=fs.readFileSync('worker/day7d-engine.js','utf8');
+const criticalPath=fs.readFileSync('worker/day7d-day3-critical-path.js','utf8');
 const legacyWorker=fs.readFileSync('worker/worker.js','utf8');
 const browser=fs.readFileSync('day7d-browser-customer-intelligence.js','utf8');
 const builder=fs.readFileSync('scripts/day7b-build-qa-frontend.mjs','utf8');
@@ -37,7 +38,7 @@ test('GalviScore clarification is Worker-owned and objective score remains immut
   has(engine,'objective_score_immutable:true','score immutability capability');
   has(browser,'save_galviscore_followup','browser Worker submission');
   has(browser,'get_or_generate_galviscore','browser Worker regeneration');
-  has(browser,'routeByGalviScoreConfidence=async','authoritative route interception');
+  has(browser,"installRoute('routeByGalviScoreConfidence','GalviScore')",'authoritative route interception');
   has(browser,'stopImmediatePropagation','legacy submit interception');
   lacks(browser,'galviscore_confidence||0)+12','local confidence mutation');
   lacks(browser,'galviscore_followup_completed_','local completion authority');
@@ -55,14 +56,34 @@ test('follow-up persistence is idempotent, evidence-versioned and skip-safe',()=
   has(engine,'bounded_multi_question_submit:true','bounded multi-question runtime capability');
 });
 
-test('approved dynamic 0–3 selector is stage-specific and non-repetitive',()=>{
+test('Day 3 requires customer context questions before every downstream paid result',()=>{
   for(const product of ['GalviShot','GalviSight','GalviPath'])has(engine,`${product}:{`,`${product} follow-up bank`);
-  has(engine,'if(confidence<=59)requiredTotal=3','low-confidence three-question contract');
-  has(engine,'else if(confidence<=69)requiredTotal=2','60–69 two-question contract');
-  has(engine,'else if(confidence<=79)requiredTotal=1','70–79 one-question contract');
-  has(engine,'const required=Math.max(0,requiredTotal-completed.size)','completed-or-skipped advancement');
+  has(criticalPath,'const DOWNSTREAM_REQUIRED_QUESTION_COUNT = 3','three-question evidence-intake contract');
+  has(criticalPath,'confidence: Math.min(59','confidence cannot eliminate downstream evidence intake');
+  has(criticalPath,'downstream_questions_always_collect_customer_context: true','runtime customer-context capability');
+  has(criticalPath,"if (evaluation.status === 'needs_followup')",'paid generation cannot bypass outstanding questions');
+  has(criticalPath,'required_customer_context_submission','versioned required-context persistence');
   has(engine,'completed.has(item.question_id)','no-repeat contract');
-  has(browser,'MAX_VISIBLE_TARGETED_QUESTIONS=3','bounded UI');
+  has(browser,'MAX_VISIBLE_TARGETED_QUESTIONS=3','bounded three-question UI');
+});
+
+test('authoritative browser customer-intelligence calls bypass mutable legacy API wrappers',()=>{
+  has(browser,'const response=await fetch(endpoint()','direct canonical Worker fetch');
+  has(browser,'CLIENT_ACTION_ALIASES','browser action canonicalization');
+  has(browser,'NON_JSON_API_RESPONSE','structured browser API error');
+  has(browser,'callAuthoritativeApi:call','debuggable authoritative client surface');
+  lacks(browser,"if(typeof callGalviCareApi==='function')return callGalviCareApi",'mutable legacy API delegation');
+  has(criticalPath,'const ACTION_ALIASES = new Map','Worker action alias normalization');
+  for(const alias of ['get_or_generate_galvishot','get_galvishot','generate_galvishot','get_or_create_galvisight','get_or_create_galvipath'])has(criticalPath,alias,'known action alias');
+  has(criticalPath,'browser_api_alias_normalization: true','runtime API normalization capability');
+});
+
+test('browser reasserts authoritative stage routes and hydrates visible question surfaces',()=>{
+  has(browser,'wrapper.__day7dAuthoritative=true','authoritative route ownership marker');
+  has(browser,"window.addEventListener(event,()=>initialize(true))",'payment-return/navigation route restoration');
+  has(browser,'new MutationObserver','late legacy renderer replacement detection');
+  has(browser,'stageShouldHydrate','visible-stage hydration');
+  has(browser,"if(responseStatus(response)==='needs_followup')return exposeFollowupStage(product,response)",'server question restoration');
 });
 
 test('Shot, Sight, Path and Clinic consume cumulative evidence and prior results',()=>{
@@ -94,8 +115,8 @@ test('browser renders Worker-selected questions and prevents legacy bypass',()=>
   ])has(browser,token,'cumulative browser contract');
   has(browser,'completeVisibleQuestions(product,true)','skip invokes authoritative completion');
   has(browser,"savedStatus==='needs_followup'",'remaining-question advancement');
-  has(browser,"document.addEventListener('DOMContentLoaded',initialize)",'refresh initialization');
-  has(browser,"if(document.readyState!=='loading')queueMicrotask(initialize)",'already-loaded restoration');
+  has(browser,"document.addEventListener('DOMContentLoaded'",'refresh initialization');
+  has(browser,"if(document.readyState!=='loading')queueMicrotask",'already-loaded restoration');
   has(engine,'legacy_generation_bypass_closed:true','Worker legacy bypass closure capability');
 });
 
