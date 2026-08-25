@@ -4,6 +4,8 @@ import fs from 'node:fs';
 
 const engine=fs.readFileSync('worker/day7d-engine.js','utf8');
 const criticalPath=fs.readFileSync('worker/day7d-day3-critical-path.js','utf8');
+const unified=fs.readFileSync('worker/day3-unified-customer-api.js','utf8');
+const day3Config=fs.readFileSync('wrangler.galvicare-day3.json','utf8');
 const legacyWorker=fs.readFileSync('worker/worker.js','utf8');
 const browser=fs.readFileSync('day7d-browser-customer-intelligence.js','utf8');
 const builder=fs.readFileSync('scripts/day7b-build-qa-frontend.mjs','utf8');
@@ -65,6 +67,17 @@ test('Day 3 requires customer context questions before every downstream paid res
   has(criticalPath,'required_customer_context_submission','versioned required-context persistence');
   has(engine,'completed.has(item.question_id)','no-repeat contract');
   has(browser,'MAX_VISIBLE_TARGETED_QUESTIONS=3','bounded three-question UI');
+});
+
+test('QA customer evidence is bound to the existing governed Day 3 Worker',()=>{
+  has(browser,'https://galvivault-p0-day1-qa.mrgalvipro.workers.dev/api','governed QA customer-evidence endpoint');
+  has(browser,"host==='galvicare-0-5-qa.mrgalvipro.workers.dev'",'QA-only browser endpoint switch');
+  has(unified,"import governedDay3 from './day3-customer-session.js'",'governed Day 3 composition');
+  has(unified,"import customerEvidenceApi from './day7d-day3-critical-path.js'",'customer evidence composition');
+  has(unified,"if (path === '/api'",'unified customer evidence route');
+  has(day3Config,'worker/day3-unified-customer-api.js','existing governed Worker entrypoint');
+  has(day3Config,'galvivault-p0-day1-qa','existing governed Worker name');
+  has(day3Config,'galvivault-0-5-qa','existing QA D1 binding');
 });
 
 test('authoritative browser customer-intelligence calls bypass mutable legacy API wrappers',()=>{
