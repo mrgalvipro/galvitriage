@@ -11,7 +11,7 @@
     "API_VERSION": "v1",
     "MIN_SCHEMA_VERSION": "0001",
     "AI_ENABLED": "true",
-    "OPENAI_MODEL_QA": "gpt-5-mini",
+    "OPENAI_MODEL_QA": "gpt-4.1-mini",
     "OPENAI_TIMEOUT_MS": "8000",
     "OPENAI_MAX_INPUT_BYTES": "24000",
     "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,https://galvicare-0-5-qa.mrgalvipro.workers.dev,http://localhost:8787,http://127.0.0.1:8787"
