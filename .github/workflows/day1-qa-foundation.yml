@@ -8,10 +8,14 @@ on:
     paths:
       - "worker/day1.js"
       - "worker/day1-p0-legacy.js"
+      - "worker/day1-galvicare-1-0.js"
+      - "worker/day1-human-e2e.js"
       - "migrations/day1/0001_canonical_business_medical_record.sql"
       - "migrations/day1/0100_galvicare_1_0_day1_foundation.sql"
+      - "migrations/day1/0101_day1_principal_session_continuity.sql"
       - "tests/day1-foundation.test.mjs"
       - "tests/day1-galvicare-1-0.test.mjs"
+      - "tests/day1-human-e2e-surface.test.mjs"
       - "wrangler.json"
       - ".github/workflows/day1-qa-foundation.yml"
 
@@ -75,7 +79,8 @@ jobs:
           const day7dDb=day7d.d1_databases?.find(item=>item.binding==='DB');
           if(day1Db?.database_name!=='galvivault-0-5-qa'||day7dDb?.database_name!=='galvivault-0-5-qa') throw new Error('QA D1 target mismatch.');
           if(day1Db?.migrations_dir!=='migrations/day1') throw new Error('Day 1 migration directory mismatch.');
-          console.log('PASS: Day 1, Day 7D, and Production runtime entries remain isolated.');
+          if(!String(day1.vars?.ALLOWED_ORIGINS||'').includes('https://galvicare-0-5-qa.mrgalvipro.workers.dev')) throw new Error('QA customer surface is not authorized for Day 1 Human E2E.');
+          console.log('PASS: Day 1, Day 7D, QA customer surface, and Production runtime boundaries remain isolated.');
           NODE
 
       - name: Install existing dependencies
@@ -86,9 +91,11 @@ jobs:
           node --check worker/day1.js
           node --check worker/day1-p0-legacy.js
           node --check worker/day1-galvicare-1-0.js
+          node --check worker/day1-human-e2e.js
+          node --check day1-prefounder-qa.js
 
       - name: Run legacy and GalviCare 1.0 Day 1 blocking suites
-        run: node --test tests/day1-foundation.test.mjs tests/day1-galvicare-1-0.test.mjs
+        run: node --test tests/day1-foundation.test.mjs tests/day1-galvicare-1-0.test.mjs tests/day1-human-e2e-surface.test.mjs
 
       - name: Run preserved GalviCare full regression gate
         run: npm run stabilization:gate
@@ -126,11 +133,20 @@ jobs:
             --file=migrations/day1/0100_galvicare_1_0_day1_foundation.sql \
             --config wrangler.json
 
+      - name: Apply Pre-Founder principal-session continuity schema to QA D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 d1 execute galvivault-0-5-qa \
+            --remote \
+            --file=migrations/day1/0101_day1_principal_session_continuity.sql \
+            --config wrangler.json
+
       - name: Verify QA D1 Day 1 schema and one-BMR invariant
         shell: bash
         run: |
           set -euo pipefail
-          SQL="SELECT migration_id,name,environment FROM gv1_schema_migrations WHERE migration_id IN ('0001','0100') ORDER BY migration_id; SELECT COUNT(*) AS v10_table_count FROM sqlite_master WHERE type='table' AND name IN ('gv1_principal_contexts','gv1_consent_events','gv1_principal_evidence_items','gv1_evidence_lineage_links','gv1_day1_request_receipts'); SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1);"
+          SQL="SELECT migration_id,name,environment FROM gv1_schema_migrations WHERE migration_id IN ('0001','0100','0101') ORDER BY migration_id; SELECT COUNT(*) AS day1_table_count FROM sqlite_master WHERE type='table' AND name IN ('gv1_principal_contexts','gv1_consent_events','gv1_principal_evidence_items','gv1_evidence_lineage_links','gv1_day1_request_receipts','gv1_principal_sessions'); SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS invalid_principal_sessions FROM gv1_principal_sessions s JOIN gv1_principal_contexts c ON c.context_id=s.context_id WHERE c.record_mode<>'principal_only' OR c.venture_id IS NOT NULL OR c.bmr_id IS NOT NULL;"
           npx --yes wrangler@4 d1 execute galvivault-0-5-qa \
             --remote \
             --command="$SQL" \
@@ -143,13 +159,14 @@ jobs:
           const objects=[];
           const walk=(v)=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){objects.push(v);Object.values(v).forEach(walk)}};
           walk(payload);
-          const migration=objects.find(x=>x.migration_id==='0100');
-          const tableCount=objects.find(x=>Object.hasOwn(x,'v10_table_count'))?.v10_table_count;
+          for(const id of ['0100','0101']){const migration=objects.find(x=>x.migration_id===id);if(!migration||migration.environment!=='qa')throw new Error(`Migration ${id} evidence is missing.`);}
+          const tableCount=objects.find(x=>Object.hasOwn(x,'day1_table_count'))?.day1_table_count;
           const duplicate=objects.find(x=>Object.hasOwn(x,'duplicate_bmr_ventures'))?.duplicate_bmr_ventures;
-          if(!migration||migration.environment!=='qa') throw new Error('Migration 0100 evidence is missing.');
-          if(Number(tableCount)!==5) throw new Error(`Expected 5 Day 1 1.0 tables; found ${tableCount ?? 'none'}.`);
+          const invalidSessions=objects.find(x=>Object.hasOwn(x,'invalid_principal_sessions'))?.invalid_principal_sessions;
+          if(Number(tableCount)!==6) throw new Error(`Expected 6 Day 1 1.0 tables; found ${tableCount ?? 'none'}.`);
           if(Number(duplicate)!==0) throw new Error(`Duplicate BMR-per-venture invariant failed: ${duplicate}.`);
-          console.log('PASS: GalviCare 1.0 Day 1 schema and one-BMR invariant are clean.');
+          if(Number(invalidSessions)!==0) throw new Error(`Principal-session scope invariant failed: ${invalidSessions}.`);
+          console.log('PASS: GalviCare 1.0 Day 1 schema, principal-session continuity, and one-BMR invariant are clean.');
           NODE
 
       - name: Deploy isolated Day 1 QA Worker and capture actual URL
@@ -202,6 +219,28 @@ jobs:
           DAY1_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
         run: node --test tests/day1-galvicare-1-0.test.mjs
 
+      - name: Prove deployed Pre-Founder principal session create, resume, and replay
+        shell: bash
+        env:
+          DAY1_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          const base=process.env.DAY1_BASE_URL;
+          const run=String(process.env.DAY1_RUN_SUFFIX).replace(/[^A-Za-z0-9._-]/g,'_').toLowerCase();
+          const suffix=`human_${run}`,email=`day1.${suffix}@example.invalid`,actor=`principal:${suffix}`,idem=`ctx-human-${run}`,clientSession=`human-prefounder:${run}`;
+          const body={email,first_name:'Human',last_name:'PreFounder',lifecycle_state:'pre_founder',record_mode:'principal_only',care_protocol:'founder_smb',payer_type:'self',client_session_key:clientSession};
+          const req=async(path,{method='GET',key,body:payload}={})=>{const headers={Origin:'https://galvicare-0-5-qa.mrgalvipro.workers.dev','X-Galvi-Day1-Actor':actor,'X-Correlation-Id':`human-${run}-${Date.now()}`};if(key)headers['Idempotency-Key']=key;if(payload)headers['Content-Type']='application/json';const r=await fetch(`${base}${path}`,{method,headers,...(payload?{body:JSON.stringify(payload)}:{})});return{r,p:await r.json()}};
+          const first=await req('/api/v1/principal-contexts',{method:'POST',key:idem,body});
+          if(first.r.status!==201||!first.p?.data?.session?.session_id||first.p?.data?.context?.venture_id!==null||first.p?.data?.context?.bmr_id!==null)throw new Error(`Pre-Founder creation/session failed: ${JSON.stringify(first.p)}`);
+          const contextId=first.p.data.context.context_id,sessionId=first.p.data.session.session_id;
+          const resumed=await req(`/api/v1/principal-contexts/${encodeURIComponent(contextId)}`);
+          if(!resumed.r.ok||resumed.p?.data?.session?.session_id!==sessionId)throw new Error(`Pre-Founder resume failed: ${JSON.stringify(resumed.p)}`);
+          const replay=await req('/api/v1/principal-contexts',{method:'POST',key:idem,body});
+          if(!replay.r.ok||replay.p?.status!=='replayed'||replay.p?.meta?.idempotent_replay!==true||replay.p?.data?.session?.session_id!==sessionId||replay.p?.data?.context?.context_id!==contextId)throw new Error(`Pre-Founder replay failed: ${JSON.stringify(replay.p)}`);
+          console.log(JSON.stringify({status:'PASS',context_id:contextId,session_id:sessionId,venture_id:null,bmr_id:null},null,2));
+          NODE
+
       - name: Verify remote GalviCare 1.0 Human-E2E readiness evidence
         shell: bash
         env:
@@ -215,7 +254,8 @@ jobs:
           OP_CONSENT="cns-${RUN}-b"
           PRE_EVIDENCE="ev-${RUN}-a"
           OP_EVIDENCE="ev-${RUN}-b"
-          SQL="SELECT COUNT(*) AS pre_context_count FROM gv1_principal_contexts WHERE client_request_id='${PRE_KEY}' AND record_mode='principal_only' AND venture_id IS NULL AND bmr_id IS NULL; SELECT COUNT(*) AS op_context_count FROM gv1_principal_contexts WHERE client_request_id='${OP_KEY}' AND record_mode='principal_plus_venture' AND venture_id IS NOT NULL AND bmr_id IS NOT NULL; SELECT COUNT(*) AS pre_consent_count FROM gv1_consent_events WHERE client_request_id='${PRE_CONSENT}' AND status='granted'; SELECT COUNT(*) AS op_consent_count FROM gv1_consent_events WHERE client_request_id='${OP_CONSENT}' AND status='granted'; SELECT COUNT(*) AS principal_evidence_count FROM gv1_principal_evidence_items WHERE client_request_id='${PRE_EVIDENCE}' AND status='accepted'; SELECT COUNT(*) AS bmr_evidence_receipt_count FROM gv1_day1_request_receipts WHERE scope='ev' AND idempotency_key='${OP_EVIDENCE}'; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS invalid_pre_contexts FROM gv1_principal_contexts WHERE record_mode='principal_only' AND (venture_id IS NOT NULL OR bmr_id IS NOT NULL); SELECT COUNT(*) AS orphan_consent FROM gv1_consent_events c LEFT JOIN gv1_founders f ON f.founder_id=c.founder_id WHERE f.founder_id IS NULL; SELECT COUNT(*) AS orphan_principal_evidence FROM gv1_principal_evidence_items e LEFT JOIN gv1_founders f ON f.founder_id=e.founder_id WHERE f.founder_id IS NULL;"
+          HUMAN_SESSION_KEY="human-prefounder:${RUN}"
+          SQL="SELECT COUNT(*) AS pre_context_count FROM gv1_principal_contexts WHERE client_request_id='${PRE_KEY}' AND record_mode='principal_only' AND venture_id IS NULL AND bmr_id IS NULL; SELECT COUNT(*) AS op_context_count FROM gv1_principal_contexts WHERE client_request_id='${OP_KEY}' AND record_mode='principal_plus_venture' AND venture_id IS NOT NULL AND bmr_id IS NOT NULL; SELECT COUNT(*) AS pre_consent_count FROM gv1_consent_events WHERE client_request_id='${PRE_CONSENT}' AND status='granted'; SELECT COUNT(*) AS op_consent_count FROM gv1_consent_events WHERE client_request_id='${OP_CONSENT}' AND status='granted'; SELECT COUNT(*) AS principal_evidence_count FROM gv1_principal_evidence_items WHERE client_request_id='${PRE_EVIDENCE}' AND status='accepted'; SELECT COUNT(*) AS bmr_evidence_receipt_count FROM gv1_day1_request_receipts WHERE scope='ev' AND idempotency_key='${OP_EVIDENCE}'; SELECT COUNT(*) AS human_principal_session_count FROM gv1_principal_sessions WHERE client_session_key='${HUMAN_SESSION_KEY}'; SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS invalid_pre_contexts FROM gv1_principal_contexts WHERE record_mode='principal_only' AND (venture_id IS NOT NULL OR bmr_id IS NOT NULL); SELECT COUNT(*) AS orphan_consent FROM gv1_consent_events c LEFT JOIN gv1_founders f ON f.founder_id=c.founder_id WHERE f.founder_id IS NULL; SELECT COUNT(*) AS orphan_principal_evidence FROM gv1_principal_evidence_items e LEFT JOIN gv1_founders f ON f.founder_id=e.founder_id WHERE f.founder_id IS NULL; SELECT COUNT(*) AS orphan_principal_sessions FROM gv1_principal_sessions s LEFT JOIN gv1_principal_contexts c ON c.context_id=s.context_id LEFT JOIN gv1_founders f ON f.founder_id=s.founder_id WHERE c.context_id IS NULL OR f.founder_id IS NULL;"
           npx --yes wrangler@4 d1 execute galvivault-0-5-qa \
             --remote \
             --command="$SQL" \
@@ -229,13 +269,13 @@ jobs:
           const walk=(v)=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){objects.push(v);Object.values(v).forEach(walk)}};
           walk(payload);
           const value=(key)=>objects.find(x=>Object.hasOwn(x,key))?.[key];
-          for(const key of ['pre_context_count','op_context_count','pre_consent_count','op_consent_count','principal_evidence_count','bmr_evidence_receipt_count']){
+          for(const key of ['pre_context_count','op_context_count','pre_consent_count','op_consent_count','principal_evidence_count','bmr_evidence_receipt_count','human_principal_session_count']){
             if(Number(value(key))!==1) throw new Error(`${key} must equal 1; found ${value(key) ?? 'none'}.`);
           }
-          for(const key of ['duplicate_bmr_ventures','invalid_pre_contexts','orphan_consent','orphan_principal_evidence']){
+          for(const key of ['duplicate_bmr_ventures','invalid_pre_contexts','orphan_consent','orphan_principal_evidence','orphan_principal_sessions']){
             if(Number(value(key))!==0) throw new Error(`${key} must equal 0; found ${value(key) ?? 'none'}.`);
           }
-          console.log('PASS: remote Day 1 1.0 principal, consent, evidence, and integrity assertions are clean.');
+          console.log('PASS: remote Day 1 1.0 principal, session, consent, evidence, and integrity assertions are clean.');
           NODE
 
       - name: Capture Day 1 Human E2E readiness summary
@@ -248,13 +288,13 @@ jobs:
           echo '- QA D1: galvivault-0-5-qa' >> "$GITHUB_STEP_SUMMARY"
           echo '- Inherited schema migration 0001: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- GalviCare 1.0 Day 1 migration 0100: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Pre-Founder principal_only null venture/BMR: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Pre-Founder principal-session continuity migration 0101: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Pre-Founder principal_only null venture/BMR + session create/resume/replay: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Operating founder one BMR per venture: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Consent fail-closed + ledger: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Principal/BMR evidence scope + cross-record rejection: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Minimum QA server-side RBAC negatives: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- AI enabled: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Legacy Day 1 + GalviCare stabilization + Day 8/Day 9 regression: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Existing Day 7D QA target changed: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production branch/runtime/database changed: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '**READY FOR DAY 1 HUMAN E2E H1-H18**' >> "$GITHUB_STEP_SUMMARY"
