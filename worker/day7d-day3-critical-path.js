@@ -14,7 +14,7 @@ import day7d, {
  * - GalviScore keeps its one targeted clarification question.
  * - GalviShot / GalviSight / GalviPath each require three bounded, server-owned,
  *   non-repeating targeted questions before that stage can generate a result.
- * - Answers are versioned evidence. Paid generation remains server-entitlement-gated.
+ * - Answers are versioned pre-entitlement evidence. Paid generation remains server-entitlement-gated.
  * - Browser/legacy action aliases are normalized here so a known customer action
  *   never falls through to the legacy UNSUPPORTED_API_ACTION router.
  */
@@ -160,11 +160,6 @@ function currentQuestions(file, product) {
     return chooseFollowups(file.reconciliation, existing, product);
   }
 
-  // The questions exist to collect the customer's situation for longitudinal care
-  // and governed AI synthesis. Confidence may affect interpretation, but it must not
-  // eliminate the evidence-intake step. Reuse the authoritative server question bank
-  // by evaluating it at the three-question band while preserving all other clinical
-  // reconciliation facts and completed-question state.
   const evidenceIntakeReconciliation = {
     ...file.reconciliation,
     confidence: Math.min(59, Number(file.reconciliation?.confidence || 0))
@@ -306,12 +301,7 @@ async function handleSave(env, sessionId, product, action, payload, hasEntitleme
   for (const answer of list) {
     const saved = await saveOne(env.DB, sessionId, product, answer, allowed);
     if (saved.invalid) {
-      return json({
-        success: false,
-        status: 'validation_error',
-        product,
-        detail: 'Answer does not match the server-governed follow-up bank.'
-      }, 400);
+      return json({ success: false, status: 'validation_error', product, detail: 'Answer does not match the server-governed follow-up bank.' }, 400);
     }
     changed ||= saved.changed;
     already &&= saved.already_saved === true;
@@ -392,9 +382,6 @@ export default {
     const routed = forwardedRequest(request, payload, action);
 
     if (action === 'health_check') return augmentHealth(await day7d.fetch(routed, env, ctx));
-
-    // GalviScore remains owned by the cumulative engine. Normalize aliases first so
-    // the browser cannot fall through to the legacy unsupported-action surface.
     if (SCORE_ACTIONS.has(action)) return day7d.fetch(routed, env, ctx);
 
     const product = EVAL_ACTIONS.get(action) || SAVE_ACTIONS.get(action) || GET_ACTIONS.get(action);
@@ -405,7 +392,10 @@ export default {
     if (!sessionId) return json({ success: false, status: 'error', message: 'Missing session_id' }, 400);
 
     try {
-      const hasEntitlement = await entitled(env.DB, sessionId, product);
+      let hasEntitlement = false;
+      if (await entitled(env.DB, sessionId, product)) {
+        hasEntitlement = true;
+      }
 
       if (EVAL_ACTIONS.has(action)) {
         return await handleEvaluation(env, sessionId, product, action, hasEntitlement);
@@ -415,8 +405,6 @@ export default {
         return await handleSave(env, sessionId, product, action, payload, hasEntitlement, routed, ctx);
       }
 
-      // A paid result may not bypass its required evidence-intake questions. This
-      // route is authoritative both before and after entitlement.
       const file = await clinicalFile(env.DB, sessionId);
       const evaluation = evaluationPayload(file, product, hasEntitlement);
       if (evaluation.status === 'needs_followup') {
