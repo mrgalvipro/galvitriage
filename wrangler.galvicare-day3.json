@@ -15,7 +15,7 @@
     "OPENAI_TIMEOUT_MS": "20000",
     "OPENAI_MAX_INPUT_BYTES": "24000",
     "DAY3_CUSTOMER_PROJECTION": "v2",
-    "DAY3_CUSTOMER_EVIDENCE_PROJECTION": "v4",
+    "DAY3_CUSTOMER_EVIDENCE_PROJECTION": "v5",
     "DAY3_CUSTOMER_SESSION_BRIDGE": "true",
     "DAY3_CUSTOMER_CORS_VERSION": "v3",
     "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,https://galvicare-0-5-qa.mrgalvipro.workers.dev,http://localhost:8787,http://127.0.0.1:8787"
