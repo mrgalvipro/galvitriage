@@ -11,6 +11,7 @@ on:
       - "worker/day7d-runtime.js"
       - "worker/day9-galvicare-continuity.js"
       - "day7d-browser-customer-intelligence.js"
+      - "day3-governed-ai-customer-bridge.mjs"
       - "scripts/day7b-build-qa-frontend.mjs"
       - "scripts/day7d-preflight.mjs"
       - "migrations/0006_day7d_customer_intelligence.sql"
@@ -64,15 +65,36 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          RELEASE_ID="$({ sha256sum worker/worker.js worker/day7d-engine.js worker/day9-galvicare-continuity.js day7d-browser-customer-intelligence.js scripts/day7b-build-qa-frontend.mjs scripts/day7d-preflight.mjs tests/day7c-integration.test.mjs tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs index.html qa-frontend-worker.js wrangler.day7d.json wrangler.qa-frontend.jsonc; } | sha256sum | awk '{print $1}')"
+          RELEASE_ID="$({ sha256sum worker/worker.js worker/day7d-engine.js worker/day9-galvicare-continuity.js day7d-browser-customer-intelligence.js day3-governed-ai-customer-bridge.mjs scripts/day7b-build-qa-frontend.mjs scripts/day7d-preflight.mjs tests/day7c-integration.test.mjs tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs index.html qa-frontend-worker.js wrangler.day7d.json wrangler.qa-frontend.jsonc; } | sha256sum | awk '{print $1}')"
           test -n "$RELEASE_ID"
           echo "DAY7D_RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
           echo "Matched Day 7D QA candidate fingerprint: $RELEASE_ID"
 
       - name: Run one authoritative pre-human gate
+        shell: bash
         run: |
+          set -euo pipefail
           node --check worker/day9-galvicare-continuity.js
           npm run day7d:gate
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const bridge=fs.readFileSync('day3-governed-ai-customer-bridge.mjs','utf8');
+          const required=[
+            "OLD_SCORE_ACTION='get_or_generate_galviscore'",
+            'assertLegacyScoreContract',
+            'GV_DAY3_LEGACY_SCORE_CONTRACT',
+            'GOVERNED BUSINESS HEALTH INTELLIGENCE',
+            '/api/v1/day3/shot',
+            '/api/v1/day3/sight',
+            '/api/v1/day3/path'
+          ];
+          const missing=required.filter(token=>!bridge.includes(token));
+          if(missing.length) throw new Error(`Day 3 customer bridge missing: ${missing.join(', ')}`);
+          const forbidden="if(request&&request.action===OLD_SCORE_ACTION)request={...request,action:CANONICAL_SCORE_ACTION};";
+          if(bridge.includes(forbidden)) throw new Error('P0 regression: Day 3 bridge remaps the authoritative GalviScore action to an incompatible Day 2 response contract.');
+          if(/api\.openai\.com|OPENAI_API_KEY/.test(bridge)) throw new Error('P0 regression: browser bridge references OpenAI provider access or a secret binding.');
+          console.log('PASS: Day 3 bridge preserves the authoritative deterministic GalviScore projection contract and only enriches downstream products after validation.');
+          NODE
 
       - name: Verify generated cumulative QA frontend
         shell: bash
@@ -82,11 +104,26 @@ jobs:
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const html=fs.readFileSync('dist-qa/index.html','utf8');
-          const required=['GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS','Day 7D cumulative customer-intelligence browser adapter.','galviscore-followup','save_galviscore_followup','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions','MAX_VISIBLE_TARGETED_QUESTIONS=3'];
+          const required=[
+            'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
+            'Day 7D cumulative customer-intelligence browser adapter.',
+            'GalviCare Day 3 governed AI customer bridge v1',
+            'GOVERNED BUSINESS HEALTH INTELLIGENCE',
+            'GV_DAY3_LEGACY_SCORE_CONTRACT',
+            'galviscore-followup',
+            'save_galviscore_followup',
+            'galvishot-followup-questions',
+            'galvisight-followup-questions',
+            'galvipath-followup-questions',
+            'MAX_VISIBLE_TARGETED_QUESTIONS=3'
+          ];
           const missing=required.filter(token=>!html.includes(token));
           if(missing.length) throw new Error(`Generated QA frontend missing: ${missing.join(', ')}`);
           if(html.split('Day 7D cumulative customer-intelligence browser adapter.').length-1!==1) throw new Error('Expected one authoritative Day 7D adapter.');
-          console.log('PASS: one cumulative QA frontend candidate generated.');
+          if(html.split('GalviCare Day 3 governed AI customer bridge v1').length-1!==1) throw new Error('Expected one Day 3 governed-AI customer bridge.');
+          const forbidden="if(request&&request.action===OLD_SCORE_ACTION)request={...request,action:CANONICAL_SCORE_ACTION};";
+          if(html.includes(forbidden)) throw new Error('Generated QA frontend contains the incompatible GalviScore action translation.');
+          console.log('PASS: one cumulative QA frontend candidate generated with deterministic GalviScore compatibility and governed-AI projection.');
           NODE
 
       - name: Apply additive Day 7D schema to existing QA D1
@@ -189,10 +226,16 @@ jobs:
               const health=await healthResponse.json();
               const response=await fetch(`${process.env.QA_FRONTEND_URL}/?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
               const html=await response.text();
-              const valid=response.ok&&healthResponse.ok&&health?.release_id===process.env.DAY7D_RELEASE_ID&&html.includes('Day 7D cumulative customer-intelligence browser adapter.');
-              last={status:response.status,health_status:healthResponse.status,release_id:health?.release_id};
+              const required=[
+                'Day 7D cumulative customer-intelligence browser adapter.',
+                'GalviCare Day 3 governed AI customer bridge v1',
+                'GOVERNED BUSINESS HEALTH INTELLIGENCE',
+                'GV_DAY3_LEGACY_SCORE_CONTRACT'
+              ];
+              const valid=response.ok&&healthResponse.ok&&health?.release_id===process.env.DAY7D_RELEASE_ID&&required.every(token=>html.includes(token));
+              last={status:response.status,health_status:healthResponse.status,release_id:health?.release_id,missing:required.filter(token=>!html.includes(token))};
               consecutive=valid?consecutive+1:0;
-              if(consecutive>=3){ console.log('PASS: deployed complete QA frontend matches candidate.'); process.exit(0); }
+              if(consecutive>=3){ console.log('PASS: deployed complete QA frontend matches candidate and contains the Day 3 governed-AI customer projection bridge.'); process.exit(0); }
             } catch(error) { last={error:String(error)}; consecutive=0; }
             await new Promise(resolve=>setTimeout(resolve,3000));
           }
@@ -205,6 +248,8 @@ jobs:
           echo '## DAY 7D AUTHORITATIVE QA RELEASE: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo "- Candidate SHA: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Candidate fingerprint: $DAY7D_RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Deterministic GalviScore response contract preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 3 governed-AI customer projection bridge deployed: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 1 isolated deployment lane preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 9 QA canonical continuity wrapper: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR FINAL DAY 7D HUMAN E2E**' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR FINAL DAY 3 HUMAN E2E**' >> "$GITHUB_STEP_SUMMARY"
