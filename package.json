@@ -8,7 +8,7 @@
     "test:day1": "node --test tests/day1-foundation.test.mjs",
     "verify:day1-files": "node --test --test-name-pattern=\"required Day 1 files|package and Wrangler|Production protection\" tests/day1-foundation.test.mjs",
     "verify:migration": "node --test --test-name-pattern=\"migration\" tests/day1-foundation.test.mjs",
-    "smoke:day1": "node --input-type=module -e \"process.env.DAY1_REMOTE_SMOKE='1'; await import('./tests/day1-foundation.test.mjs')\"",
+    "smoke:day1": "node --test tests/day1-remote-compat.test.mjs",
     "qa:smoke": "npm run smoke:day1",
     "dev:day1": "npx wrangler dev --config wrangler.json",
     "deploy:day1:qa": "npx wrangler deploy --config wrangler.json",
