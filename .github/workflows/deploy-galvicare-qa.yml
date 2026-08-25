@@ -9,7 +9,6 @@ on:
       - "worker/worker.js"
       - "worker/day7d-engine.js"
       - "worker/day7d-runtime.js"
-      - "worker/day9-galvicare-continuity.js"
       - "day7d-browser-customer-intelligence.js"
       - "day3-governed-ai-customer-bridge.mjs"
       - "scripts/day7b-build-qa-frontend.mjs"
@@ -42,7 +41,7 @@ env:
 
 jobs:
   qa-release-gate:
-    name: Day 7D → One P0 Candidate → Worker + Frontend → Runtime Proof
+    name: Day 3 customer path → deterministic Worker + governed AI frontend → runtime proof
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -61,20 +60,20 @@ jobs:
       - name: Install dependencies
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: Compute matched Day 7D release fingerprint
+      - name: Compute matched customer-path release fingerprint
         shell: bash
         run: |
           set -euo pipefail
-          RELEASE_ID="$({ sha256sum worker/worker.js worker/day7d-engine.js worker/day9-galvicare-continuity.js day7d-browser-customer-intelligence.js day3-governed-ai-customer-bridge.mjs scripts/day7b-build-qa-frontend.mjs scripts/day7d-preflight.mjs tests/day7c-integration.test.mjs tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs index.html qa-frontend-worker.js wrangler.day7d.json wrangler.qa-frontend.jsonc; } | sha256sum | awk '{print $1}')"
+          RELEASE_ID="$({ sha256sum worker/worker.js worker/day7d-engine.js day7d-browser-customer-intelligence.js day3-governed-ai-customer-bridge.mjs scripts/day7b-build-qa-frontend.mjs scripts/day7d-preflight.mjs tests/day7c-integration.test.mjs tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs index.html qa-frontend-worker.js wrangler.day7d.json wrangler.qa-frontend.jsonc; } | sha256sum | awk '{print $1}')"
           test -n "$RELEASE_ID"
           echo "DAY7D_RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
-          echo "Matched Day 7D QA candidate fingerprint: $RELEASE_ID"
+          echo "Matched GalviCare QA customer-path candidate fingerprint: $RELEASE_ID"
 
-      - name: Run one authoritative pre-human gate
+      - name: Run authoritative pre-human gate
         shell: bash
         run: |
           set -euo pipefail
-          node --check worker/day9-galvicare-continuity.js
+          node --check worker/day7d-engine.js
           npm run day7d:gate
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
@@ -93,7 +92,7 @@ jobs:
           const forbidden="if(request&&request.action===OLD_SCORE_ACTION)request={...request,action:CANONICAL_SCORE_ACTION};";
           if(bridge.includes(forbidden)) throw new Error('P0 regression: Day 3 bridge remaps the authoritative GalviScore action to an incompatible Day 2 response contract.');
           if(/api\.openai\.com|OPENAI_API_KEY/.test(bridge)) throw new Error('P0 regression: browser bridge references OpenAI provider access or a secret binding.');
-          console.log('PASS: Day 3 bridge preserves the authoritative deterministic GalviScore projection contract and only enriches downstream products after validation.');
+          console.log('PASS: deterministic GalviScore projection contract is preserved and governed AI remains server-side.');
           NODE
 
       - name: Verify generated cumulative QA frontend
@@ -110,12 +109,10 @@ jobs:
             'GalviCare Day 3 governed AI customer bridge v1',
             'GOVERNED BUSINESS HEALTH INTELLIGENCE',
             'GV_DAY3_LEGACY_SCORE_CONTRACT',
-            'galviscore-followup',
-            'save_galviscore_followup',
+            'get_or_generate_galviscore',
             'galvishot-followup-questions',
             'galvisight-followup-questions',
-            'galvipath-followup-questions',
-            'MAX_VISIBLE_TARGETED_QUESTIONS=3'
+            'galvipath-followup-questions'
           ];
           const missing=required.filter(token=>!html.includes(token));
           if(missing.length) throw new Error(`Generated QA frontend missing: ${missing.join(', ')}`);
@@ -123,7 +120,7 @@ jobs:
           if(html.split('GalviCare Day 3 governed AI customer bridge v1').length-1!==1) throw new Error('Expected one Day 3 governed-AI customer bridge.');
           const forbidden="if(request&&request.action===OLD_SCORE_ACTION)request={...request,action:CANONICAL_SCORE_ACTION};";
           if(html.includes(forbidden)) throw new Error('Generated QA frontend contains the incompatible GalviScore action translation.');
-          console.log('PASS: one cumulative QA frontend candidate generated with deterministic GalviScore compatibility and governed-AI projection.');
+          console.log('PASS: generated customer path preserves deterministic score rendering and contains governed-AI projection.');
           NODE
 
       - name: Apply additive Day 7D schema to existing QA D1
@@ -135,31 +132,30 @@ jobs:
           packageManager: npm
           command: d1 execute galvivault-0-5-qa --remote --file=migrations/0006_day7d_customer_intelligence.sql --config wrangler.day7d.json
 
-      - name: Generate bounded Day 9 QA runtime config
+      - name: Build exact-candidate Day 7D runtime config
         shell: bash
         run: |
           set -euo pipefail
-          jq '.main="worker/day9-galvicare-continuity.js" | .vars.GALVIVAULT_DAY9_CONTINUITY_BRIDGE="true" | .vars.DAY7D_DEPLOY_SHA=env.DAY7D_RELEASE_ID | .vars.DAY7D_DEPLOY_TARGET="galvicare-triage-intake"' \
-            wrangler.day7d.json > wrangler.day9-runtime.generated.json
-          test "$(jq -r '.name' wrangler.day9-runtime.generated.json)" = "galvicare-triage-intake"
-          test "$(jq -r '.main' wrangler.day9-runtime.generated.json)" = "worker/day9-galvicare-continuity.js"
-          test "$(jq -r '.vars.ENVIRONMENT' wrangler.day9-runtime.generated.json)" = "qa"
-          test "$(jq -r '.vars.GALVIVAULT_DAY9_CONTINUITY_BRIDGE' wrangler.day9-runtime.generated.json)" = "true"
-          test "$(jq -r '.d1_databases[] | select(.binding=="DB") | .database_name' wrangler.day9-runtime.generated.json)" = "galvivault-0-5-qa"
+          jq '.main="worker/day7d-engine.js" | .vars.DAY7D_DEPLOY_SHA=env.DAY7D_RELEASE_ID | .vars.DAY7D_DEPLOY_TARGET="galvicare-triage-intake"' \
+            wrangler.day7d.json > wrangler.day7d-runtime.generated.json
+          test "$(jq -r '.name' wrangler.day7d-runtime.generated.json)" = "galvicare-triage-intake"
+          test "$(jq -r '.main' wrangler.day7d-runtime.generated.json)" = "worker/day7d-engine.js"
+          test "$(jq -r '.vars.ENVIRONMENT' wrangler.day7d-runtime.generated.json)" = "qa"
+          test "$(jq -r '.d1_databases[] | select(.binding=="DB") | .database_name' wrangler.day7d-runtime.generated.json)" = "galvivault-0-5-qa"
 
-      - name: Deploy authoritative Day 7D Worker with Day 9 QA continuity bridge
+      - name: Deploy authoritative deterministic QA Worker
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           wranglerVersion: "4"
           packageManager: npm
-          command: deploy --config wrangler.day9-runtime.generated.json
+          command: deploy --config wrangler.day7d-runtime.generated.json
 
-      - name: Remove generated Day 9 QA runtime config
+      - name: Remove generated runtime config
         if: always()
         shell: bash
-        run: rm -f wrangler.day9-runtime.generated.json
+        run: rm -f wrangler.day7d-runtime.generated.json
 
       - name: Deploy authoritative QA frontend
         uses: cloudflare/wrangler-action@v3
@@ -170,7 +166,7 @@ jobs:
           packageManager: npm
           command: deploy --config wrangler.qa-frontend.jsonc --var DAY7D_FRONTEND_RELEASE_ID:${{ env.DAY7D_RELEASE_ID }}
 
-      - name: Verify deployed Worker P0 convergence
+      - name: Verify deployed deterministic Worker P0 convergence
         shell: bash
         run: |
           node --input-type=module <<'NODE'
@@ -196,7 +192,7 @@ jobs:
             server_selected_question_validation:true,
             save_returns_regenerated_result:true
           };
-          const deadline=Date.now()+180000;
+          const deadline=Date.now()+120000;
           let consecutive=0,last=null;
           while(Date.now()<deadline){
             try{
@@ -207,18 +203,18 @@ jobs:
               for(const [key,value] of Object.entries(expected)) if(body?.day7d?.[key]!==value) mismatches.push(`${key}: ${JSON.stringify(body?.day7d?.[key])}`);
               last={mismatches,body};
               consecutive=mismatches.length===0?consecutive+1:0;
-              if(consecutive>=3){ console.log('PASS: deployed Day 7D Worker converged.'); process.exit(0); }
+              if(consecutive>=3){ console.log('PASS: deployed authoritative Day 7D deterministic Worker converged.'); process.exit(0); }
             } catch(error) { last={error:String(error)}; consecutive=0; }
-            await new Promise(resolve=>setTimeout(resolve,3000));
+            await new Promise(resolve=>setTimeout(resolve,2500));
           }
-          throw new Error(`Worker did not converge: ${JSON.stringify(last)}`);
+          throw new Error(`Deterministic Worker did not converge: ${JSON.stringify(last)}`);
           NODE
 
       - name: Verify deployed complete QA frontend
         shell: bash
         run: |
           node --input-type=module <<'NODE'
-          const deadline=Date.now()+180000;
+          const deadline=Date.now()+120000;
           let consecutive=0,last=null;
           while(Date.now()<deadline){
             try{
@@ -226,30 +222,25 @@ jobs:
               const health=await healthResponse.json();
               const response=await fetch(`${process.env.QA_FRONTEND_URL}/?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
               const html=await response.text();
-              const required=[
-                'Day 7D cumulative customer-intelligence browser adapter.',
-                'GalviCare Day 3 governed AI customer bridge v1',
-                'GOVERNED BUSINESS HEALTH INTELLIGENCE',
-                'GV_DAY3_LEGACY_SCORE_CONTRACT'
-              ];
+              const required=['Day 7D cumulative customer-intelligence browser adapter.','GalviCare Day 3 governed AI customer bridge v1','GOVERNED BUSINESS HEALTH INTELLIGENCE','GV_DAY3_LEGACY_SCORE_CONTRACT'];
               const valid=response.ok&&healthResponse.ok&&health?.release_id===process.env.DAY7D_RELEASE_ID&&required.every(token=>html.includes(token));
               last={status:response.status,health_status:healthResponse.status,release_id:health?.release_id,missing:required.filter(token=>!html.includes(token))};
               consecutive=valid?consecutive+1:0;
-              if(consecutive>=3){ console.log('PASS: deployed complete QA frontend matches candidate and contains the Day 3 governed-AI customer projection bridge.'); process.exit(0); }
+              if(consecutive>=3){ console.log('PASS: deployed QA frontend matches candidate and contains governed-AI customer projection.'); process.exit(0); }
             } catch(error) { last={error:String(error)}; consecutive=0; }
-            await new Promise(resolve=>setTimeout(resolve,3000));
+            await new Promise(resolve=>setTimeout(resolve,2500));
           }
           throw new Error(`QA frontend did not converge: ${JSON.stringify(last)}`);
           NODE
 
-      - name: READY FOR FINAL DAY 7D HUMAN E2E
+      - name: READY FOR FINAL DAY 3 HUMAN E2E
         if: success()
         run: |
-          echo '## DAY 7D AUTHORITATIVE QA RELEASE: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '## GALVICARE DAY 3 CUSTOMER PATH QA RELEASE: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo "- Candidate SHA: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Candidate fingerprint: $DAY7D_RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
           echo '- Deterministic GalviScore response contract preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Authoritative Day 7D deterministic Worker deployed: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 3 governed-AI customer projection bridge deployed: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 1 isolated deployment lane preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 9 QA canonical continuity wrapper: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production touched: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '**READY FOR FINAL DAY 3 HUMAN E2E**' >> "$GITHUB_STEP_SUMMARY"
