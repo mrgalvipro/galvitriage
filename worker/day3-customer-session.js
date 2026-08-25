@@ -167,6 +167,18 @@ function confidenceComponents(value) {
   return { required_data_completeness: c, evidence_quality: c, answer_consistency: c, corroboration: c, context_completeness: c };
 }
 
+function authoritativeClinicalConfidence(legacyFile, input) {
+  const storedScore = legacyFile?.prior_results?.GalviScore || {};
+  const candidates = [
+    storedScore.galviscore_confidence,
+    storedScore.clinical_confidence,
+    storedScore.confidence,
+    input?.visible_confidence
+  ];
+  const found = candidates.map(Number).find((value) => Number.isFinite(value) && value >= 0 && value <= 100);
+  return found ?? 0;
+}
+
 function governedFollowups(legacyFile) {
   return (Array.isArray(legacyFile?.followup_rows) ? legacyFile.followup_rows : [])
     .filter((row) => text(row?.answer) && !low(row.answer).startsWith('skipped for now'))
@@ -260,15 +272,26 @@ async function ensureDay2Baseline(env, sessionId, context, input) {
     problem: Number(rawDims.problem || 0),
     business_model: Number(rawDims.business_model || 0)
   };
-  const cumulativeConfidence = Number(legacyFile?.reconciliation?.confidence || input?.visible_confidence || 0);
-  const confidence = confidenceComponents(cumulativeConfidence);
-  const state = await internalDay2(env, `/api/v1/day2/intake-state/${encodeURIComponent(context.context_id)}`);
-  const contextEvidence = legacyFile?.context || {};
 
-  if (!state?.data?.triage) {
+  // Clinical Confidence is an authoritative deterministic fact and is distinct from
+  // Day 7D reconciliation confidence, which only controls the number of targeted
+  // customer questions. Never use a low Business Health score/reconciliation score
+  // to make an otherwise high-confidence clinical record ineligible for governed AI.
+  const clinicalConfidence = authoritativeClinicalConfidence(legacyFile, input);
+  const confidence = confidenceComponents(clinicalConfidence);
+  const confidenceKey = Math.round(clinicalConfidence);
+  let state = await internalDay2(env, `/api/v1/day2/intake-state/${encodeURIComponent(context.context_id)}`);
+  const contextEvidence = legacyFile?.context || {};
+  const triageConfidence = Number(state?.data?.triage?.clinical_confidence);
+  const vitalsConfidence = Number(state?.data?.vitals?.clinical_confidence);
+  const scoreConfidence = Number(state?.data?.score?.clinical_confidence);
+  const triageNeedsCorrection = !state?.data?.triage || !Number.isFinite(triageConfidence) || Math.abs(triageConfidence - clinicalConfidence) > 0.5;
+  const vitalsNeedsCorrection = !state?.data?.vitals || !Number.isFinite(vitalsConfidence) || Math.abs(vitalsConfidence - clinicalConfidence) > 0.5;
+
+  if (triageNeedsCorrection) {
     await internalDay2(env, '/api/v1/day2/triage', {
       method: 'POST',
-      key: `d3triage.${safe(sessionId)}`,
+      key: `d3triage.v3.${safe(sessionId)}.${confidenceKey}`,
       body: {
         context_id: context.context_id,
         acuity: acuityFromClassification(input?.classification),
@@ -276,43 +299,53 @@ async function ensureDay2Baseline(env, sessionId, context, input) {
         red_flags: [],
         followup_round: 0,
         answers: {
-          source: 'galvicare_day3_customer_session_v2',
+          source: 'galvicare_day3_customer_session_v3',
           legacy_session_id: sessionId,
           founder_reported_context: contextEvidence,
-          cumulative_followup_count: Array.isArray(legacyFile?.followup_rows) ? legacyFile.followup_rows.length : 0
+          cumulative_followup_count: Array.isArray(legacyFile?.followup_rows) ? legacyFile.followup_rows.length : 0,
+          reconciliation_confidence: Number(legacyFile?.reconciliation?.confidence || 0)
         }
       }
     });
   }
 
-  if (!state?.data?.vitals) {
+  if (vitalsNeedsCorrection) {
     await internalDay2(env, '/api/v1/day2/vitals', {
       method: 'POST',
-      key: `d3vitals.${safe(sessionId)}`,
+      key: `d3vitals.v3.${safe(sessionId)}.${confidenceKey}`,
       body: { context_id: context.context_id, dimensions, confidence }
     });
   }
 
-  let refreshed = await internalDay2(env, `/api/v1/day2/intake-state/${encodeURIComponent(context.context_id)}`);
-  if (!refreshed?.data?.score) {
+  if (triageNeedsCorrection || vitalsNeedsCorrection || !state?.data?.score || !Number.isFinite(scoreConfidence) || Math.abs(scoreConfidence - clinicalConfidence) > 0.5) {
     await internalDay2(env, '/api/v1/day2/score', {
       method: 'POST',
-      key: `d3score.${safe(sessionId)}`,
+      key: `d3score.v3.${safe(sessionId)}.${confidenceKey}`,
       body: { context_id: context.context_id }
     });
-    refreshed = await internalDay2(env, `/api/v1/day2/intake-state/${encodeURIComponent(context.context_id)}`);
   }
-  const canonicalScore = Number(refreshed?.data?.score?.overall_score);
+
+  state = await internalDay2(env, `/api/v1/day2/intake-state/${encodeURIComponent(context.context_id)}`);
+  const canonicalScore = Number(state?.data?.score?.overall_score);
+  const canonicalClinicalConfidence = Number(state?.data?.score?.clinical_confidence);
   if (!Number.isFinite(canonicalScore) || Math.abs(canonicalScore - score) > 1) {
     const error = new Error(`Canonical Day 2 score ${canonicalScore} does not match authoritative GalviCare score ${score}.`);
     error.status = 409;
     error.code = 'GV_DAY3_CUSTOMER_SCORE_MISMATCH';
     throw error;
   }
+  if (!Number.isFinite(canonicalClinicalConfidence) || Math.abs(canonicalClinicalConfidence - clinicalConfidence) > 0.5) {
+    const error = new Error(`Canonical Day 2 Clinical Confidence ${canonicalClinicalConfidence} does not match authoritative GalviCare Clinical Confidence ${clinicalConfidence}.`);
+    error.status = 409;
+    error.code = 'GV_DAY3_CUSTOMER_CONFIDENCE_MISMATCH';
+    throw error;
+  }
+
   const followupEvidence = await syncCustomerFollowupEvidence(env.DB, sessionId, context, legacyFile);
   return {
     score: canonicalScore,
-    clinical_confidence: Number(refreshed?.data?.score?.clinical_confidence ?? cumulativeConfidence),
+    clinical_confidence: canonicalClinicalConfidence,
+    reconciliation_confidence: Number(legacyFile?.reconciliation?.confidence || 0),
     followup_count: Array.isArray(legacyFile?.followup_rows) ? legacyFile.followup_rows.length : 0,
     governed_followup_evidence_count: followupEvidence.count,
     governed_followup_evidence_id: followupEvidence.evidence_id,
@@ -353,13 +386,14 @@ async function bootstrap(request, env) {
         record_mode: context.record_mode,
         canonical_score: baseline.score,
         clinical_confidence: baseline.clinical_confidence,
+        reconciliation_confidence: baseline.reconciliation_confidence,
         cumulative_followup_count: baseline.followup_count,
         governed_followup_evidence_count: baseline.governed_followup_evidence_count,
         governed_followup_evidence_id: baseline.governed_followup_evidence_id,
         governed_followup_evidence_version: baseline.governed_followup_evidence_version,
         identity_source: 'authoritative_galvicare_session'
       },
-      meta: { customer_session_bridge: true, deterministic_fallback: true, clarification_evidence_synced: true }
+      meta: { customer_session_bridge: true, deterministic_fallback: true, clarification_evidence_synced: true, clinical_confidence_authoritative: true }
     }, 200, request);
   } catch (error) {
     return json({
@@ -399,7 +433,8 @@ async function augmentHealth(response, request) {
     ...(body.data.capabilities || {}),
     customer_session_bridge: true,
     canonical_session_identity: true,
-    customer_clarification_evidence_sync: true
+    customer_clarification_evidence_sync: true,
+    customer_clinical_confidence_authority: true
   };
   body.meta = { ...(body.meta || {}), customer_session_bridge: true };
   const headers = new Headers(response.headers);
