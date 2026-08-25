@@ -24,7 +24,12 @@
   const scoreBaseline={value:null};
   const el=id=>document.getElementById(id);
   const session=()=>typeof getStoredSessionId==='function'?String(getStoredSessionId()||'').trim():String(localStorage.getItem('galvicare_session_id')||localStorage.getItem('galvishot_session_id')||'').trim();
-  const endpoint=()=>typeof GALVICARE_API_ENDPOINT!=='undefined'?GALVICARE_API_ENDPOINT:`${GALVICARE_INTAKE_ENDPOINT}/api`;
+  const DAY3_CUSTOMER_API_ENDPOINT='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev/api';
+  const endpoint=()=>{
+    const host=String(location?.hostname||'').toLowerCase();
+    if(host==='galvicare-0-5-qa.mrgalvipro.workers.dev')return DAY3_CUSTOMER_API_ENDPOINT;
+    return typeof GALVICARE_API_ENDPOINT!=='undefined'?GALVICARE_API_ENDPOINT:`${GALVICARE_INTAKE_ENDPOINT}/api`;
+  };
   const objectiveScore=value=>{const result=value?.result||value?.data||value||{};const candidates=[result.galviscore_score,result.score,result.overall_score,result.total_score];const found=candidates.find(candidate=>Number.isFinite(Number(candidate)));return found===undefined?null:Number(found);};
   const responseStatus=response=>String(response?.status||response?.evaluation?.status||'').toLowerCase();
   const entitlementPending=response=>responseStatus(response)==='entitlement_required'||(response?.payment_required===true&&response?.evidence_ready===true&&response?.result_generation_locked===true);
