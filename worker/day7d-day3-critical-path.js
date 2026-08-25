@@ -255,6 +255,8 @@ async function augmentHealth(response) {
     ...body.day7d,
     entrypoint: 'worker/day7d-day3-critical-path.js',
     score_clarification_action_surface: true,
+    score_clarification_get_action: 'get_or_generate_galviscore',
+    score_clarification_save_action: 'save_galviscore_followup',
     pre_entitlement_evidence_capture: true,
     paid_generation_server_verified: true
   };
