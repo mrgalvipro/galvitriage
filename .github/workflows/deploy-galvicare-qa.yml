@@ -199,8 +199,33 @@ jobs:
             paid_generation_server_verified:true
           };
           const deadline=Date.now()+120000;let consecutive=0,last=null;
-          while(Date.now()<deadline){try{const response=await fetch(process.env.QA_API_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`worker-${Date.now()}`})});const body=await response.json();const mismatches=[];if(!response.ok||body?.success!==true)mismatches.push(`http/success=${response.status}/${body?.success}`);for(const [key,value] of Object.entries(expected))if(body?.day7d?.[key]!==value)mismatches.push(`${key}: ${JSON.stringify(body?.day7d?.[key])}`);last={mismatches,body};consecutive=mismatches.length===0?consecutive+1:0;if(consecutive>=3){console.log('PASS: deployed deterministic Worker + pre-entitlement evidence boundary converged.');process.exit(0);}}catch(error){last={error:String(error)};consecutive=0;}await new Promise(resolve=>setTimeout(resolve,2500));}
-          throw new Error(`Deterministic Worker did not converge: ${JSON.stringify(last)}`);
+          while(Date.now()<deadline){
+            try{
+              const nonce=Date.now();
+              const response=await fetch(process.env.QA_API_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`worker-${nonce}`})});
+              const body=await response.json();
+              const mismatches=[];
+              if(!response.ok||body?.success!==true)mismatches.push(`health http/success=${response.status}/${body?.success}`);
+              for(const [key,value] of Object.entries(expected))if(body?.day7d?.[key]!==value)mismatches.push(`${key}: ${JSON.stringify(body?.day7d?.[key])}`);
+
+              // P0 deployed action-surface proof. Health metadata alone previously allowed
+              // a false positive while the customer-facing /api route still served the
+              // legacy UNSUPPORTED_API_ACTION response. This read-only synthetic session
+              // must be routed by Day 7D and fail closed at entitlement, never at routing.
+              const routeResponse=await fetch(process.env.QA_API_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'get_or_generate_galviscore',session_id:`__day3_route_probe_${nonce}`,payload:{}})});
+              let routeBody={};
+              try{routeBody=await routeResponse.json();}catch{mismatches.push(`clarification route returned non-JSON http=${routeResponse.status}`);}
+              if(routeBody?.code==='UNSUPPORTED_API_ACTION'||routeBody?.message==='Unsupported /api action')mismatches.push('clarification route is still served by legacy UNSUPPORTED_API_ACTION runtime');
+              if(routeResponse.status!==402||routeBody?.status!=='locked'||routeBody?.product!=='GalviScore')mismatches.push(`clarification route contract=${routeResponse.status}/${routeBody?.status}/${routeBody?.product}`);
+              if(routeResponse.headers.get('x-galvi-day7d-rules')!==process.env.DAY7D_RULES_VERSION)mismatches.push(`clarification route rules header=${routeResponse.headers.get('x-galvi-day7d-rules')}`);
+
+              last={mismatches,health_status:response.status,route_status:routeResponse.status,route_body:routeBody};
+              consecutive=mismatches.length===0?consecutive+1:0;
+              if(consecutive>=3){console.log('PASS: deployed deterministic Worker, clarification action surface, and pre-entitlement evidence boundary converged.');process.exit(0);}
+            }catch(error){last={error:String(error)};consecutive=0;}
+            await new Promise(resolve=>setTimeout(resolve,2500));
+          }
+          throw new Error(`Deterministic Worker/action surface did not converge: ${JSON.stringify(last)}`);
           NODE
 
       - name: Verify deployed complete QA frontend
@@ -219,6 +244,7 @@ jobs:
           echo "- Candidate SHA: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Candidate fingerprint: $DAY7D_RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
           echo '- Deterministic GalviScore response contract preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Deployed get_or_generate_galviscore route contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Pre-entitlement follow-up evidence capture: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Paid-result generation remains server-entitlement-gated: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 3 canonical-session governed-AI browser bridge deployed: PASS' >> "$GITHUB_STEP_SUMMARY"
