@@ -1,0 +1,300 @@
+name: GalviStudio GalviCare 1.0 Day 2 QA Gate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - "worker/day2-galvicare-1-0.js"
+      - "migrations/day1/0102_galvicare_1_0_day2_intake_results.sql"
+      - "tests/day2-galvicare-1-0.test.mjs"
+      - "wrangler.galvicare-day2.json"
+      - ".github/workflows/day2-galvicare-1-0-qa.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvicare-1-0-day2-qa
+  cancel-in-progress: true
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DAY2_BASELINE_SHA: 62b3f2860354e85c72a989d071f47ba2443fec3c
+  DAY2_ALLOWED_ORIGIN: https://galvipro.com
+
+jobs:
+  day2:
+    name: Build, migrate, deploy, E2E, integrity, rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout exact existing QA ref candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Prove authoritative branch and eliminate local work-branch ambiguity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
+          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test -z "$(git status --porcelain)"
+          if git branch --show-current | grep -qx 'work'; then
+            echo "FAIL: forbidden work branch is active in authoritative Actions checkout."
+            exit 1
+          fi
+          git merge-base --is-ancestor "${DAY2_BASELINE_SHA}" "${GITHUB_SHA}"
+          echo "PASS T20: existing QA ref is authoritative; no new branch/work branch is used."
+
+      - name: Assert critical-path diff and Production isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only "${DAY2_BASELINE_SHA}..${GITHUB_SHA}" | tee /tmp/day2-changed.txt
+          ALLOWED='^(\.github/workflows/day2-galvicare-1-0-qa\.yml|worker/day2-galvicare-1-0\.js|migrations/day1/0102_galvicare_1_0_day2_intake_results\.sql|tests/day2-galvicare-1-0\.test\.mjs|wrangler\.galvicare-day2\.json)$'
+          if grep -Ev "${ALLOWED}" /tmp/day2-changed.txt; then
+            echo "FAIL: Day 2 candidate contains non-critical-path files."
+            exit 1
+          fi
+          if grep -E '(^|/)(production|main)|wrangler\.production|day7b-production' /tmp/day2-changed.txt; then
+            echo "FAIL: Production surface changed."
+            exit 1
+          fi
+          echo "PASS: candidate diff is Day 2-only."
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install existing dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Syntax-check Day 2 candidate
+        run: |
+          node --check worker/day2-galvicare-1-0.js
+          node --check tests/day2-galvicare-1-0.test.mjs
+
+      - name: T01/T18 — inherited Day 1 mandatory regression
+        run: |
+          node --test tests/day1-foundation.test.mjs tests/day1-galvicare-1-0.test.mjs tests/day1-human-e2e-surface.test.mjs tests/day1-prefounder-customer.test.mjs
+
+      - name: Preserve historical GalviVault Day 2 identity contracts
+        run: |
+          node --test tests/day2-worker.test.mjs tests/galvivault-day2-identity-continuity.test.mjs
+
+      - name: T02-T17 — deterministic Day 2 clinical contract
+        run: node --test tests/day2-galvicare-1-0.test.mjs
+
+      - name: T19 — preserved GalviCare 0.5 customer regression
+        run: npm run stabilization:gate
+
+      - name: Preserve clinician and FHR/BHR regression slices
+        run: |
+          npm run test:day8
+          npm run test:day9
+
+      - name: Apply inherited schemas idempotently to existing QA D1
+        shell: bash
+        run: |
+          set -euo pipefail
+          for migration in \
+            migrations/day1/0001_canonical_business_medical_record.sql \
+            migrations/day1/0100_galvicare_1_0_day1_foundation.sql \
+            migrations/day1/0101_day1_principal_session_continuity.sql \
+            migrations/day1/0102_galvicare_1_0_day2_intake_results.sql
+          do
+            npx --yes wrangler@4 d1 execute galvivault-0-5-qa --remote --file="$migration" --config wrangler.galvicare-day2.json
+          done
+
+      - name: Pre-deploy D1 integrity / schema proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL="SELECT migration_id,name,environment FROM gv1_schema_migrations WHERE migration_id IN ('0100','0101','0102') ORDER BY migration_id;
+          SELECT COUNT(*) AS duplicate_principals FROM (SELECT lower(email) email FROM gv1_founders WHERE email IS NOT NULL GROUP BY lower(email) HAVING COUNT(*)>1);
+          SELECT COUNT(*) AS invalid_prefounder_links FROM gv1_principal_contexts WHERE record_mode='principal_only' AND (venture_id IS NOT NULL OR bmr_id IS NOT NULL);
+          SELECT COUNT(*) AS duplicate_bmr_ventures FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1);
+          SELECT COUNT(*) AS invalid_day2_generation FROM gv1_day2_intake_results WHERE generation_source<>'rules';
+          SELECT COUNT(*) AS invalid_day2_scope FROM gv1_day2_intake_results r JOIN gv1_principal_contexts c ON c.context_id=r.context_id WHERE r.founder_id<>c.founder_id OR COALESCE(r.bmr_id,'')<>COALESCE(c.bmr_id,'');"
+          npx --yes wrangler@4 d1 execute galvivault-0-5-qa --remote --command="$SQL" --config wrangler.galvicare-day2.json --json > /tmp/day2-predeploy-d1.json
+          cat /tmp/day2-predeploy-d1.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('/tmp/day2-predeploy-d1.json','utf8'));
+          const o=[]; const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){o.push(v);Object.values(v).forEach(walk)}}; walk(p);
+          for(const id of ['0100','0101','0102']){const m=o.find(x=>x.migration_id===id);if(!m||m.environment!=='qa')throw new Error(`Missing QA migration ${id}`);}
+          for(const key of ['duplicate_principals','invalid_prefounder_links','duplicate_bmr_ventures','invalid_day2_generation','invalid_day2_scope']){
+            const v=o.find(x=>Object.hasOwn(x,key))?.[key]; if(Number(v)!==0)throw new Error(`${key}=${v}`);
+          }
+          console.log('PASS D1-1/D1-2/D1-3/D1-9/D1-11/D1-12 preflight.');
+          NODE
+
+      - name: Build exact-SHA runtime config without changing repository
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const c=JSON.parse(fs.readFileSync('wrangler.galvicare-day2.json','utf8'));
+          c.vars={...(c.vars||{}),COMMIT_SHA:process.env.GITHUB_SHA};
+          fs.writeFileSync('wrangler.galvicare-day2.runtime.json',JSON.stringify(c,null,2));
+          NODE
+
+      - name: Deploy exact candidate to existing QA Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4 deploy --config wrangler.galvicare-day2.runtime.json 2>&1 | tee /tmp/day2-deploy.log
+          DAY2_BASE_URL="$(grep -Eo 'https://[[:alnum:].-]+\.workers\.dev' /tmp/day2-deploy.log | tail -n 1 || true)"
+          test -n "${DAY2_BASE_URL}"
+          echo "DAY2_BASE_URL=${DAY2_BASE_URL}" >> "$GITHUB_ENV"
+          echo "candidate_sha=${GITHUB_SHA}" > /tmp/day2-runtime.txt
+          echo "url=${DAY2_BASE_URL}" >> /tmp/day2-runtime.txt
+
+      - name: T17 — wait for exact Day 2 runtime convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 60); do
+            STATUS="$(curl --silent --show-error --location --output /tmp/day2-health.json --write-out '%{http_code}' "${DAY2_BASE_URL}/health?candidate=${GITHUB_SHA}&attempt=${attempt}" || true)"
+            if [ "$STATUS" = "200" ] && node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('/tmp/day2-health.json','utf8'));
+          if(p?.success!==true||p?.environment!=='qa')process.exit(1);
+          if(p?.data?.release_version!=='galvicare_1_0_day2'||p?.data?.galvicare_schema_version!=='0102')process.exit(1);
+          if(p?.data?.commit_sha!==process.env.GITHUB_SHA||p?.data?.capabilities?.ai_enabled!==false)process.exit(1);
+          NODE
+            then
+              echo "PASS: exact candidate runtime converged on attempt ${attempt}."
+              cat /tmp/day2-health.json
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "FAIL: active QA Worker never converged to exact Day 2 candidate."
+          cat /tmp/day2-health.json || true
+          exit 1
+
+      - name: H1-H17 / Golden A-G — deployed synthetic Human E2E
+        env:
+          DAY2_V10_REMOTE_SMOKE: "1"
+          DAY2_RUN_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: node --test tests/day2-galvicare-1-0.test.mjs
+
+      - name: H18/T18/T19 — post-deploy inherited regression remains green
+        run: |
+          node --test tests/day1-foundation.test.mjs tests/day1-galvicare-1-0.test.mjs tests/day1-human-e2e-surface.test.mjs tests/day1-prefounder-customer.test.mjs
+          npm run stabilization:gate
+          npm run test:day8
+          npm run test:day9
+
+      - name: D1-1 through D1-12 — post-E2E integrity assertions
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL="SELECT COUNT(*) AS d1_1_duplicate_principals FROM (SELECT lower(email) email FROM gv1_founders WHERE email IS NOT NULL GROUP BY lower(email) HAVING COUNT(*)>1);
+          SELECT COUNT(*) AS d1_2_prefounder_has_record FROM gv1_principal_contexts WHERE record_mode='principal_only' AND (venture_id IS NOT NULL OR bmr_id IS NOT NULL);
+          SELECT COUNT(*) AS d1_3_duplicate_bmr FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)<>1);
+          SELECT COUNT(*) AS d1_4_cross_scope FROM gv1_day2_intake_results r JOIN gv1_principal_contexts c ON c.context_id=r.context_id WHERE r.founder_id<>c.founder_id OR COALESCE(r.bmr_id,'')<>COALESCE(c.bmr_id,'');
+          SELECT COUNT(*) AS d1_5_invalid_evidence_refs FROM gv1_day2_intake_results r, json_each(r.supporting_evidence_ids_json) j LEFT JOIN gv1_principal_evidence_items p ON p.evidence_id=j.value LEFT JOIN gv1_evidence_items b ON b.evidence_id=j.value WHERE p.evidence_id IS NULL AND b.evidence_id IS NULL;
+          SELECT COUNT(*) AS d1_6_duplicate_requests FROM (SELECT result_type,client_request_id,COUNT(*) n FROM gv1_day2_intake_results GROUP BY result_type,client_request_id HAVING COUNT(*)>1);
+          SELECT COUNT(*) AS d1_7_bad_rules FROM gv1_day2_intake_results WHERE result_type='triage' AND (rules_version IS NULL OR json_extract(payload_json,'$.acuity_score') IS NULL OR json_extract(payload_json,'$.acuity_band') IS NULL);
+          SELECT COUNT(*) AS d1_8_confidence_overwrite FROM gv1_day2_intake_results WHERE result_type='triage' AND json_extract(payload_json,'$.clinical_confidence') IS NULL;
+          SELECT COUNT(*) AS d1_9_wrong_score_type FROM gv1_day2_intake_results r JOIN gv1_principal_contexts c ON c.context_id=r.context_id WHERE (c.record_mode='principal_only' AND r.score_type<>'founder_readiness') OR (c.record_mode='principal_plus_venture' AND r.score_type<>'business_health');
+          SELECT COUNT(*) AS d1_10_missing_audit FROM gv1_day2_intake_results r LEFT JOIN gv1_audit_log a ON a.entity_id=r.result_id AND a.source='galvicare-1.0-day2' WHERE a.audit_id IS NULL;
+          SELECT COUNT(*) AS d1_11_orphan_context FROM gv1_day2_intake_results r LEFT JOIN gv1_principal_contexts c ON c.context_id=r.context_id WHERE c.context_id IS NULL;
+          SELECT COUNT(*) AS d1_12_schema FROM gv1_schema_migrations WHERE migration_id='0102' AND environment='qa';"
+          npx --yes wrangler@4 d1 execute galvivault-0-5-qa --remote --command="$SQL" --config wrangler.galvicare-day2.json --json > /tmp/day2-d1.json
+          cat /tmp/day2-d1.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('/tmp/day2-d1.json','utf8')); const o=[];
+          const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){o.push(v);Object.values(v).forEach(walk)}}; walk(p);
+          const zeros=['d1_1_duplicate_principals','d1_2_prefounder_has_record','d1_3_duplicate_bmr','d1_4_cross_scope','d1_5_invalid_evidence_refs','d1_6_duplicate_requests','d1_7_bad_rules','d1_8_confidence_overwrite','d1_9_wrong_score_type','d1_10_missing_audit','d1_11_orphan_context'];
+          for(const key of zeros){const v=o.find(x=>Object.hasOwn(x,key))?.[key];if(Number(v)!==0)throw new Error(`${key}=${v}`);}
+          const schema=o.find(x=>Object.hasOwn(x,'d1_12_schema'))?.d1_12_schema;if(Number(schema)!==1)throw new Error(`d1_12_schema=${schema}`);
+          console.log('PASS: D1 integrity assertions are clean.');
+          NODE
+
+      - name: H19 — non-authoritative adapter isolation proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          if grep -Eq 'HubSpot|GA4|Clarity|Calendly|Stripe|Make' worker/day2-galvicare-1-0.js; then
+            echo "FAIL: Day 2 canonical intake path gained a direct third-party dependency."
+            exit 1
+          fi
+          echo "PASS: Day 2 canonical Worker+D1 path has no third-party adapter dependency."
+
+      - name: H20 — exercise non-destructive rollback and restore exact candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp wrangler.json wrangler.day1.rollback.runtime.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p='wrangler.day1.rollback.runtime.json'; const c=JSON.parse(fs.readFileSync(p,'utf8'));
+          c.vars={...(c.vars||{}),COMMIT_SHA:process.env.DAY2_BASELINE_SHA}; fs.writeFileSync(p,JSON.stringify(c,null,2));
+          NODE
+          npx --yes wrangler@4 deploy --config wrangler.day1.rollback.runtime.json >/tmp/day2-rollback.log 2>&1
+          for attempt in $(seq 1 40); do
+            if curl -fsS "${DAY2_BASE_URL}/health?rollback=${attempt}" >/tmp/day1-rollback-health.json &&
+               node --input-type=module -e "import fs from 'node:fs';const p=JSON.parse(fs.readFileSync('/tmp/day1-rollback-health.json','utf8'));if(p?.data?.release_version!=='galvicare_1_0_day1')process.exit(1);"; then
+              echo "PASS: Day 1 rollback target served correctly."
+              break
+            fi
+            test "$attempt" -lt 40 || exit 1
+            sleep 3
+          done
+          npx --yes wrangler@4 deploy --config wrangler.galvicare-day2.runtime.json >/tmp/day2-restore.log 2>&1
+          for attempt in $(seq 1 40); do
+            if curl -fsS "${DAY2_BASE_URL}/health?restore=${attempt}" >/tmp/day2-restore-health.json &&
+               node --input-type=module -e "import fs from 'node:fs';const p=JSON.parse(fs.readFileSync('/tmp/day2-restore-health.json','utf8'));if(p?.data?.release_version!=='galvicare_1_0_day2'||p?.data?.commit_sha!==process.env.GITHUB_SHA)process.exit(1);"; then
+              echo "PASS: exact Day 2 candidate restored after rollback rehearsal."
+              exit 0
+            fi
+            sleep 3
+          done
+          exit 1
+
+      - name: Final Day 2 evidence summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "DAY 2 HUMAN E2E PASS — DAY 2 BUILD FINAL"
+            echo "branch=${GITHUB_REF_NAME}"
+            echo "candidate_sha=${GITHUB_SHA}"
+            echo "baseline_sha=${DAY2_BASELINE_SHA}"
+            echo "worker=${DAY2_BASE_URL}"
+            echo "schema=0102"
+            echo "rules=galviengine_1_0_score_v1"
+            echo "protocol=universal_business_health_v1"
+            echo "ai_enabled=false"
+            echo "manual_repair=NO"
+            echo "new_branch_created=NO"
+            echo "production_changed=NO"
+          } | tee /tmp/day2-final.txt
+          cat /tmp/day2-final.txt >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Day 2 release evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: galvicare-1-0-day2-${{ github.sha }}
+          path: |
+            /tmp/day2-changed.txt
+            /tmp/day2-predeploy-d1.json
+            /tmp/day2-deploy.log
+            /tmp/day2-health.json
+            /tmp/day2-d1.json
+            /tmp/day2-rollback.log
+            /tmp/day1-rollback-health.json
+            /tmp/day2-restore.log
+            /tmp/day2-restore-health.json
+            /tmp/day2-final.txt
