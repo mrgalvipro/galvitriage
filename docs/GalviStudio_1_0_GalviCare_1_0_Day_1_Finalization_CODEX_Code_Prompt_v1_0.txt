@@ -1,0 +1,1135 @@
+GALVISTUDIO 1.0 | GALVICARE 1.0
+DAY 1 BUILD FINALIZATION — CODEX IMPLEMENTATION ENGINEER PROMPT
+Clinical, Identity, Consent & Record Foundation
+Critical-Path / QA-First / Regression-Protected Execution
+
+ROLE
+You are the CODEX Implementation Engineer responsible for FINALIZING Day 1 of the GalviStudio 1.0 | GalviCare 1.0 seven-day build.
+
+Treat the attached:
+"GalviStudio_1_0_GalviCare_1_0_Day_1_Builder_Guide_CODEX_Implementation_Engineer_Edition_v1_0"
+as the authoritative Day 1 implementation runbook.
+
+This is NOT a redesign, refactor, cleanup, architecture brainstorm, or opportunity to rebuild GalviCare/GalviVault.
+Your job is to implement the smallest complete set of changes required to achieve:
+
+DAY 1 HUMAN E2E PASS
+→ DAY 1 BUILD FINAL
+→ CLINICAL / IDENTITY / CONSENT / RECORD FOUNDATION READY FOR DAY 2
+
+Do not declare completion from code review or local tests alone. Completion requires exact deployed-QA proof, D1 integrity proof, regression proof, Human E2E proof, rollback readiness, and a signed final implementation report.
+
+======================================================================
+1. AUTHORITATIVE MISSION
+======================================================================
+
+Finalize the additive Day 1 foundation so that:
+
+1. One human/principal can exist safely before a venture exists.
+2. A Pre-Founder can have:
+   - stable canonical person/principal identity,
+   - lifecycle context,
+   - session continuity,
+   - consent,
+   - principal-scoped evidence,
+   while:
+   - venture_id remains null,
+   - BMR/BHR backing ID remains null,
+   - NO fake venture or shell BHR is created.
+3. A real operating founder resolves/creates:
+   - one canonical person,
+   - one real venture,
+   - exactly one canonical venture-level BMR/BHR backing record,
+   - one resumable/idempotent session context.
+4. Explicit consent is versioned, persisted, retrievable, auditable, replay-safe, and fail-closed for protected Day 1 actions.
+5. Evidence is provenance-bearing, validation-aware, versioned/immutable once accepted, correctly scoped to principal and optional venture/BMR, and lineage-safe.
+6. New Day 1 actions are authorized server-side through the existing Worker/domain boundary.
+7. QA runtime self-identifies its exact release/schema/candidate state and reports ai_enabled=false.
+8. Existing GalviCare 0.5 and GalviVault/clinician workflows remain green.
+9. The prior known-good QA code/deployment remains a proven rollback target.
+10. Day 2 starts only from the exact evidenced Day 1 Build Final baseline.
+
+NON-NEGOTIABLE RELEASE PRINCIPLE:
+Protect the record before expanding intelligence.
+
+OpenAI MUST remain OFF on Day 1.
+No OpenAI API call, secret, provider activation, model selection, autonomous reasoning, openai_proposal, or accepted_ai path is authorized.
+Day 3 owns governed OpenAI activation.
+
+======================================================================
+2. LOCKED ENVIRONMENT / BRANCH / AUTHORITY CONTRACT
+======================================================================
+
+Authoritative repository:
+- mrgalvipro/galvitriage, OR the exact authoritative repository already serving current QA if repository evidence proves a different canonical remote.
+
+Implementation branch:
+- qa-revamped-galvicare-0-5 ONLY.
+
+Production branch:
+- main is READ-ONLY for Day 1 reference.
+
+FORBIDDEN:
+- branch "work"
+- any new workaround branch
+- any new Day-1-specific branch family
+- implementation directly on main
+- merge to main
+- Production Worker deployment
+- Production D1 migration
+- Production backfill
+- Production secrets/config changes
+
+Canonical runtime write boundary:
+- Cloudflare Worker/domain services only.
+
+Canonical persistence:
+- existing Cloudflare D1.
+
+DO NOT:
+- write D1 directly from browser/client code,
+- create a second identity DB,
+- create a second FHR/BHR DB,
+- replace D1,
+- create a new Worker or new D1 to bypass a deployment/binding problem,
+- perform direct Production SQL,
+- use URL flags/localStorage/button visibility as authorization or entitlement truth.
+
+Third-party integrations are non-authoritative adapters.
+Do not rewrite Stripe, Calendly, HubSpot, GA4, Clarity, Make, or unrelated GalviVault/clinician behavior to make Day 1 pass.
+
+Make remains disabled as a critical care dependency.
+
+======================================================================
+3. EXECUTION RULE: PROVE BASELINE BEFORE EDITING
+======================================================================
+
+PHASE 0 IS P0 BLOCKING.
+
+Before changing ANY Day 1 source file:
+
+A. Prove repository identity and exact branch:
+- capture repository root
+- git remote -v
+- git status --short
+- git branch --show-current
+- git rev-parse HEAD
+- git rev-parse origin/qa-revamped-galvicare-0-5
+- git rev-parse origin/main
+- git log -1 --oneline
+- inventory branches
+- fetch using the existing authenticated path
+
+If current branch is main, work, or any unapproved branch:
+STOP.
+Do not create another branch.
+Return to/fetch/synchronize only qa-revamped-galvicare-0-5 through the approved Git path.
+
+Do NOT merge main into QA merely to "update" QA.
+
+B. Fingerprint the known-good QA baseline:
+Capture:
+- baseline SHA
+- origin QA SHA
+- origin/main SHA
+- package-lock checksum
+- current migration inventory/ledger
+- workflow inventory
+- wrangler/config identity
+- QA D1 binding logical name / safe identifier
+- current QA Worker deployment ID/URL
+- current release/health/version response
+- current GalviCare 0.5 regression result
+- current GalviVault/clinician regression result
+- exact rollback SHA
+- exact rollback Worker deployment/config
+- current QA schema/migration version/checksum
+
+C. Run BEFORE-CHANGE regression:
+Use the repository's actual existing commands/scripts. Do not invent new expected behavior.
+
+Required pre-change proof:
+- existing GalviCare 0.5 public journey/regression = GREEN
+- existing GalviVault/clinician identity/record/chart/session regression = GREEN
+- known-good deployed QA Worker health/version = coherent
+- one known-good existing POST /api action = working
+- QA D1 binding/schema ledger = known and readable
+
+If the pre-change deployed baseline is broken:
+DAY 1 HAS NOT STARTED.
+STOP and restore/synchronize the known-good baseline first.
+
+Do not simultaneously repair an unknown baseline and introduce Day 1 identity/consent/evidence changes.
+
+======================================================================
+4. BEFORE EDITING: INVENTORY, COMPATIBILITY MAP, DIFF PLAN
+======================================================================
+
+Do not guess table names, filenames, routes, services, migrations, tests, or workflow names.
+
+Inspect actual repository/schema reality first.
+
+Inventory at minimum:
+- person/founder/principal identity tables/services
+- identity normalization/lookup rules
+- founder/person unique keys
+- venture table/service
+- founder/person ↔ venture relationship
+- BMR/BHR canonical venture record service/table
+- one-record-per-venture uniqueness rule/index
+- assessment/journey/session services
+- session idempotency
+- current consent/acknowledgment storage
+- current evidence/observation/lineage structures
+- current authorization/claims/assignment helpers
+- clinician portal auth helpers
+- audit/journey events
+- existing health/version/capability endpoint
+- all migrations/indexes
+- current Worker router/actions
+- existing package scripts/tests
+- QA deployment workflow/config
+- current Day 8/Day 9 FHR/BHR/clinician capabilities that must be reused, not duplicated
+
+Create a compatibility map for every Day 1 logical requirement:
+
+logical requirement
+→ existing canonical implementation
+→ gap
+→ reuse/no change OR smallest additive change.
+
+DECISION RULE:
+1. Existing object fully satisfies contract:
+   REUSE. No migration.
+2. Existing object is semantically correct but misses a safe non-breaking field/index:
+   add the minimum nullable/default-safe field/index.
+3. Existing object exists under different terminology, e.g. BMR vs BHR:
+   preserve canonical storage; use compatibility mapper/alias/projection if needed.
+4. Capability genuinely absent:
+   add the smallest dedicated module/table with correct FK, uniqueness, versioning, audit, and idempotency.
+5. Ownership/semantics unclear:
+   STOP and inspect further. Do not create a new canonical object by guess.
+
+Before editing, produce:
+- Day 1 allowed-files manifest
+- explicit DO NOT MODIFY list
+- expected diff plan
+
+Any unexpected final changed path is a BLOCKING release defect until:
+- explained and explicitly necessary,
+- reverted, or
+- separately approved.
+
+DEFAULT EXPECTATION:
+Day 1 is primarily Worker/domain-service/schema/test work.
+Public UI edits should be minimal or NONE except one narrowly proven consent hook if required.
+
+DO NOT MODIFY unless strictly proven necessary:
+- Production files/config
+- Production D1 state
+- Production secrets
+- known-good GalviCare 0.5 customer screens/routing
+- Stripe entitlement logic
+- Calendly booking logic
+- HubSpot sync
+- GA4/Clarity
+- Make/webhook orchestration
+- Day 8 clinician login/search/chart/treatment flows
+- Day 9 historical FHR import/Founder Intelligence logic
+- unrelated migrations
+- unrelated tests/fixtures
+- unrelated workflows
+- dependency versions
+- formatting-only files
+- broad renames/refactors/docs cleanup
+
+======================================================================
+5. CRITICAL-PATH IMPLEMENTATION — PHASE 1
+SCHEMA / CAPABILITY RECONCILIATION
+======================================================================
+
+Only after baseline is GREEN:
+
+1. Map every logical Day 1 object to actual canonical schema.
+2. Prefer zero schema changes if existing P0 objects already satisfy the contract.
+3. If migration is genuinely required:
+   - use next repository-approved migration naming/order
+   - additive only
+   - QA only
+   - no DROP
+   - no destructive RENAME
+   - do not rewrite historical migrations
+   - allow Pre-Founder principal-only rows without mandatory venture/BMR
+   - check current QA data before adding uniqueness constraints
+   - preserve old 0.5 reads
+   - keep old Worker code backward-compatible with additive schema where possible
+   - apply local/test first if repo supports it
+   - then QA D1 only
+   - capture migration ID + checksum
+   - re-inventory schema after apply
+   - prove historical migration files unchanged
+
+If migration causes existing 0.5 queries to fail:
+STOP.
+Fix compatibility or revert candidate.
+Do not patch the UI around a broken schema.
+
+======================================================================
+6. CRITICAL-PATH IMPLEMENTATION — PHASE 2
+LIFECYCLE + CORE / PROTOCOL / PAYER / RECORD MODE
+======================================================================
+
+Implement or reconcile the following server-side contract:
+
+lifecycle_state:
+- pre_founder
+- dreamer
+- founder
+- owner_operator
+- investor
+- steward
+
+care_protocol:
+- founder_smb = default
+- athlete_career_ownership = first specialty protocol ID
+- future configured protocol IDs must not fork persistence
+
+payer_type:
+- self
+- institution
+- sponsor
+- enterprise
+
+payer_type is metadata only on Day 1.
+It MUST NOT change:
+- canonical person identity
+- venture ownership
+- BMR/BHR ownership
+- evidence truth
+- clinical core persistence
+
+record_mode:
+- principal_only
+- principal_plus_venture
+
+SERVER RULE:
+principal_only:
+- stable person/principal allowed
+- session allowed
+- consent allowed
+- principal-scoped evidence allowed
+- venture_id MUST be null
+- BMR/BHR backing ID MUST be null
+- never fabricate business data
+
+principal_plus_venture:
+- real venture must resolve/create through existing venture service
+- exactly one canonical BMR/BHR backing record for that venture
+- session binds to correct person/venture/record
+
+Implement validation at the existing Worker/domain boundary, NOT independently in each UI screen.
+
+Return/retain canonical context in the existing API envelope:
+- principal/person ID
+- nullable venture ID
+- nullable BMR/BHR backing ID
+- session ID
+- lifecycle_state
+- care_protocol
+- payer_type
+- record_mode
+- schema_version
+- status/success
+- next_action where existing contract supports it
+
+Do not rename/drop existing founder_id/bmr_id columns merely to match product terminology.
+Use compatibility mapping if persistence still uses founder_id/bmr_id.
+
+======================================================================
+7. CRITICAL-PATH IMPLEMENTATION — PHASE 3
+PRE-FOUNDER PRINCIPAL-ONLY CONTINUITY
+======================================================================
+
+A Pre-Founder is a real longitudinal person, not a fake business.
+
+Implement/reuse:
+- current identity normalization
+- current person/founder resolve/create service
+- current session get/create/resume service
+- client_request_id/idempotency convention
+- audit/journey event convention
+
+Required behavior:
+1. New synthetic Pre-Founder resolves/creates one stable person.
+2. venture_id = null.
+3. BMR/BHR backing ID = null.
+4. session created/resumed.
+5. Refresh/re-entry returns same logical context.
+6. Replay with same idempotency key creates no duplicate person/session.
+7. Principal-level consent/evidence is permitted.
+8. Later real venture creation must attach to the SAME person, not copy/replace identity.
+9. Same person + genuinely new venture gets a new venture + new BMR/BHR for that venture; never merge venture records.
+
+Do not broaden identity matching beyond current proven rules.
+Email is a lookup/attribute, not the immutable canonical person ID.
+
+======================================================================
+8. CRITICAL-PATH IMPLEMENTATION — PHASE 4
+CONSENT LEDGER + FAIL-CLOSED ENFORCEMENT
+======================================================================
+
+Reuse existing approved consent language if present.
+Do NOT invent legal/policy copy.
+
+Engineering contract must preserve, using existing names where equivalent:
+- consent_id
+- person/principal ID
+- optional venture/BMR scope
+- purpose
+- policy_version
+- status
+- actor
+- effective_at
+- recorded_at
+- supersedes/previous version
+- client_request_id
+- safe provenance/source/session metadata
+
+Supported status should map to existing governed equivalents for:
+- granted
+- withdrawn
+- declined
+- superseded
+
+Implement/reuse logical actions:
+- record_consent
+- get_consent_status
+- change_or_withdraw_consent
+
+Rules:
+- Worker/domain service owns writes
+- actor is server-validated
+- timestamps are server-authoritative
+- replay-safe/idempotent
+- history retained
+- no hard-delete of prior consent
+- current consent is a projection of valid history
+- no fake venture scope for Pre-Founder
+- missing/withdrawn required consent returns structured locked/consent_required behavior
+- protected write MUST NOT execute when consent is absent
+
+Compatibility rule:
+Do not globally break existing 0.5 flows solely to force new 1.0 consent behavior if product policy did not previously gate them.
+Gate the new approved Day 1 protected actions while preserving 0.5 regression.
+
+Required negatives:
+- no consent
+- withdrawn consent
+- incorrect required policy version if applicable
+- forged actor
+- duplicate replay
+- cross-person consent lookup
+
+======================================================================
+9. CRITICAL-PATH IMPLEMENTATION — PHASE 5
+EVIDENCE SUBSTRATE + LINEAGE
+======================================================================
+
+Support/reconcile four evidence categories:
+- foundational
+- operational
+- strategic
+- behavioral
+
+Required governed evidence behavior:
+- provenance-bearing
+- source-aware
+- version-aware
+- validation-aware
+- replay-safe
+- principal-scoped OR correct venture/BMR-scoped
+- traceable to actor/session/request
+- accepted evidence immutable
+- corrections via version/supersession
+- no cross-record contamination
+
+Required logical fields, mapped to actual canonical equivalents:
+- evidence_id
+- person/principal ID
+- optional venture_id
+- optional BMR/BHR ID
+- category
+- source_type/source_ref
+- captured_at
+- as_of_at
+- validation_status
+- normalized/typed payload or existing evidence structure
+- provenance/checksum where existing model supports it
+- schema_version
+- supersedes_evidence_id or existing equivalent
+- client_request_id
+- created_by / actor role
+- audit/journey reference
+
+Validation status should map to existing equivalents of:
+- reported
+- validated
+- contradicted
+- pending
+
+Critical rules:
+- every evidence item belongs to exactly one principal/person context
+- optional BMR scope must be canonically consistent with same person/venture
+- reject cross-principal/cross-BMR links unless an already governed reference class explicitly permits it
+- founder-reported != automatically validated
+- behavioral signal != hard fact
+- later AI hypotheses/findings/recommendations/treatments/outcomes are separate record classes
+- Day 1 stores governed evidence; it does NOT diagnose
+
+Implement/reuse logical actions:
+- record_evidence
+- get_authorized_evidence
+- link_evidence
+
+Every material evidence write emits safe audit/journey metadata.
+
+======================================================================
+10. CRITICAL-PATH IMPLEMENTATION — PHASE 6
+MINIMUM SERVER-SIDE RBAC / AUTHORIZATION
+======================================================================
+
+Do not rebuild the existing Day 8 clinician authentication/authorization system.
+Reuse it.
+
+Every new Day 1 action must validate inside Worker/domain service:
+- actor identity
+- actor role
+- record ownership/assignment
+- object scope
+- current consent when required
+
+Minimum role boundaries:
+
+Customer / Principal:
+- own authorized lifecycle/consent/evidence input/projection only
+- no clinician-only action
+- no raw audit/internal rationale
+- no other founder record
+
+Business Physician:
+- only assigned/authorized chart context and existing permitted clinical controls
+- cannot bypass record assignment/scope
+
+GalviClinician:
+- assigned records only
+- limited existing clinical/documentation permissions
+- no physician-only control unless already authorized
+
+Support / Implementation:
+- minimum operational access
+- no privileged clinical rationale/content by default
+- no consent/evidence mutation unless explicitly authorized
+
+System / Adapter:
+- only explicit whitelisted server-side operations
+- adapters cannot become generic record readers/writers
+
+BLOCKING NEGATIVE TESTS:
+- unauthenticated protected action denied
+- Customer A cannot access Customer B
+- unassigned clinician denied
+- support overreach denied
+- client-side role spoof denied
+- URL/localStorage/query flag cannot grant server privilege
+
+Use structured 401/403 or current governed locked-status behavior without record enumeration leakage.
+
+======================================================================
+11. CRITICAL-PATH IMPLEMENTATION — PHASE 7
+HEALTH / SCHEMA / CAPABILITY SELF-IDENTIFICATION
+======================================================================
+
+Extend the EXISTING health/version endpoint where possible.
+Do not create a competing status system.
+
+QA response must identify actual candidate runtime with repo-standard equivalents of:
+
+environment = qa
+release_version = galvicare_1_0_day1
+commit_sha = exact candidate SHA where safely supported
+schema_version = actual applied Day 1/QA schema version
+worker_version = actual runtime release identity
+capabilities.principal_lifecycle = true
+capabilities.pre_founder = true
+capabilities.consent_ledger = true
+capabilities.evidence_lineage = true
+capabilities.minimum_rbac = true
+capabilities.ai_enabled = false
+
+D1 binding may expose only a safe logical/masked identifier.
+
+Never expose secrets/tokens/PII.
+
+All new Worker errors must be structured JSON with a stable safe error code and correlation/run ID.
+Blank/HTML API failures are P1 blockers.
+
+======================================================================
+12. API / ROUTER COMPATIBILITY CONTRACT
+======================================================================
+
+Reuse the current common POST /api action envelope and existing action names if equivalent.
+Do NOT create parallel REST endpoints solely for naming consistency.
+
+Required logical capabilities:
+- get_capabilities / health
+- ensure_principal_context
+- get_principal_context
+- record_consent
+- get_consent_status
+- change_or_withdraw_consent
+- record_evidence
+- get_authorized_evidence
+- link_evidence
+- existing GalviCare 0.5 actions unchanged
+
+Every mutation:
+- receives/generates client_request_id/correlation ID using current convention
+- is idempotent or versioned
+- re-resolves canonical ownership server-side
+- treats client IDs/context as hints, not authority
+
+Day 1 responses must contain NO AI proposal/accepted AI output.
+If generation_source exists, Day 1 content may only use existing non-AI semantics such as rules/stored/manual.
+
+======================================================================
+13. AUTOMATED QA — PHASE 8
+======================================================================
+
+Use existing repository test patterns. Add narrowly scoped scripts only if required by repo conventions.
+
+Recommended logical scripts if no equivalent exists:
+- verify:day1-files
+- test:day1
+- qa:day1-smoke
+
+Do not rename existing repo commands unnecessarily.
+
+PASS REQUIREMENT:
+- failed = 0
+- mandatory skipped = 0
+
+Mandatory blocking coverage:
+D1-REP-001 branch is qa-revamped-galvicare-0-5; no work branch.
+D1-REP-002 final diff only allowed Day 1 paths; Production config/workflows unchanged.
+D1-BASE-001 pre-change GalviCare 0.5 regression green.
+D1-BASE-002 pre-change GalviVault/clinician smoke green.
+D1-SCH-001 additive/replay-safe migration.
+D1-SCH-002 historical migrations unchanged.
+D1-SCH-003 pre-existing 0.5 records readable.
+D1-LIF-001 allowed lifecycle values accepted; invalid rejected.
+D1-LIF-002 founder_smb default + athlete_career_ownership without persistence fork.
+D1-LIF-003 payer metadata does not change canonical ownership.
+D1-REC-001 principal_only => null venture/BMR.
+D1-REC-002 principal_plus_venture => real venture + exactly one BMR/BHR.
+D1-ID-001 existing person resolves same canonical ID.
+D1-ID-002 replay creates no duplicate person.
+D1-ID-003 same person/new venture creates new venture/BMR, no merge.
+D1-PF-001 new Pre-Founder person/session, no fake venture/BMR.
+D1-PF-002 refresh/re-entry same principal context.
+D1-CNS-001 purpose/policy/status/actor/time persisted.
+D1-CNS-002 replay idempotent.
+D1-CNS-003 withdraw/change preserves history/current projection.
+D1-CNS-004 protected write without required consent blocked.
+D1-EVD-001 all four categories persist provenance/version/validation.
+D1-EVD-002 principal-only evidence supports null BMR.
+D1-EVD-003 BMR-scoped evidence belongs to same canonical person/venture.
+D1-EVD-004 cross-record evidence/link rejected.
+D1-EVD-005 correction creates version/supersession; prior accepted evidence remains.
+D1-AUT-001 unauthenticated protected action denied.
+D1-AUT-002 customer cannot access another record/clinician action.
+D1-AUT-003 unassigned clinician/support overreach denied.
+D1-ERR-001 errors are structured JSON, not blank/HTML.
+D1-HLT-001 QA health exact release/schema and ai_enabled=false.
+D1-REG-001 full GalviCare 0.5 regression GREEN after build.
+D1-REG-002 GalviVault/clinician regression GREEN after build.
+D1-RBK-001 prior QA code/Worker remains usable against additive schema or rollback path proven safe.
+
+Do not change expected test output to hide regression.
+Do not weaken canonical validation to make stale/invalid data pass.
+
+======================================================================
+14. PRE-DEPLOY GATE
+======================================================================
+
+Before QA deployment, ALL must be true:
+- branch = qa-revamped-galvicare-0-5
+- working tree clean after intended commit(s)
+- candidate SHA recorded
+- allowed-files manifest matches final diff
+- Day 1 automated tests PASS
+- mandatory skipped=0
+- GalviCare 0.5 regression PASS
+- GalviVault/clinician regression PASS
+- QA migration/schema assertions PASS if applicable
+- Production main/D1/config unchanged
+- rollback target known and deployable
+
+Only then commit/push the approved Day 1 candidate to the existing QA branch through the approved repository process.
+DO NOT MERGE TO MAIN.
+
+======================================================================
+15. QA DEPLOYMENT — PHASE 9
+======================================================================
+
+Use the EXISTING approved QA deployment path.
+
+If GitHub Actions is current:
+- exact candidate SHA must be checked out
+- use existing QA environment and existing QA D1 binding
+- do not create a branch to make the workflow see the code
+
+If hosted runner is unavailable:
+- classify as CI/platform state
+- do not rewrite application code/schema/workflows speculatively
+
+If Wrangler/Cloudflare returns 403/binding failure:
+- compare credentials/config/binding with known-good
+- fix credential/config/binding path only
+- do not create new Worker/D1
+
+After deployment record:
+- candidate SHA
+- deployment ID
+- deployment URL
+- timestamp
+- release_version
+- schema_version
+- QA D1 binding
+- workflow/run identity
+
+Probe the REAL QA runtime:
+1. health/capabilities
+2. one principal-only action
+3. one consent read/write
+4. one evidence action
+5. one authorization denial
+6. one existing known-good 0.5 action
+
+Candidate SHA ↔ deployment ID ↔ health release/schema ↔ QA D1 binding must match.
+
+If local tests pass but deployed API is old/legacy:
+treat as DEPLOYMENT DRIFT and fix deployment/ref/binding mapping.
+Do not rewrite passing application code.
+
+======================================================================
+16. QA HUMAN E2E — PHASE 10
+======================================================================
+
+Use synthetic/pseudonymous QA identities only.
+
+Record run ID, tester, timestamp, candidate SHA, QA branch, Worker deployment, QA D1 binding/schema, rollback target, synthetic Pre-Founder alias, and synthetic operating-founder alias.
+
+Execute ALL H1-H18:
+
+H1 Baseline Identity:
+record run/build/deployment/schema/tester metadata.
+
+H2 Existing 0.5 Founder:
+known-good founder path; existing canonical person/venture/BHR resolves.
+
+H3 New Pre-Founder:
+one stable person/principal; expected lifecycle/record_mode; venture_id=null; BMR/BHR=null; session exists.
+
+H4 Resume/Reload:
+same person/session; still no fake venture/BHR.
+
+H5 Replay:
+same idempotency key; no unintended duplicate person/session/consent/evidence.
+
+H6 Consent-Absent Negative:
+protected write blocked; structured consent_required/locked; no canonical protected write.
+
+H7 Consent Grant:
+purpose/version/status/actor/timestamp + audit/event stored/readable.
+
+H8 Consent Change/Withdraw:
+history preserved; current projection updated; no hard-delete.
+
+H9 Principal Evidence:
+principal-scoped Pre-Founder evidence with category/provenance/version/validation and null BMR.
+
+H10 Authorization Negative:
+unauthenticated/wrong customer/unassigned clinician protected access denied without leakage.
+
+H11 Operating Founder:
+one person + one real venture + one BMR/BHR + one session.
+
+H12 Duplicate Operating Founder:
+replay/refresh returns same canonical IDs; no duplicate record.
+
+H13 Scoped Evidence / Cross-Record Negative:
+valid venture-scoped evidence succeeds; cross-person/cross-BMR link fails.
+
+H14 Health/Runtime:
+exact candidate/release/schema/environment=qa; ai_enabled=false.
+
+H15 Existing Clinician Regression:
+existing clinician login/search/chart smoke stays green.
+
+H16 D1 Assertions:
+all Appendix E logical integrity checks translated to actual schema and PASS.
+
+H17 Rollback Proof:
+prior known-good code/Worker restorable without destructive database work; safe drill if available.
+
+H18 Decision:
+emit PASS or FAIL/STOP/ROLLBACK.
+No undocumented manual repair.
+
+Human evidence rules:
+- screenshot alone is insufficient for canonical state
+- pair critical proof with Worker/D1/deployment/backend evidence
+- evidence must identify run ID + candidate SHA + deployment + schema
+- if manual DB edit/console repair/role override/different branch was needed, FAIL
+- if remediation changes candidate SHA, old evidence is invalid; redeploy/rerun
+
+======================================================================
+17. D1 INTEGRITY PROOF — PHASE 11
+======================================================================
+
+Translate logical checks to ACTUAL schema discovered in Phase 1.
+READ-ONLY QA assertions only.
+
+Prove:
+D1-INT-001 Pre-Founder exists exactly once; no fake venture/BMR/BHR.
+D1-INT-002 operating venture has exactly one canonical BMR/BHR.
+D1-INT-003 replay did not create unintended duplicates.
+D1-CONS-001 no orphan consent.
+D1-CONS-002 current consent projection matches valid history.
+D1-EVD-001 no orphan/cross-record evidence.
+D1-EVD-002 evidence correction preserves prior version.
+D1-AUTH-001 no unintended cross-founder grants/global escalation.
+D1-SCH-001 Day 1 migration exactly once in QA ledger if present; historical migrations unchanged.
+D1-SCH-002 Production schema/migration evidence unchanged from baseline.
+D1-AUD-001 expected write/denial audit events exist; secret scan clean.
+D1-REG-001 existing 0.5 canonical records remain readable.
+
+======================================================================
+18. RELEASE EVIDENCE PACKAGE
+======================================================================
+
+Produce/update:
+01-baseline
+02-diff-plan
+03-migration or explicit no-migration/reuse proof
+04-automated-tests
+05-qa-deployment
+06-human-e2e
+07-d1-assertions
+08-defects
+09-rollback
+10-final-report
+
+For every defect record:
+- exact failure
+- runtime layer
+- root cause
+- minimal diff
+- focused retest
+- regression result
+
+======================================================================
+19. DEFECT REMEDIATION RULES
+======================================================================
+
+When a test/runtime step fails:
+1. name exact failing assertion/request/status/runtime layer
+2. isolate root cause
+3. change smallest surface possible
+4. rerun failed test
+5. rerun affected regression slice
+6. then full required regression
+
+Do not change Worker + UI + workflow + DB together unless separately proven defective.
+
+Recurring failure handling:
+
+Wrong branch:
+STOP; return to qa-revamped-galvicare-0-5; no new branch.
+
+Hosted runner unavailable:
+infrastructure state, not code defect; no speculative rewrite.
+
+Wrangler/Cloudflare 403:
+compare auth/environment/config/binding to known-good; fix that path; no new D1/Worker.
+
+Deployed API old:
+verify exact workflow SHA/deployment/route/env; redeploy candidate; no app rewrite.
+
+POST /api 500:
+capture structured correlation/action; isolate one failing service; minimal fix.
+
+HTTP 422 canonical ID:
+derive current authoritative ID from latest response/state; fix stale test/client ID if validation is correct; never relax canonical validation.
+
+Migration duplicate/object conflict:
+stop; inspect canonical equivalent; remove redundant candidate object; no duplicate store.
+
+Pre-Founder got BMR:
+P0 defect; fix record_mode/service enforcement; rerun clean synthetic identity.
+
+Cross-record evidence/access:
+P0 security/data defect; STOP; fix scope/auth and audit contaminated QA rows.
+
+Adapter failure:
+non-authoritative; valid Worker+D1 state must survive according to existing adapter contract.
+
+Manual repair needed:
+FAIL until code/config root cause fixed and path rerun cleanly.
+
+======================================================================
+20. FINAL DIFF / PRODUCTION SAFETY
+======================================================================
+
+Run repo-appropriate equivalents:
+- git status --short
+- git diff --name-status <DAY1_BASELINE_SHA>...HEAD
+- git diff --stat <DAY1_BASELINE_SHA>...HEAD
+- git rev-parse HEAD
+- git rev-parse origin/main
+- git branch --show-current
+
+Verify:
+- no work branch
+- main untouched
+- Production config/D1/Worker untouched
+- no unrelated workflow rewrite
+- no dependency upgrade
+- no broad refactor
+- no new database
+- no duplicate identity/FHR/BHR store
+- OpenAI OFF
+- 0.5 regression green
+- GalviVault/clinician regression green
+- rollback retained
+
+======================================================================
+21. ROLLBACK DRILL — PHASE 12
+======================================================================
+
+Preferred rollback:
+- revert/redeploy prior known-good QA code/Worker
+- leave backward-compatible additive Day 1 schema inert
+- no destructive down-migration
+- no ad hoc DROP
+- no Production delete/reset
+
+Record rollback SHA/deployment, schema compatibility, approved rollback command/workflow, post-rollback health/smoke, and candidate restoration if a live safe drill is performed.
+
+Rollback is PASS only when prior 0.5/P0 smoke is green again.
+
+======================================================================
+22. FINAL GO / STOP GATE
+======================================================================
+
+GO only if:
+- exact baseline proven
+- approved QA branch only
+- main untouched
+- final diff authorized
+- canonical schema reused where possible
+- additive QA-only migration safe if needed
+- no duplicate canonical store
+- lifecycle/protocol/payer/record_mode PASS
+- Pre-Founder null venture/BHR PASS
+- operating founder one-record behavior PASS
+- idempotency PASS
+- consent PASS
+- evidence/lineage PASS
+- no cross-record contamination
+- RBAC negatives PASS
+- structured error contract PASS
+- health exact and ai_enabled=false
+- automated tests failed=0
+- mandatory skipped=0
+- GalviCare 0.5 regression PASS
+- GalviVault/clinician regression PASS
+- deployed candidate SHA proven
+- existing QA D1 binding proven
+- H1-H18 PASS
+- D1 assertions PASS
+- manual repair = NO
+- rollback PASS
+- no unresolved P0/P1 defects
+
+STOP/ROLLBACK for any red P0/P1 gate.
+There is no "mostly passed" Day 1.
+Do not begin Day 2 while any blocking gate is red.
+
+======================================================================
+23. REQUIRED FINAL IMPLEMENTATION REPORT
+======================================================================
+
+Return this structure:
+
+1. BASELINE
+- Repository / remote:
+- QA branch:
+- Baseline SHA:
+- origin/QA SHA:
+- origin/main SHA:
+- Baseline QA Worker deployment:
+- QA D1 binding / schema:
+- Rollback SHA / deployment:
+- Pre-change GalviCare regression: PASS | FAIL
+- Pre-change GalviVault/clinician regression: PASS | FAIL
+
+2. DAY 1 DIFF
+- Files added:
+- Files modified:
+- Unexpected files: NONE | <list>
+- Production files/config changed: MUST BE NO
+- Workflow changes: NONE | <exact justified change>
+- Migration added? YES | NO
+- Migration ID/checksum:
+
+3. SCHEMA / COMPATIBILITY
+- Existing canonical objects reused:
+- New objects/fields added:
+- Principal logical mapping:
+- BMR/BHR compatibility mapping:
+- Pre-Founder nullability:
+- QA-only migration proof:
+- Historical migrations unchanged: PASS | FAIL
+- Duplicate canonical store introduced: MUST BE NO
+
+4. LIFECYCLE / RECORD MODE
+- lifecycle_state: PASS | FAIL
+- care_protocol default/specialty: PASS | FAIL
+- payer_type metadata-only: PASS | FAIL
+- Pre-Founder null venture/BHR: PASS | FAIL
+- Operating founder one record: PASS | FAIL
+- Same person/new venture: PASS | FAIL
+- Replay/idempotency: PASS | FAIL
+
+5. CONSENT
+- Ledger/version/status/history: PASS | FAIL
+- Missing-consent protected action blocked: PASS | FAIL
+- Withdrawal/change history preserved: PASS | FAIL
+- Cross-person/forged actor denial: PASS | FAIL
+
+6. EVIDENCE
+- Four categories supported: PASS | FAIL
+- Provenance/version/validation: PASS | FAIL
+- Principal-only evidence: PASS | FAIL
+- Venture-scoped evidence: PASS | FAIL
+- Cross-record contamination: NONE | DEFECT
+- Immutable/supersession behavior: PASS | FAIL
+
+7. AUTHORIZATION / SECURITY
+- Role boundaries: PASS | FAIL
+- Unauthenticated protected action: DENIED | DEFECT
+- Cross-founder access: DENIED | DEFECT
+- Unassigned clinician/support overreach: DENIED | DEFECT
+- Existing clinician auth weakened: MUST BE NO
+
+8. RUNTIME / HEALTH
+- Candidate SHA:
+- QA Worker deployment ID / URL:
+- QA D1 binding:
+- Health release/schema/environment: PASS | FAIL
+- ai_enabled=false: PASS | FAIL
+- Structured error probe: PASS | FAIL
+- Deployment drift: NONE | DEFECT
+
+9. AUTOMATED / REGRESSION / HUMAN E2E
+- Day 1 tests: PASS | FAIL
+- Failed count:
+- Mandatory skipped: MUST BE 0
+- GalviCare 0.5 regression: PASS | FAIL
+- GalviVault/clinician regression: PASS | FAIL
+- Human E2E H1-H18: PASS | FAIL
+- D1 assertions: PASS | FAIL
+- Undocumented manual repair: MUST BE NO
+
+10. DEFECTS / REMEDIATION
+For each:
+- failing step/test:
+- exact error/status:
+- root cause:
+- files changed:
+- minimal fix:
+- focused retest:
+- regression result:
+- resolved? YES | NO
+
+11. ROLLBACK
+- Prior safe SHA:
+- Prior safe deployment:
+- Additive-schema compatibility:
+- Rollback procedure:
+- Rollback proof: PASS | FAIL
+
+12. DAY 2 HANDOFF
+- Final Day 1 SHA:
+- Final QA deployment:
+- Final QA schema:
+- Stable identity contract:
+- Stable consent contract:
+- Stable evidence contract:
+- Stable protocol/record_mode:
+- Stable authorization helpers:
+- GalviCare regression: PASS
+- GalviVault/clinician regression: PASS
+- Open P0/P1 defects: MUST BE NONE
+
+FINAL DECISION — emit exactly one:
+
+DAY 1 HUMAN E2E PASS
+DAY 1 BUILD FINAL
+CLINICAL / IDENTITY / CONSENT / RECORD FOUNDATION READY FOR DAY 2
+
+OR
+
+FAIL / STOP / ROLLBACK
+<exact blocking gates + rollback target>
+
+Do NOT claim PASS until deployed QA + D1 + Human E2E + regression + rollback evidence supports it.
+
+======================================================================
+24. DAY 2 HANDOFF RULE
+======================================================================
+
+Only after PASS, preserve this exact candidate as Day 2 baseline.
+
+Day 2 must consume, not recreate:
+- stable person/principal identity
+- principal_only Pre-Founder semantics
+- one-record-per-real-venture BMR/BHR
+- lifecycle_state
+- care_protocol
+- payer_type
+- record_mode
+- consent service/history
+- evidence/lineage service
+- server-side authorization
+- health/capability reporting
+
+ai_enabled remains false through Day 2.
+OpenAI activation belongs to Day 3.
+
+BEGIN NOW.
+
+FIRST output:
+1. BASELINE FINGERPRINT
+2. CURRENT SCHEMA/CAPABILITY INVENTORY
+3. DAY 1 COMPATIBILITY MAP
+4. ALLOWED-FILES MANIFEST
+5. DO NOT MODIFY LIST
+6. EXPECTED MINIMAL DIFF
+
+Do not change code until those six baseline artifacts prove the Day 1 entry gate is green.
+
+Then execute the phases sequentially.
+Stop at the first unresolved P0/P1 blocker.
+Prioritize critical-path completion over breadth, cleanup, optimization, or cosmetic work.
