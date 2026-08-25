@@ -7,9 +7,10 @@ import day7d, {
 /*
  * Day 3 critical-path compatibility layer.
  *
- * GalviShot / GalviSight / GalviPath follow-up questions are evidence intake.
- * They may be displayed and saved before a paid result is unlocked. Paid result
- * generation remains strictly server-entitlement-gated by day7d-engine.js.
+ * GalviScore clarification and GalviShot / GalviSight / GalviPath follow-up
+ * questions are evidence intake. The score clarification action surface remains
+ * owned by day7d-engine.js. Paid downstream result generation remains strictly
+ * server-entitlement-gated.
  *
  * This wrapper intentionally does NOT create an entitlement, trust a URL flag,
  * trust localStorage, or generate a paid product before verified entitlement.
@@ -20,6 +21,7 @@ const now = () => new Date().toISOString();
 const first = (db, sql, ...params) => db.prepare(sql).bind(...params).first();
 const run = (db, sql, ...params) => db.prepare(sql).bind(...params).run();
 const SKIPPED_ANSWER = 'Skipped for now — no additional evidence supplied.';
+const SCORE_ACTIONS = new Set(['get_or_generate_galviscore', 'save_galviscore_followup']);
 const PRE_ENTITLEMENT_PRODUCTS = new Set(['GalviShot', 'GalviSight', 'GalviPath']);
 const EVAL_ACTIONS = new Map([
   ['evaluate_galvishot', 'GalviShot'],
@@ -39,7 +41,7 @@ function json(body, status = 200, extra = {}) {
     headers: {
       'Content-Type': 'application/json',
       'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Headers': 'Content-Type',
+      'Access-Control-Allow-Headers': 'Content-Type, Cache-Control',
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Cache-Control': 'no-store',
       'X-Galvi-Day7D-Rules': DAY7D_RULES_VERSION,
@@ -252,6 +254,7 @@ async function augmentHealth(response) {
   body.day7d = {
     ...body.day7d,
     entrypoint: 'worker/day7d-day3-critical-path.js',
+    score_clarification_action_surface: true,
     pre_entitlement_evidence_capture: true,
     paid_generation_server_verified: true
   };
@@ -270,6 +273,11 @@ export default {
 
     const action = text(payload?.action);
     if (action === 'health_check') return augmentHealth(await day7d.fetch(request, env, ctx));
+
+    // GalviScore clarification is always delegated to the authoritative cumulative
+    // engine. This explicit route prevents a compatibility wrapper or future
+    // paid-product interceptor from swallowing the score follow-up actions.
+    if (SCORE_ACTIONS.has(action)) return day7d.fetch(request, env, ctx);
 
     const product = EVAL_ACTIONS.get(action) || SAVE_ACTIONS.get(action);
     if (!product || !PRE_ENTITLEMENT_PRODUCTS.has(product)) return day7d.fetch(request, env, ctx);
