@@ -16,6 +16,7 @@
     "OPENAI_MAX_INPUT_BYTES": "24000",
     "DAY3_CUSTOMER_PROJECTION": "v2",
     "DAY3_CUSTOMER_EVIDENCE_PROJECTION": "v2",
+    "DAY3_CUSTOMER_SESSION_BRIDGE": "true",
     "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,https://galvicare-0-5-qa.mrgalvipro.workers.dev,http://localhost:8787,http://127.0.0.1:8787"
   },
   "d1_databases": [
