@@ -51,15 +51,16 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
   }
 
   function patchLegacyScoreAction(){
-    const original=window.callGalviCareApi;
-    if(typeof original!=='function'||original.__day3CanonicalScoreBridge)return false;
-    const wrapped=async function(request){
-      if(request&&request.action===OLD_SCORE_ACTION)request={...request,action:CANONICAL_SCORE_ACTION};
-      return original(request);
-    };
-    wrapped.__day3CanonicalScoreBridge=true;
-    wrapped.__day3Original=original;
-    window.callGalviCareApi=wrapped;
+    const current=window.callGalviCareApi;
+    if(typeof current!=='function')return false;
+    /* Critical compatibility rule: Day 7D owns get_or_generate_galviscore and returns the
+       exact legacy projection contract required by renderUnlockedGalviScore. The Day 3
+       bridge MUST NOT translate that request to get_or_create_score, whose Day 2 response
+       shape is intentionally different. If an earlier bridge wrapper is still installed in
+       the same document, restore the underlying authoritative API function. */
+    if(current.__day3CanonicalScoreBridge&&typeof current.__day3Original==='function'){
+      window.callGalviCareApi=current.__day3Original;
+    }
     return true;
   }
 
@@ -168,10 +169,21 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
 
   function idempotency(scope,ref){return scope+'.'+safe(ref.context_id)+'.'+safe(session()||'session');}
 
+  function assertLegacyScoreContract(legacy){
+    const required=['galviscore_score','galviscore_confidence','galviscore_classification','category_scores'];
+    const missing=required.filter(key=>key==='category_scores'?!legacy?.category_scores||typeof legacy.category_scores!=='object':legacy?.[key]===undefined||legacy?.[key]===null||legacy?.[key]==='');
+    if(missing.length){
+      const error=new Error('Day 3 STOP: deterministic GalviScore projection contract is incomplete ('+missing.join(', ')+'). Governed AI was not projected.');
+      error.code='GV_DAY3_LEGACY_SCORE_CONTRACT';
+      throw error;
+    }
+    return legacy;
+  }
+
   async function ensureCanonicalDay2(ref){
     if(ref.record_mode==='principal_only')throw new Error('Pre-Founder principal-only intelligence uses the dedicated Day 3 Pre-Founder QA case; the Business Health customer bridge will not fabricate venture dimensions.');
-    const legacy=scoreResult();
-    if(!legacy||number(legacy.galviscore_score)===null)throw new Error('The deterministic GalviScore must be completed before governed AI can enrich the paid products.');
+    const legacy=assertLegacyScoreContract(scoreResult());
+    if(number(legacy.galviscore_score)===null)throw new Error('The deterministic GalviScore must be completed before governed AI can enrich the paid products.');
     const dimensions=canonicalDimensions(legacy.category_scores||{});
     let state=(await api('/api/v1/day2/intake-state/'+encodeURIComponent(ref.context_id),{actor:ref.actor})).data||{};
     if(!state.triage){
@@ -213,12 +225,14 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
 
   function style(){
     if(byId('day3-governed-ai-style'))return;
-    const node=document.createElement('style');node.id='day3-governed-ai-style';node.textContent='.day3-ai-card{border:1px solid #cbd5e1;background:#f8fbff;border-radius:14px;padding:18px;margin:16px 0 22px}.day3-ai-eyebrow{letter-spacing:.11em;text-transform:uppercase;font-size:12px;font-weight:800;color:#174a73}.day3-ai-card h2{margin:7px 0 8px}.day3-ai-lead{font-size:15px;line-height:1.55;color:#334155}.day3-ai-insight{background:#fff;border:1px solid #dbe5ee;border-left:4px solid #174a73;border-radius:10px;padding:14px;margin:12px 0}.day3-ai-insight h3{margin:0 0 8px;font-size:16px}.day3-ai-insight p{margin:7px 0;line-height:1.5}.day3-ai-meta{font-size:12px;color:#64748b}.day3-ai-list{padding-left:20px;line-height:1.55}.day3-ai-status{font-size:13px;color:#475569}.day3-ai-chip{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf3f8;color:#174a73;font-size:11px;font-weight:700;margin-right:6px}';document.head.appendChild(node);
+    const node=document.createElement('style');node.id='day3-governed-ai-style';node.textContent='.day3-ai-card{border:1px solid #cbd5e1;background:#f8fbff;border-radius:14px;padding:18px;margin:16px 0 22px}.day3-ai-eyebrow{letter-spacing:.11em;text-transform:uppercase;font-size:12px;font-weight:800;color:#174a73}.day3-ai-card h2{margin:7px 0 8px}.day3-ai-lead{font-size:15px;line-height:1.55;color:#334155}.day3-ai-insight{background:#fff;border:1px solid #dbe5ee;border-left:4px solid #174a73;border-radius:10px;padding:14px;margin:12px 0}.day3-ai-insight h3{margin:0 0 8px;font-size:16px}.day3-ai-insight p{margin:7px 0;line-height:1.5}.day3-ai-meta{font-size:12px;color:#64748b}.day3-ai-list{padding-left:20px;line-height:1.55}.day3-ai-status{font-size:13px;color:#475569}.day3-ai-chip{display:inline-block;padding:4px 8px;border-radius:999px;background:#eaf3f8;color:#174a73;font-size:11px;font-weight:700;margin-right:6px}.day3-ai-failure{border:1px solid #f0c7c7;background:#fff7f7;color:#7f1d1d;border-radius:12px;padding:14px;margin:14px 0;font-size:13px;line-height:1.45}';document.head.appendChild(node);
   }
   function addText(parent,tag,value,className){if(!text(value))return null;const node=document.createElement(tag);if(className)node.className=className;node.textContent=value;parent.appendChild(node);return node;}
   function addLabeled(parent,label,value){if(!text(value))return;const p=document.createElement('p');const strong=document.createElement('strong');strong.textContent=label+' ';p.appendChild(strong);p.appendChild(document.createTextNode(text(value)));parent.appendChild(p);}
   function list(parent,items,className='day3-ai-list'){const values=(Array.isArray(items)?items:[]).map(text).filter(Boolean);if(!values.length)return;const ul=document.createElement('ul');ul.className=className;values.forEach(value=>{const li=document.createElement('li');li.textContent=value;ul.appendChild(li)});parent.appendChild(ul)}
-  function card(product,title,lead){style();const id='day3-ai-'+product.toLowerCase();byId(id)?.remove();const host=product==='GalviShot'?byId('galvishot-result'):product==='GalviSight'?(byId('galvisight-result-panel')||byId('galvisight-handoff')):(byId('galvipath-result-panel')||byId('galvipath-result'));if(!host)return null;const node=document.createElement('section');node.id=id;node.className='day3-ai-card';addText(node,'div','GALVIENGINE™ | GOVERNED BUSINESS HEALTH INTELLIGENCE','day3-ai-eyebrow');addText(node,'h2',title);addText(node,'p',lead,'day3-ai-lead');host.insertBefore(node,host.firstChild);return node;}
+  function resultHost(product){return product==='GalviShot'?byId('galvishot-result'):product==='GalviSight'?(byId('galvisight-result-panel')||byId('galvisight-handoff')):(byId('galvipath-result-panel')||byId('galvipath-result'))}
+  function card(product,title,lead){style();const id='day3-ai-'+product.toLowerCase();byId(id)?.remove();const host=resultHost(product);if(!host)return null;byId('day3-ai-failure-'+product.toLowerCase())?.remove();const node=document.createElement('section');node.id=id;node.className='day3-ai-card';addText(node,'div','GALVIENGINE™ | GOVERNED BUSINESS HEALTH INTELLIGENCE','day3-ai-eyebrow');addText(node,'h2',title);addText(node,'p',lead,'day3-ai-lead');host.insertBefore(node,host.firstChild);return node;}
+  function projectionFailure(product,error){style();const host=resultHost(product);if(!host)return;const id='day3-ai-failure-'+product.toLowerCase();if(byId(id))return;const node=document.createElement('div');node.id=id;node.className='day3-ai-failure';node.textContent='QA GOVERNED-AI GATE: '+product+' deterministic fallback remains available, but governed intelligence was not projected in this run. Day 3 Human E2E must not be marked PASS. '+text(error?.code||'')+' '+text(error?.message||error);host.insertBefore(node,host.firstChild)}
   function metaLine(node,response){const meta=response?.meta||{};const p=document.createElement('p');p.className='day3-ai-meta';p.textContent='Evidence-grounded • '+(response?.data?.generation_source==='stored'?'Longitudinal result restored':'New governed analysis')+' • '+text(meta.model||'GalviEngine model')+' • '+text(meta.prompt_version||'versioned prompt');node.appendChild(p)}
 
   function renderShot(response){
@@ -242,7 +256,8 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
         await ensureCanonicalDay2(ref);
         const response=await reason(product,ref);
         if(response){render(product,response);rendered.set(product,key);console.info(SIGNATURE,product,'projected',response?.data?.generation_source,response?.meta?.ai_status||'',EVIDENCE_PROJECTION_VERSION)}
-      }catch(error){console.warn(SIGNATURE,product,'not projected:',error?.code||'',error?.message||error)}
+        else{const error=new Error('GalviEngine did not return accepted or stored governed intelligence for '+product+'.');error.code='GV_DAY3_AI_NOT_PROJECTABLE';projectionFailure(product,error)}
+      }catch(error){projectionFailure(product,error);console.warn(SIGNATURE,product,'not projected:',error?.code||'',error?.message||error)}
     })();inflight.set(key,op);try{await op}finally{inflight.delete(key)}
   }
 
@@ -250,7 +265,7 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
   function scan(){patchLegacyScoreAction();if(visible(byId('galvishot-result')))enrich('GalviShot');if(visible(byId('galvisight-result-panel')))enrich('GalviSight');if(visible(byId('galvipath-result-panel')))enrich('GalviPath')}
   function init(){patchLegacyScoreAction();scan();const observer=new MutationObserver(()=>queueMicrotask(scan));observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});let count=0;const timer=setInterval(()=>{scan();if(++count>120)clearInterval(timer)},500)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
-  window.GalviCareDay3GovernedAI={enrich,ensureCanonicalContext,ensureCanonicalDay2,patchLegacyScoreAction,businessContext,signature:SIGNATURE,evidenceProjectionVersion:EVIDENCE_PROJECTION_VERSION};
+  window.GalviCareDay3GovernedAI={enrich,ensureCanonicalContext,ensureCanonicalDay2,patchLegacyScoreAction,businessContext,assertLegacyScoreContract,signature:SIGNATURE,evidenceProjectionVersion:EVIDENCE_PROJECTION_VERSION};
 })();`;
 
 export default DAY3_CUSTOMER_BRIDGE_SOURCE;
