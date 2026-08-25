@@ -156,10 +156,46 @@ jobs:
           packageManager: npm
           command: deploy --config wrangler.day7d-runtime.generated.json
 
+      - name: Force exact uploaded Worker version to 100 percent traffic
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx wrangler versions list --name galvicare-triage-intake --config wrangler.day7d-runtime.generated.json --json > day7d-versions.json
+          VERSION_ID="$(node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const parsed=JSON.parse(fs.readFileSync('day7d-versions.json','utf8'));
+          const versions=Array.isArray(parsed)?parsed:(parsed.versions||parsed.items||parsed.result||[]);
+          if(!Array.isArray(versions)||!versions.length)throw new Error('No GalviCare QA Worker versions returned after upload.');
+          const row=versions[0]||{};
+          const id=row.id||row.version_id||row.versionId;
+          if(!id)throw new Error(`Latest Worker version has no recognizable ID: ${JSON.stringify(row)}`);
+          process.stdout.write(String(id));
+          NODE
+          )"
+          test -n "$VERSION_ID"
+          echo "DAY7D_WORKER_VERSION_ID=$VERSION_ID" >> "$GITHUB_ENV"
+          echo "Explicitly activating Worker version $VERSION_ID at 100% traffic."
+          npx wrangler versions deploy "${VERSION_ID}@100%" -y --name galvicare-triage-intake --config wrangler.day7d-runtime.generated.json --message "Day 3 exact-candidate activation ${DAY7D_RELEASE_ID}"
+          npx wrangler deployments list --name galvicare-triage-intake --config wrangler.day7d-runtime.generated.json --json > day7d-deployments.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const expected=process.env.DAY7D_WORKER_VERSION_ID;
+          const parsed=JSON.parse(fs.readFileSync('day7d-deployments.json','utf8'));
+          const deployments=Array.isArray(parsed)?parsed:(parsed.deployments||parsed.items||parsed.result||[]);
+          if(!Array.isArray(deployments)||!deployments.length)throw new Error('No active Worker deployments returned after explicit activation.');
+          const latest=deployments[0];
+          const serialized=JSON.stringify(latest);
+          if(!serialized.includes(expected))throw new Error(`Latest active deployment does not contain expected Worker version ${expected}: ${serialized}`);
+          console.log(`PASS: Cloudflare deployment metadata contains exact activated Worker version ${expected}.`);
+          NODE
+
       - name: Remove generated runtime config
         if: always()
         shell: bash
-        run: rm -f wrangler.day7d-runtime.generated.json
+        run: rm -f wrangler.day7d-runtime.generated.json day7d-versions.json day7d-deployments.json
 
       - name: Deploy authoritative QA frontend
         uses: cloudflare/wrangler-action@v3
@@ -207,18 +243,12 @@ jobs:
               const mismatches=[];
               if(!response.ok||body?.success!==true)mismatches.push(`health http/success=${response.status}/${body?.success}`);
               for(const [key,value] of Object.entries(expected))if(body?.day7d?.[key]!==value)mismatches.push(`${key}: ${JSON.stringify(body?.day7d?.[key])}`);
-
-              // P0 deployed action-surface proof. Health metadata alone previously allowed
-              // a false positive while the customer-facing /api route still served the
-              // legacy UNSUPPORTED_API_ACTION response. This read-only synthetic session
-              // must be routed by Day 7D and fail closed at entitlement, never at routing.
               const routeResponse=await fetch(process.env.QA_API_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'get_or_generate_galviscore',session_id:`__day3_route_probe_${nonce}`,payload:{}})});
               let routeBody={};
               try{routeBody=await routeResponse.json();}catch{mismatches.push(`clarification route returned non-JSON http=${routeResponse.status}`);}
               if(routeBody?.code==='UNSUPPORTED_API_ACTION'||routeBody?.message==='Unsupported /api action')mismatches.push('clarification route is still served by legacy UNSUPPORTED_API_ACTION runtime');
               if(routeResponse.status!==402||routeBody?.status!=='locked'||routeBody?.product!=='GalviScore')mismatches.push(`clarification route contract=${routeResponse.status}/${routeBody?.status}/${routeBody?.product}`);
               if(routeResponse.headers.get('x-galvi-day7d-rules')!==process.env.DAY7D_RULES_VERSION)mismatches.push(`clarification route rules header=${routeResponse.headers.get('x-galvi-day7d-rules')}`);
-
               last={mismatches,health_status:response.status,route_status:routeResponse.status,route_body:routeBody};
               consecutive=mismatches.length===0?consecutive+1:0;
               if(consecutive>=3){console.log('PASS: deployed deterministic Worker, clarification action surface, and pre-entitlement evidence boundary converged.');process.exit(0);}
@@ -243,6 +273,7 @@ jobs:
           echo '## GALVICARE DAY 3 CUSTOMER PATH QA RELEASE: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo "- Candidate SHA: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Candidate fingerprint: $DAY7D_RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Explicit Worker version: $DAY7D_WORKER_VERSION_ID" >> "$GITHUB_STEP_SUMMARY"
           echo '- Deterministic GalviScore response contract preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Deployed get_or_generate_galviscore route contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Pre-entitlement follow-up evidence capture: PASS' >> "$GITHUB_STEP_SUMMARY"
