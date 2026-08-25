@@ -156,36 +156,10 @@ jobs:
           packageManager: npm
           command: deploy --config wrangler.day7d-runtime.generated.json
 
-      - name: Activate newest uploaded Worker version at 100 percent traffic
-        shell: bash
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          set -euo pipefail
-          npx wrangler versions list --name galvicare-triage-intake --config wrangler.day7d-runtime.generated.json --json > day7d-versions.json
-          VERSION_ID="$(node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const parsed=JSON.parse(fs.readFileSync('day7d-versions.json','utf8'));
-          const versions=Array.isArray(parsed)?parsed:(parsed.versions||parsed.items||parsed.result||[]);
-          if(!Array.isArray(versions)||!versions.length) throw new Error('No GalviCare QA Worker versions returned after upload.');
-          const timestamp=row=>Date.parse(row.created_on||row.createdOn||row.created_at||row.createdAt||0)||0;
-          const newest=[...versions].sort((a,b)=>timestamp(b)-timestamp(a))[0]||{};
-          const id=newest.id||newest.version_id||newest.versionId;
-          if(!id) throw new Error(`Newest Worker version has no recognizable ID: ${JSON.stringify(newest)}`);
-          process.stdout.write(String(id));
-          NODE
-          )"
-          test -n "$VERSION_ID"
-          echo "DAY7D_WORKER_VERSION_ID=$VERSION_ID" >> "$GITHUB_ENV"
-          echo "Explicitly activating newest Worker version $VERSION_ID at 100% traffic."
-          npx wrangler versions deploy "${VERSION_ID}@100%" -y --name galvicare-triage-intake --config wrangler.day7d-runtime.generated.json --message "Day 3 exact-candidate activation ${DAY7D_RELEASE_ID}"
-          echo "PASS: explicit 100% activation command succeeded for newest uploaded Worker version $VERSION_ID. Live action-surface proof remains authoritative."
-
       - name: Remove generated runtime config
         if: always()
         shell: bash
-        run: rm -f wrangler.day7d-runtime.generated.json day7d-versions.json
+        run: rm -f wrangler.day7d-runtime.generated.json
 
       - name: Deploy authoritative QA frontend
         uses: cloudflare/wrangler-action@v3
@@ -253,7 +227,20 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           const deadline=Date.now()+120000;let consecutive=0,last=null;
-          while(Date.now()<deadline){try{const healthResponse=await fetch(`${process.env.QA_FRONTEND_URL}/health?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});const health=await healthResponse.json();const response=await fetch(`${process.env.QA_FRONTEND_URL}/?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});const html=await response.text();const required=['Day 7D cumulative customer-intelligence browser adapter.','GalviCare Day 3 governed AI customer bridge v2','GOVERNED BUSINESS HEALTH INTELLIGENCE','X-Galvi-Day3-Session','/api/v1/day3/customer-bootstrap','holdForEntitlement'];const valid=response.ok&&healthResponse.ok&&health?.release_id===process.env.DAY7D_RELEASE_ID&&required.every(token=>html.includes(token));last={status:response.status,health_status:healthResponse.status,release_id:health?.release_id,missing:required.filter(token=>!html.includes(token))};consecutive=valid?consecutive+1:0;if(consecutive>=3){console.log('PASS: deployed QA frontend matches canonical-session governed-AI candidate.');process.exit(0);}}catch(error){last={error:String(error)};consecutive=0;}await new Promise(resolve=>setTimeout(resolve,2500));}
+          while(Date.now()<deadline){
+            try{
+              const healthResponse=await fetch(`${process.env.QA_FRONTEND_URL}/health?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
+              const health=await healthResponse.json();
+              const response=await fetch(`${process.env.QA_FRONTEND_URL}/?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
+              const html=await response.text();
+              const required=['Day 7D cumulative customer-intelligence browser adapter.','GalviCare Day 3 governed AI customer bridge v2','GOVERNED BUSINESS HEALTH INTELLIGENCE','X-Galvi-Day3-Session','/api/v1/day3/customer-bootstrap','holdForEntitlement'];
+              const valid=response.ok&&healthResponse.ok&&health?.release_id===process.env.DAY7D_RELEASE_ID&&required.every(token=>html.includes(token));
+              last={status:response.status,health_status:healthResponse.status,release_id:health?.release_id,missing:required.filter(token=>!html.includes(token))};
+              consecutive=valid?consecutive+1:0;
+              if(consecutive>=3){console.log('PASS: deployed QA frontend matches canonical-session governed-AI candidate.');process.exit(0);}
+            }catch(error){last={error:String(error)};consecutive=0;}
+            await new Promise(resolve=>setTimeout(resolve,2500));
+          }
           throw new Error(`QA frontend did not converge: ${JSON.stringify(last)}`);
           NODE
 
@@ -263,7 +250,6 @@ jobs:
           echo '## GALVICARE DAY 3 CUSTOMER PATH QA RELEASE: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo "- Candidate SHA: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Candidate fingerprint: $DAY7D_RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Explicit Worker version: $DAY7D_WORKER_VERSION_ID" >> "$GITHUB_STEP_SUMMARY"
           echo '- Deterministic GalviScore response contract preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Deployed get_or_generate_galviscore route contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Pre-entitlement follow-up evidence capture: PASS' >> "$GITHUB_STEP_SUMMARY"
