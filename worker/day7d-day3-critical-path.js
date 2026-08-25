@@ -5,15 +5,18 @@ import day7d, {
 } from './day7d-engine.js';
 
 /*
- * Day 3 critical-path compatibility layer.
+ * Day 3 critical-path customer API compatibility layer.
  *
- * GalviScore clarification and GalviShot / GalviSight / GalviPath follow-up
- * questions are evidence intake. The score clarification action surface remains
- * owned by day7d-engine.js. Paid downstream result generation remains strictly
- * server-entitlement-gated.
- *
- * This wrapper intentionally does NOT create an entitlement, trust a URL flag,
- * trust localStorage, or generate a paid product before verified entitlement.
+ * P0 invariants:
+ * - GalviScore clarification and downstream GalviShot / GalviSight / GalviPath
+ *   questions are evidence intake and must never disappear merely because
+ *   deterministic/reconciliation confidence is high.
+ * - GalviScore keeps its one targeted clarification question.
+ * - GalviShot / GalviSight / GalviPath each require three bounded, server-owned,
+ *   non-repeating targeted questions before that stage can generate a result.
+ * - Answers are versioned evidence. Paid generation remains server-entitlement-gated.
+ * - Browser/legacy action aliases are normalized here so a known customer action
+ *   never falls through to the legacy UNSUPPORTED_API_ACTION router.
  */
 const text = (value) => String(value ?? '').trim();
 const low = (value) => text(value).toLowerCase();
@@ -21,8 +24,31 @@ const now = () => new Date().toISOString();
 const first = (db, sql, ...params) => db.prepare(sql).bind(...params).first();
 const run = (db, sql, ...params) => db.prepare(sql).bind(...params).run();
 const SKIPPED_ANSWER = 'Skipped for now — no additional evidence supplied.';
-const SCORE_ACTIONS = new Set(['get_or_generate_galviscore', 'save_galviscore_followup']);
+const DOWNSTREAM_REQUIRED_QUESTION_COUNT = 3;
 const PRE_ENTITLEMENT_PRODUCTS = new Set(['GalviShot', 'GalviSight', 'GalviPath']);
+
+const ACTION_ALIASES = new Map([
+  ['get_or_create_galviscore', 'get_or_generate_galviscore'],
+  ['get_galviscore', 'get_or_generate_galviscore'],
+  ['generate_galviscore', 'get_or_generate_galviscore'],
+  ['get_or_generate_galvishot', 'get_or_create_galvishot'],
+  ['get_galvishot', 'get_or_create_galvishot'],
+  ['generate_galvishot', 'get_or_create_galvishot'],
+  ['get_or_create_galvisight', 'get_or_generate_galvisight'],
+  ['get_galvisight', 'get_or_generate_galvisight'],
+  ['generate_galvisight', 'get_or_generate_galvisight'],
+  ['get_or_create_galvipath', 'get_or_generate_galvipath'],
+  ['generate_galvipath', 'get_or_generate_galvipath'],
+  ['save_galvishot_followups', 'save_galvishot_followup'],
+  ['save_galvisight_followups', 'save_galvisight_followup'],
+  ['save_galvipath_followups', 'save_galvipath_followup']
+]);
+
+const SCORE_ACTIONS = new Set([
+  'evaluate_galviscore',
+  'get_or_generate_galviscore',
+  'save_galviscore_followup'
+]);
 const EVAL_ACTIONS = new Map([
   ['evaluate_galvishot', 'GalviShot'],
   ['evaluate_galvisight_readiness', 'GalviSight'],
@@ -34,6 +60,22 @@ const SAVE_ACTIONS = new Map([
   ['save_galvisight_followup', 'GalviSight'],
   ['save_galvipath_followup', 'GalviPath']
 ]);
+const GET_ACTIONS = new Map([
+  ['get_or_create_galvishot', 'GalviShot'],
+  ['get_or_generate_galvisight', 'GalviSight'],
+  ['get_or_generate_galvipath', 'GalviPath'],
+  ['get_galvipath', 'GalviPath']
+]);
+const CANONICAL_GET_ACTION = {
+  GalviShot: 'get_or_create_galvishot',
+  GalviSight: 'get_or_generate_galvisight',
+  GalviPath: 'get_or_generate_galvipath'
+};
+
+function canonicalAction(value) {
+  const action = text(value);
+  return ACTION_ALIASES.get(action) || action;
+}
 
 function json(body, status = 200, extra = {}) {
   return new Response(JSON.stringify(body), {
@@ -45,9 +87,21 @@ function json(body, status = 200, extra = {}) {
       'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
       'Cache-Control': 'no-store',
       'X-Galvi-Day7D-Rules': DAY7D_RULES_VERSION,
+      'X-Galvi-Day3-Question-Contract': 'score-1-downstream-3',
       'X-Galvi-Day3-PreEntitlement-Evidence': 'active',
       ...extra
     }
+  });
+}
+
+function forwardedRequest(request, payload, action) {
+  if (text(payload?.action) === action) return request;
+  const headers = new Headers(request.headers);
+  headers.set('Content-Type', 'application/json');
+  return new Request(request.url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ...payload, action })
   });
 }
 
@@ -101,14 +155,25 @@ async function bumpEvidence(db, sessionId, reason) {
 }
 
 function currentQuestions(file, product) {
-  return chooseFollowups(
-    file.reconciliation,
-    file.followups_by_product?.[product] || {},
-    product
-  );
+  const existing = file.followups_by_product?.[product] || {};
+  if (product === 'GalviScore') {
+    return chooseFollowups(file.reconciliation, existing, product);
+  }
+
+  // The questions exist to collect the customer's situation for longitudinal care
+  // and governed AI synthesis. Confidence may affect interpretation, but it must not
+  // eliminate the evidence-intake step. Reuse the authoritative server question bank
+  // by evaluating it at the three-question band while preserving all other clinical
+  // reconciliation facts and completed-question state.
+  const evidenceIntakeReconciliation = {
+    ...file.reconciliation,
+    confidence: Math.min(59, Number(file.reconciliation?.confidence || 0))
+  };
+  return chooseFollowups(evidenceIntakeReconciliation, existing, product)
+    .slice(0, DOWNSTREAM_REQUIRED_QUESTION_COUNT);
 }
 
-function evaluationPayload(file, product) {
+function evaluationPayload(file, product, hasEntitlement = false) {
   const questions = currentQuestions(file, product);
   if (questions.length) {
     return {
@@ -119,26 +184,51 @@ function evaluationPayload(file, product) {
       confidence: file.reconciliation.confidence,
       evidence_version: file.evidence_version,
       rules_version: DAY7D_RULES_VERSION,
+      required_question_count: product === 'GalviScore' ? 1 : DOWNSTREAM_REQUIRED_QUESTION_COUNT,
+      questions_remaining: questions.length,
       followups: questions,
       followup_questions: questions,
-      payment_required: true,
+      payment_required: product === 'GalviScore' ? !hasEntitlement : true,
       result_generation_locked: true,
       next_screen: product
     };
   }
+
+  if (!hasEntitlement) {
+    return {
+      success: true,
+      status: 'entitlement_required',
+      session_id: file.session_id,
+      product,
+      confidence: file.reconciliation.confidence,
+      evidence_version: file.evidence_version,
+      rules_version: DAY7D_RULES_VERSION,
+      required_question_count: product === 'GalviScore' ? 1 : DOWNSTREAM_REQUIRED_QUESTION_COUNT,
+      questions_remaining: 0,
+      followups: [],
+      followup_questions: [],
+      payment_required: true,
+      evidence_ready: true,
+      result_generation_locked: true,
+      next_screen: product
+    };
+  }
+
   return {
     success: true,
-    status: 'entitlement_required',
+    status: 'evidence_ready',
     session_id: file.session_id,
     product,
     confidence: file.reconciliation.confidence,
     evidence_version: file.evidence_version,
     rules_version: DAY7D_RULES_VERSION,
+    required_question_count: product === 'GalviScore' ? 1 : DOWNSTREAM_REQUIRED_QUESTION_COUNT,
+    questions_remaining: 0,
     followups: [],
     followup_questions: [],
-    payment_required: true,
+    payment_required: false,
     evidence_ready: true,
-    result_generation_locked: true,
+    result_generation_locked: false,
     next_screen: product
   };
 }
@@ -197,16 +287,16 @@ async function saveOne(db, sessionId, product, input, allowed) {
   return { invalid: false, changed: true, already_saved: false };
 }
 
-async function handlePreEntitlementEvaluation(env, sessionId, product, action) {
+async function handleEvaluation(env, sessionId, product, action, hasEntitlement) {
   const file = await clinicalFile(env.DB, sessionId);
-  return json({ action, ...evaluationPayload(file, product) });
+  return json({ action, ...evaluationPayload(file, product, hasEntitlement) });
 }
 
-async function handlePreEntitlementSave(env, sessionId, product, action, payload) {
+async function handleSave(env, sessionId, product, action, payload, hasEntitlement, request, ctx) {
   const beforeFile = await clinicalFile(env.DB, sessionId);
   const allowed = currentQuestions(beforeFile, product);
   const answers = payload?.payload?.answers || payload?.answers || [];
-  const list = (Array.isArray(answers) ? answers : [answers]).slice(0, 3);
+  const list = (Array.isArray(answers) ? answers : [answers]).slice(0, DOWNSTREAM_REQUIRED_QUESTION_COUNT);
   if (!list.length) {
     return json({ success: false, status: 'validation_error', product, detail: 'At least one answer is required.' }, 400);
   }
@@ -229,22 +319,43 @@ async function handlePreEntitlementSave(env, sessionId, product, action, payload
 
   const before = beforeFile.evidence_version;
   const after = changed
-    ? await bumpEvidence(env.DB, sessionId, `${product}:pre_entitlement_followup_submission`)
+    ? await bumpEvidence(env.DB, sessionId, `${product}:required_customer_context_submission`)
     : await evidenceVersion(env.DB, sessionId);
   const afterFile = await clinicalFile(env.DB, sessionId);
-  const evaluation = evaluationPayload(afterFile, product);
+  const evaluation = evaluationPayload(afterFile, product, hasEntitlement);
+
+  if (evaluation.status === 'needs_followup' || evaluation.status === 'entitlement_required') {
+    return json({
+      action,
+      ...evaluation,
+      evaluation,
+      save_status: already ? 'already_saved' : 'saved',
+      evidence_version_before: before,
+      evidence_version: after,
+      evidence_version_bumped: after > before,
+      evidence_saved: true,
+      paid_result_generated: false
+    });
+  }
+
+  const getAction = CANONICAL_GET_ACTION[product];
+  const generationRequest = forwardedRequest(request, { ...payload, payload: {}, session_id: sessionId }, getAction);
+  const generated = await day7d.fetch(generationRequest, env, ctx);
+  let generatedBody = {};
+  try { generatedBody = await generated.clone().json(); } catch {}
+  if (!generated.ok || generatedBody?.success === false) return generated;
 
   return json({
     action,
-    ...evaluation,
+    ...generatedBody,
     evaluation,
     save_status: already ? 'already_saved' : 'saved',
     evidence_version_before: before,
     evidence_version: after,
     evidence_version_bumped: after > before,
     evidence_saved: true,
-    paid_result_generated: false
-  });
+    paid_result_generated: true
+  }, generated.status);
 }
 
 async function augmentHealth(response) {
@@ -258,7 +369,10 @@ async function augmentHealth(response) {
     score_clarification_get_action: 'get_or_generate_galviscore',
     score_clarification_save_action: 'save_galviscore_followup',
     pre_entitlement_evidence_capture: true,
-    paid_generation_server_verified: true
+    paid_generation_server_verified: true,
+    browser_api_alias_normalization: true,
+    downstream_required_question_count: DOWNSTREAM_REQUIRED_QUESTION_COUNT,
+    downstream_questions_always_collect_customer_context: true
   };
   return json(body, response.status);
 }
@@ -273,39 +387,57 @@ export default {
     try { payload = await request.clone().json(); }
     catch { return day7d.fetch(request, env, ctx); }
 
-    const action = text(payload?.action);
-    if (action === 'health_check') return augmentHealth(await day7d.fetch(request, env, ctx));
+    const rawAction = text(payload?.action);
+    const action = canonicalAction(rawAction);
+    const routed = forwardedRequest(request, payload, action);
 
-    // GalviScore clarification is always delegated to the authoritative cumulative
-    // engine. This explicit route prevents a compatibility wrapper or future
-    // paid-product interceptor from swallowing the score follow-up actions.
-    if (SCORE_ACTIONS.has(action)) return day7d.fetch(request, env, ctx);
+    if (action === 'health_check') return augmentHealth(await day7d.fetch(routed, env, ctx));
 
-    const product = EVAL_ACTIONS.get(action) || SAVE_ACTIONS.get(action);
-    if (!product || !PRE_ENTITLEMENT_PRODUCTS.has(product)) return day7d.fetch(request, env, ctx);
+    // GalviScore remains owned by the cumulative engine. Normalize aliases first so
+    // the browser cannot fall through to the legacy unsupported-action surface.
+    if (SCORE_ACTIONS.has(action)) return day7d.fetch(routed, env, ctx);
+
+    const product = EVAL_ACTIONS.get(action) || SAVE_ACTIONS.get(action) || GET_ACTIONS.get(action);
+    if (!product || !PRE_ENTITLEMENT_PRODUCTS.has(product)) return day7d.fetch(routed, env, ctx);
     if (!env?.DB) return json({ success: false, status: 'error', message: 'D1 binding DB is not configured' }, 500);
 
     const sessionId = text(payload?.session_id || payload?.session?.session_id);
     if (!sessionId) return json({ success: false, status: 'error', message: 'Missing session_id' }, 400);
 
-    if (await entitled(env.DB, sessionId, product)) {
-      return day7d.fetch(request, env, ctx);
-    }
-
     try {
+      const hasEntitlement = await entitled(env.DB, sessionId, product);
+
       if (EVAL_ACTIONS.has(action)) {
-        return await handlePreEntitlementEvaluation(env, sessionId, product, action);
+        return await handleEvaluation(env, sessionId, product, action, hasEntitlement);
       }
-      return await handlePreEntitlementSave(env, sessionId, product, action, payload);
+
+      if (SAVE_ACTIONS.has(action)) {
+        return await handleSave(env, sessionId, product, action, payload, hasEntitlement, routed, ctx);
+      }
+
+      // A paid result may not bypass its required evidence-intake questions. This
+      // route is authoritative both before and after entitlement.
+      const file = await clinicalFile(env.DB, sessionId);
+      const evaluation = evaluationPayload(file, product, hasEntitlement);
+      if (evaluation.status === 'needs_followup') {
+        return json({ action, ...evaluation });
+      }
+      if (!hasEntitlement) {
+        return json({ action, ...evaluation }, 200);
+      }
+
+      const canonicalGet = CANONICAL_GET_ACTION[product];
+      return day7d.fetch(forwardedRequest(routed, { ...payload, action, session_id: sessionId }, canonicalGet), env, ctx);
     } catch (error) {
-      console.error('Day 3 pre-entitlement evidence path', action, error?.stack || error);
+      console.error('Day 3 customer evidence/API path', action, error?.stack || error);
       return json({
         success: false,
         status: 'error',
         action,
+        requested_action: rawAction,
         product,
-        error_code: 'DAY3_PRE_ENTITLEMENT_EVIDENCE_ERROR',
-        message: 'Customer evidence could not be saved safely before entitlement.',
+        error_code: 'DAY3_CUSTOMER_API_EVIDENCE_ERROR',
+        message: 'Customer evidence could not be processed safely.',
         detail: String(error?.message || error)
       }, 500);
     }
