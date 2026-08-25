@@ -4,5 +4,8 @@
   "main": "qa-frontend-worker.js",
   "compatibility_date": "2026-07-27",
   "workers_dev": true,
-  "no_bundle": false
+  "no_bundle": false,
+  "vars": {
+    "DAY3_CUSTOMER_EVIDENCE_PROJECTION": "v2"
+  }
 }

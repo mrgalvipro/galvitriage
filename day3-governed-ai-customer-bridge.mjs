@@ -2,12 +2,14 @@
  * Critical-path purpose:
  * 1) keep the passed deterministic 0.5/Day 1/Day 2 customer journey intact;
  * 2) project accepted Day 3 governed OpenAI intelligence into the paid customer surfaces;
- * 3) keep one canonical QA principal/BHR and persist the deterministic baseline in GalviVault before AI reasoning;
- * 4) never call OpenAI from the browser and never replace deterministic GalviScore truth.
+ * 3) carry founder-reported qualitative situation into the governed evidence bundle;
+ * 4) keep one canonical QA principal/BHR and persist the deterministic baseline in GalviVault before AI reasoning;
+ * 5) never call OpenAI from the browser and never replace deterministic GalviScore truth.
  */
 const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
   'use strict';
   const SIGNATURE='GalviCare Day 3 governed AI customer bridge v1';
+  const EVIDENCE_PROJECTION_VERSION='v2';
   const DAY3_BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev';
   const BRIDGE_STORE='galvicare_day3_customer_bridge_v1';
   const DAY1_HUMAN_STORE='galvicare_day1_human_e2e_v1';
@@ -30,6 +32,23 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
   const parseStore=(key)=>{try{return JSON.parse(localStorage.getItem(key)||'{}')}catch{return{}}};
   const saveStore=(patch)=>{const next={...parseStore(BRIDGE_STORE),...patch};localStorage.setItem(BRIDGE_STORE,JSON.stringify(next));return next};
   const actorFromEmail=(email)=>{const match=text(email).toLowerCase().match(/^day1\.([a-z0-9._-]+)@example\.invalid$/);return match?'principal:'+match[1]:''};
+  const field=(name)=>text(q('[name="'+name+'"]')?.value);
+
+  function businessContext(){
+    return {
+      organization_stage:field('organization_stage'),
+      organization_type:field('organization_type'),
+      industry:field('industry'),
+      team_size:field('team_size'),
+      revenue_range:field('revenue_range'),
+      highest_impact_area:field('highest_impact_area'),
+      biggest_challenge:field('biggest_challenge'),
+      one_30_day_problem:field('one_30_day_problem'),
+      growth_blocker:field('growth_blocker'),
+      feels_broken:field('feels_broken'),
+      keeps_up_at_night:field('keeps_up_at_night')
+    };
+  }
 
   function patchLegacyScoreAction(){
     const original=window.callGalviCareApi;
@@ -161,7 +180,7 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
         acuity:acuityFromClassification(legacy.galviscore_classification),
         confidence:confidenceComponents(legacy.galviscore_confidence),
         red_flags:[],followup_round:0,
-        answers:{source:'galvicare_customer_deterministic_bridge_v1',legacy_session_id:session(),classification:legacy.galviscore_classification,top_priorities:legacy.galviscore_top_priorities||'',category_scores:legacy.category_scores||{}}
+        answers:{source:'galvicare_customer_evidence_bridge_v2',projection_version:EVIDENCE_PROJECTION_VERSION,legacy_session_id:session(),founder_reported_context:businessContext(),classification:legacy.galviscore_classification,top_priorities:legacy.galviscore_top_priorities||'',category_scores:legacy.category_scores||{}}
       }});
     }
     if(!state.vitals){
@@ -203,26 +222,26 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
   function metaLine(node,response){const meta=response?.meta||{};const p=document.createElement('p');p.className='day3-ai-meta';p.textContent='Evidence-grounded • '+(response?.data?.generation_source==='stored'?'Longitudinal result restored':'New governed analysis')+' • '+text(meta.model||'GalviEngine model')+' • '+text(meta.prompt_version||'versioned prompt');node.appendChild(p)}
 
   function renderShot(response){
-    const content=response?.data?.content||{};const node=card('GalviShot','What GalviCare Understands About Your Situation','GalviCare connected the evidence in your Business Health Record to explain which conditions deserve attention first, why they matter together, and what would reduce uncertainty next.');if(!node)return;
+    const content=response?.data?.content||{};const node=card('GalviShot','What GalviCare Understands About Your Situation','GalviCare connected your stated priorities, operating context and Business Health evidence to explain which conditions deserve attention first, why they matter together, and what would reduce uncertainty next.');if(!node)return;
     (content.findings||[]).forEach((finding,index)=>{const box=document.createElement('div');box.className='day3-ai-insight';addText(box,'h3',(index+1)+'. '+text(finding.statement||finding.finding_code||'Priority finding'));addLabeled(box,'What the evidence suggests:',finding.reasoning_summary);addLabeled(box,'Why this matters now:',finding.why_it_matters);addLabeled(box,'Next best move:',finding.next_step);const footer=document.createElement('div');footer.className='day3-ai-meta';footer.textContent='Severity: '+text(finding.severity||'bounded')+' • Evidence confidence: '+Math.round(clamp(number(finding.confidence)??0,0,1)*100)+'%'+(finding.hypothesis_only?' • Hypothesis — not established fact':'');box.appendChild(footer);node.appendChild(box)});metaLine(node,response);
   }
   function renderSight(response){
-    const content=response?.data?.content||{};const node=card('GalviSight','Why These Symptoms May Be Happening','GalviSight moves beyond the score to connect patterns across the record, distinguish evidence from hypotheses, and show what would change the working diagnosis.');if(!node)return;addText(node,'p',content.summary,'day3-ai-lead');if((content.implications||[]).length){addText(node,'h3','What this means for your next decision');list(node,content.implications)};(content.hypotheses||[]).forEach((hypothesis,index)=>{const box=document.createElement('div');box.className='day3-ai-insight';addText(box,'h3','Hypothesis '+(index+1)+': '+text(hypothesis.statement||hypothesis.code));addLabeled(box,'Evidence confidence:',Math.round(clamp(number(hypothesis.confidence)??0,0,1)*100)+'%');if((hypothesis.what_would_change_this||[]).length){addText(box,'strong','What would change this view');list(box,hypothesis.what_would_change_this)}node.appendChild(box)});metaLine(node,response);
+    const content=response?.data?.content||{};const node=card('GalviSight','Why These Symptoms May Be Happening','GalviSight moves beyond the score to connect your stated situation with patterns across the record, distinguish evidence from hypotheses, and show what would change the working diagnosis.');if(!node)return;addText(node,'p',content.summary,'day3-ai-lead');if((content.implications||[]).length){addText(node,'h3','What this means for your next decision');list(node,content.implications)};(content.hypotheses||[]).forEach((hypothesis,index)=>{const box=document.createElement('div');box.className='day3-ai-insight';addText(box,'h3','Hypothesis '+(index+1)+': '+text(hypothesis.statement||hypothesis.code));addLabeled(box,'Evidence confidence:',Math.round(clamp(number(hypothesis.confidence)??0,0,1)*100)+'%');if((hypothesis.what_would_change_this||[]).length){addText(box,'strong','What would change this view');list(box,hypothesis.what_would_change_this)}node.appendChild(box)});metaLine(node,response);
   }
   function renderPath(response){
-    const content=response?.data?.content||{};const node=card('GalviPath','Your Personalized Business Health Care Plan','GalviPath turns the diagnosis into a bounded sequence: what to do first, what evidence to collect, when to reassess, and when the situation should escalate to human care.');if(!node)return;addLabeled(node,'Care objective:',content.objective);if((content.sequence||[]).length){addText(node,'h3','Recommended sequence');const ol=document.createElement('ol');ol.className='day3-ai-list';content.sequence.forEach(step=>{const li=document.createElement('li');li.textContent=text(step);ol.appendChild(li)});node.appendChild(ol)}if((content.evidence_required||[]).length){addText(node,'h3','Evidence to collect');list(node,content.evidence_required)}addLabeled(node,'Check-in cadence:',content.cadence);addLabeled(node,'Escalate when:',content.escalation);const chips=document.createElement('div');const owner=document.createElement('span');owner.className='day3-ai-chip';owner.textContent='Owner: '+text(content.owner);chips.appendChild(owner);const support=document.createElement('span');support.className='day3-ai-chip';support.textContent='Care level: '+text(content.support_level);chips.appendChild(support);node.appendChild(chips);metaLine(node,response);
+    const content=response?.data?.content||{};const node=card('GalviPath','Your Personalized Business Health Care Plan','GalviPath turns the diagnosis and your stated near-term priorities into a bounded sequence: what to do first, what evidence to collect, when to reassess, and when the situation should escalate to human care.');if(!node)return;addLabeled(node,'Care objective:',content.objective);if((content.sequence||[]).length){addText(node,'h3','Recommended sequence');const ol=document.createElement('ol');ol.className='day3-ai-list';content.sequence.forEach(step=>{const li=document.createElement('li');li.textContent=text(step);ol.appendChild(li)});node.appendChild(ol)}if((content.evidence_required||[]).length){addText(node,'h3','Evidence to collect');list(node,content.evidence_required)}addLabeled(node,'Check-in cadence:',content.cadence);addLabeled(node,'Escalate when:',content.escalation);const chips=document.createElement('div');const owner=document.createElement('span');owner.className='day3-ai-chip';owner.textContent='Owner: '+text(content.owner);chips.appendChild(owner);const support=document.createElement('span');support.className='day3-ai-chip';support.textContent='Care level: '+text(content.support_level);chips.appendChild(support);node.appendChild(chips);metaLine(node,response);
   }
   function render(product,response){if(product==='GalviShot')renderShot(response);else if(product==='GalviSight')renderSight(response);else renderPath(response)}
 
   async function enrich(product){
-    const legacy=scoreResult();const key=product+':'+session()+':'+JSON.stringify({score:legacy?.galviscore_score,confidence:legacy?.galviscore_confidence,dimensions:legacy?.category_scores});
+    const legacy=scoreResult();const key=product+':'+session()+':'+JSON.stringify({score:legacy?.galviscore_score,confidence:legacy?.galviscore_confidence,dimensions:legacy?.category_scores,context:businessContext()});
     if(rendered.get(product)===key||inflight.has(key))return;
     const op=(async()=>{
       try{
         const ref=await ensureCanonicalContext();
         await ensureCanonicalDay2(ref);
         const response=await reason(product,ref);
-        if(response){render(product,response);rendered.set(product,key);console.info(SIGNATURE,product,'projected',response?.data?.generation_source,response?.meta?.ai_status||'')}
+        if(response){render(product,response);rendered.set(product,key);console.info(SIGNATURE,product,'projected',response?.data?.generation_source,response?.meta?.ai_status||'',EVIDENCE_PROJECTION_VERSION)}
       }catch(error){console.warn(SIGNATURE,product,'not projected:',error?.code||'',error?.message||error)}
     })();inflight.set(key,op);try{await op}finally{inflight.delete(key)}
   }
@@ -231,7 +250,7 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
   function scan(){patchLegacyScoreAction();if(visible(byId('galvishot-result')))enrich('GalviShot');if(visible(byId('galvisight-result-panel')))enrich('GalviSight');if(visible(byId('galvipath-result-panel')))enrich('GalviPath')}
   function init(){patchLegacyScoreAction();scan();const observer=new MutationObserver(()=>queueMicrotask(scan));observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});let count=0;const timer=setInterval(()=>{scan();if(++count>120)clearInterval(timer)},500)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
-  window.GalviCareDay3GovernedAI={enrich,ensureCanonicalContext,ensureCanonicalDay2,patchLegacyScoreAction,signature:SIGNATURE};
+  window.GalviCareDay3GovernedAI={enrich,ensureCanonicalContext,ensureCanonicalDay2,patchLegacyScoreAction,businessContext,signature:SIGNATURE,evidenceProjectionVersion:EVIDENCE_PROJECTION_VERSION};
 })();`;
 
 export default DAY3_CUSTOMER_BRIDGE_SOURCE;
