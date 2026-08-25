@@ -77,7 +77,7 @@ html=html.replace('</body>',`<script>\n${day7dBrowser}\n</script>\n<script>\n${d
 const adapterCount=html.split(AUTHORITATIVE_SIGNATURE).length-1;
 if(adapterCount!==1) throw new Error(`Generated QA frontend must contain exactly one Day 7D adapter; found ${adapterCount}.`);
 const day1CustomerCount=html.split(DAY1_CUSTOMER_SIGNATURE).length-1;
-if(day1CustomerCount!==2) throw new Error(`Generated QA frontend must contain one customer Pre-Founder script (two signature tokens); found ${day1CustomerCount}.`);
+if(day1CustomerCount!==1) throw new Error(`Generated QA frontend must contain exactly one customer Pre-Founder adapter; found ${day1CustomerCount}.`);
 const day1Count=html.split(DAY1_HUMAN_SIGNATURE).length-1;
 if(day1Count!==2) throw new Error(`Generated QA frontend must contain one Day 1 Human E2E script (two signature tokens); found ${day1Count}.`);
 if(html.includes(LEGACY_SIGNATURE)) throw new Error('Legacy Day 7D adapter marker survived the QA build.');
