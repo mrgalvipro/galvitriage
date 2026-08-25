@@ -108,7 +108,9 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
+          import path from 'node:path';
           const c=JSON.parse(fs.readFileSync('wrangler.galvicare-day3.json','utf8'));
+          c.main=path.resolve(c.main);
           c.vars={...(c.vars||{}),COMMIT_SHA:process.env.GITHUB_SHA,AI_ENABLED:'true'};
           fs.writeFileSync('/tmp/wrangler.day3.runtime.json',JSON.stringify(c,null,2));
           NODE
@@ -175,7 +177,9 @@ jobs:
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
-          import fs from 'node:fs';const d3=JSON.parse(fs.readFileSync('wrangler.galvicare-day3.json','utf8'));d3.vars={...(d3.vars||{}),COMMIT_SHA:process.env.GITHUB_SHA,AI_ENABLED:'false'};fs.writeFileSync('/tmp/wrangler.day3.disabled.json',JSON.stringify(d3,null,2));const d2=JSON.parse(fs.readFileSync('wrangler.galvicare-day2.json','utf8'));d2.vars={...(d2.vars||{}),COMMIT_SHA:process.env.SIGNED_DAY2_SHA};fs.writeFileSync('/tmp/wrangler.day2.rollback.json',JSON.stringify(d2,null,2));
+          import fs from 'node:fs';
+          import path from 'node:path';
+          const d3=JSON.parse(fs.readFileSync('wrangler.galvicare-day3.json','utf8'));d3.main=path.resolve(d3.main);d3.vars={...(d3.vars||{}),COMMIT_SHA:process.env.GITHUB_SHA,AI_ENABLED:'false'};fs.writeFileSync('/tmp/wrangler.day3.disabled.json',JSON.stringify(d3,null,2));const d2=JSON.parse(fs.readFileSync('wrangler.galvicare-day2.json','utf8'));d2.main=path.resolve(d2.main);d2.vars={...(d2.vars||{}),COMMIT_SHA:process.env.SIGNED_DAY2_SHA};fs.writeFileSync('/tmp/wrangler.day2.rollback.json',JSON.stringify(d2,null,2));
           NODE
           npx --yes wrangler@4 deploy --config /tmp/wrangler.day3.disabled.json >/tmp/day3-disable.log 2>&1
           sleep 5
