@@ -26,7 +26,7 @@ const DAY7D_RELEASE_CONTRACT='day7d_cumulative_customer_intelligence_v3';
 const AUTHORITATIVE_SIGNATURE='Day 7D cumulative customer-intelligence browser adapter.';
 const DAY1_CUSTOMER_SIGNATURE='Day 1 customer Pre-Founder pathway adapter.';
 const DAY1_HUMAN_SIGNATURE='Day 1 Human E2E Pre-Founder QA adapter.';
-const DAY3_CUSTOMER_SIGNATURE='GalviCare Day 3 governed AI customer bridge v1';
+const DAY3_CUSTOMER_SIGNATURE='GalviCare Day 3 governed AI customer bridge v2';
 const LEGACY_SIGNATURE='DAY7D_CUSTOMER_INTELLIGENCE_ADAPTER_SOURCE';
 const DAY1_VISIBILITY_ID='day1-human-e2e-qa-visibility';
 const DAY1_VISIBILITY_SELECTOR='#day1-human-e2e-panel[data-qa-only="true"]';
@@ -46,7 +46,7 @@ for(const contract of [
 ]) if(!html.includes(contract)) throw new Error(`Canonical source contract missing: ${contract}`);
 
 for(const contract of [
-  AUTHORITATIVE_SIGNATURE,'needs_followup',
+  AUTHORITATIVE_SIGNATURE,'needs_followup','entitlement_required','holdForEntitlement','result_generation_locked',
   'save_galviscore_followup','get_or_generate_galviscore',
   'save_galvishot_followup','save_galvisight_followup','save_galvipath_followup',
   'galviscore-followup','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions',
@@ -58,12 +58,13 @@ for(const contract of [DAY1_CUSTOMER_SIGNATURE,"IDEA_STAGE='Idea'",'GALVICARE™
 if(/Dreamer/i.test(day1Customer)) throw new Error('Customer-facing Pre-Founder adapter must not use Dreamer terminology.');
 for(const contract of [DAY1_HUMAN_SIGNATURE,DAY1_WORKER,"record_mode:'principal_only'",'H3 Create Pre-Founder','H14 Runtime Health']) if(!day1HumanE2E.includes(contract)) throw new Error(`Day 1 Human E2E browser contract missing: ${contract}`);
 for(const contract of [
-  DAY3_CUSTOMER_SIGNATURE,DAY1_WORKER,"OLD_SCORE_ACTION='get_or_generate_galviscore'","CANONICAL_SCORE_ACTION='get_or_create_score'",
-  '/api/v1/day2/intake-state/','/api/v1/day3/shot','/api/v1/day3/sight','/api/v1/day3/path',
+  DAY3_CUSTOMER_SIGNATURE,DAY1_WORKER,"SESSION_HEADER='X-Galvi-Day3-Session'",'/api/v1/day3/customer-bootstrap',
+  '/api/v1/day3/shot','/api/v1/day3/sight','/api/v1/day3/path','authoritative_galvicare_session',
   'openai_governed','GOVERNED BUSINESS HEALTH INTELLIGENCE','What GalviCare Understands About Your Situation',
   'Why These Symptoms May Be Happening','Your Personalized Business Health Care Plan','GV_DAY3_CUSTOMER_SCORE_MISMATCH'
 ]) if(!DAY3_CUSTOMER_BRIDGE_SOURCE.includes(contract)) throw new Error(`Day 3 customer bridge contract missing: ${contract}`);
 if(/api\.openai\.com|OPENAI_API_KEY/.test(DAY3_CUSTOMER_BRIDGE_SOURCE)) throw new Error('Day 3 browser bridge must never call OpenAI or contain an API key binding.');
+if(/day1\\\.\<name\>|example\\\.invalid/.test(DAY3_CUSTOMER_BRIDGE_SOURCE)) throw new Error('Day 3 customer bridge must not require a synthetic Day 1 Human-E2E identity.');
 
 html=html.replace(`const GALVICARE_INTAKE_ENDPOINT = '${PROD_WORKER}';`,`const GALVICARE_INTAKE_ENDPOINT = '${QA_WORKER}';`);
 for(const {live,test} of Object.values(STRIPE)) html=html.replaceAll(live,test);
@@ -72,54 +73,37 @@ html=html.replace("const GALVICARE_CANONICAL_CUSTOMER_URL = 'https://www.galvipr
 html=html.replace(/const GALVICLINIC_FALLBACK_URL = '[^']+';/,`const GALVICLINIC_FALLBACK_URL = '${QA_CALENDLY}';`);
 const qaBanner=`\n<div id="galvicare-qa-environment-banner" role="status" style="position:sticky;top:0;z-index:99999;background:#7f1d1d;color:#fff;text-align:center;font:700 13px/1.3 Arial,sans-serif;padding:8px 12px;letter-spacing:.08em;">GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS</div>`;
 html=html.replace(/<body([^>]*)>/,`<body$1>${qaBanner}`);
-const day1VisibilityStyle=`  <style id="${DAY1_VISIBILITY_ID}">\n    /* QA-only surgical override: generic QA-only content remains hidden.\n       The approved Human E2E control surface is visible for testing only. */\n    ${DAY1_VISIBILITY_SELECTOR}{display:block!important;visibility:visible!important;}\n  </style>`;
-html=html.replace('</head>',`  <meta name="galvicare-environment" content="qa" />\n  <meta name="galvicare-qa-frontend" content="${DAY7D_RELEASE_CONTRACT}" />\n  <meta name="galvicare-day1-human-e2e" content="principal-only-enabled" />\n  <meta name="galvicare-day3-governed-ai" content="customer-projection-v1" />\n${day1VisibilityStyle}\n</head>`);
+const day1VisibilityStyle=`  <style id="${DAY1_VISIBILITY_ID}">\n    ${DAY1_VISIBILITY_SELECTOR}{display:block!important;visibility:visible!important;}\n  </style>`;
+html=html.replace('</head>',`  <meta name="galvicare-environment" content="qa" />\n  <meta name="galvicare-qa-frontend" content="${DAY7D_RELEASE_CONTRACT}" />\n  <meta name="galvicare-day1-human-e2e" content="principal-only-enabled" />\n  <meta name="galvicare-day3-governed-ai" content="customer-session-projection-v2" />\n${day1VisibilityStyle}\n</head>`);
 
 function removeEmbeddedAdapter(signature){while(html.includes(signature)){const markerStart=html.indexOf(signature),scriptStart=html.lastIndexOf('<script>',markerStart),scriptEnd=html.indexOf('</script>',markerStart);if(scriptStart<0||scriptEnd<0)throw new Error(`Embedded adapter containing ${signature} is not bounded by a script tag.`);html=html.slice(0,scriptStart)+html.slice(scriptEnd+'</script>'.length);}}
-removeEmbeddedAdapter(LEGACY_SIGNATURE);
-removeEmbeddedAdapter('Day 7D progressive customer-intelligence browser adapter.');
-removeEmbeddedAdapter(AUTHORITATIVE_SIGNATURE);
-removeEmbeddedAdapter(DAY1_CUSTOMER_SIGNATURE);
-removeEmbeddedAdapter(DAY1_HUMAN_SIGNATURE);
+removeEmbeddedAdapter(LEGACY_SIGNATURE);removeEmbeddedAdapter('Day 7D progressive customer-intelligence browser adapter.');removeEmbeddedAdapter(AUTHORITATIVE_SIGNATURE);removeEmbeddedAdapter(DAY1_CUSTOMER_SIGNATURE);removeEmbeddedAdapter(DAY1_HUMAN_SIGNATURE);
 html=html.replace('</body>',`<script>\n${day7dBrowser}\n</script>\n<script>\n${DAY3_CUSTOMER_BRIDGE_SOURCE}\n</script>\n<script>\n${day1Customer}\n</script>\n<script>\n${day1HumanE2E}\n</script>\n</body>`);
 
-const adapterCount=html.split(AUTHORITATIVE_SIGNATURE).length-1;
-if(adapterCount!==1) throw new Error(`Generated QA frontend must contain exactly one Day 7D adapter; found ${adapterCount}.`);
-const day3BridgeCount=html.split(DAY3_CUSTOMER_SIGNATURE).length-1;
-if(day3BridgeCount!==1) throw new Error(`Generated QA frontend must contain exactly one Day 3 governed-AI customer bridge; found ${day3BridgeCount}.`);
-const day1CustomerCount=html.split(DAY1_CUSTOMER_SIGNATURE).length-1;
-if(day1CustomerCount!==1) throw new Error(`Generated QA frontend must contain exactly one customer Pre-Founder adapter; found ${day1CustomerCount}.`);
-const day1Count=html.split(DAY1_HUMAN_SIGNATURE).length-1;
-if(day1Count!==2) throw new Error(`Generated QA frontend must contain one Day 1 Human E2E script (two signature tokens); found ${day1Count}.`);
-if(html.includes(LEGACY_SIGNATURE)) throw new Error('Legacy Day 7D adapter marker survived the QA build.');
+const adapterCount=html.split(AUTHORITATIVE_SIGNATURE).length-1;if(adapterCount!==1)throw new Error(`Generated QA frontend must contain exactly one Day 7D adapter; found ${adapterCount}.`);
+const day3BridgeCount=html.split(DAY3_CUSTOMER_SIGNATURE).length-1;if(day3BridgeCount!==1)throw new Error(`Generated QA frontend must contain exactly one Day 3 governed-AI customer bridge; found ${day3BridgeCount}.`);
+const day1CustomerCount=html.split(DAY1_CUSTOMER_SIGNATURE).length-1;if(day1CustomerCount!==1)throw new Error(`Generated QA frontend must contain exactly one customer Pre-Founder adapter; found ${day1CustomerCount}.`);
+const day1Count=html.split(DAY1_HUMAN_SIGNATURE).length-1;if(day1Count!==2)throw new Error(`Generated QA frontend must contain one Day 1 Human E2E script (two signature tokens); found ${day1Count}.`);
+if(html.includes(LEGACY_SIGNATURE))throw new Error('Legacy Day 7D adapter marker survived the QA build.');
 
 for(const required of [
-  DAY7D_RELEASE_CONTRACT,QA_WORKER,DAY1_WORKER,QA_CUSTOMER_URL,QA_GA4,QA_CLARITY,QA_CALENDLY,TEST_STRIPE_MARKER,
-  ...Object.values(STRIPE).map(x=>x.test),
+  DAY7D_RELEASE_CONTRACT,QA_WORKER,DAY1_WORKER,QA_CUSTOMER_URL,QA_GA4,QA_CLARITY,QA_CALENDLY,TEST_STRIPE_MARKER,...Object.values(STRIPE).map(x=>x.test),
   'galviscore-followup','submit-followup','save_galviscore_followup','get_or_generate_galviscore','renderUnlockedGalviScore',
-  'galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions',
-  'save_galvishot_followup','save_galvisight_followup','save_galvipath_followup',
-  'skipCurrentQuestion','SKIPPED_ANSWER','stopImmediatePropagation','installAuthoritativeStageRoutes',
-  'invokeLegacyWithResponse','MAX_VISIBLE_TARGETED_QUESTIONS=3','galvipath-book-galviclinic',
-  DAY3_CUSTOMER_SIGNATURE,'customer-projection-v1','/api/v1/day3/shot','/api/v1/day3/sight','/api/v1/day3/path',
-  "CANONICAL_SCORE_ACTION='get_or_create_score'",'openai_governed','GOVERNED BUSINESS HEALTH INTELLIGENCE',
-  DAY1_CUSTOMER_SIGNATURE,'prefounder-customer-pathway','GALVICARE™ | PRE-FOUNDER PATHWAY','What is a Founder?','Founder Development Institute',
-  DAY1_HUMAN_SIGNATURE,'day1-human-e2e-panel','H3 Create Pre-Founder','H14 Runtime Health',
-  DAY1_VISIBILITY_ID,DAY1_VISIBILITY_SELECTOR,'display:block!important','visibility:visible!important'
+  'galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions','save_galvishot_followup','save_galvisight_followup','save_galvipath_followup',
+  'skipCurrentQuestion','SKIPPED_ANSWER','stopImmediatePropagation','installAuthoritativeStageRoutes','invokeLegacyWithResponse','MAX_VISIBLE_TARGETED_QUESTIONS=3','holdForEntitlement','entitlement_required','result_generation_locked','galvipath-book-galviclinic',
+  DAY3_CUSTOMER_SIGNATURE,'customer-session-projection-v2','X-Galvi-Day3-Session','/api/v1/day3/customer-bootstrap','/api/v1/day3/shot','/api/v1/day3/sight','/api/v1/day3/path','authoritative_galvicare_session','openai_governed','GOVERNED BUSINESS HEALTH INTELLIGENCE',
+  DAY1_CUSTOMER_SIGNATURE,'prefounder-customer-pathway','GALVICARE™ | PRE-FOUNDER PATHWAY','What is a Founder?','Founder Development Institute',DAY1_HUMAN_SIGNATURE,'day1-human-e2e-panel','H3 Create Pre-Founder','H14 Runtime Health',DAY1_VISIBILITY_ID,DAY1_VISIBILITY_SELECTOR,'display:block!important','visibility:visible!important'
 ]) if(!html.includes(required)) throw new Error(`Generated QA frontend missing cumulative journey contract: ${required}`);
-if(html.includes(PROD_WORKER)) throw new Error('Production Worker leaked into QA frontend.');
-for(const {live} of Object.values(STRIPE)) if(html.includes(live)) throw new Error(`LIVE Stripe link leaked into QA frontend: ${live}`);
-if(/api\.openai\.com|OPENAI_API_KEY/.test(html)) throw new Error('Generated QA browser must not contain OpenAI provider access or secret references.');
+if(html.includes(PROD_WORKER))throw new Error('Production Worker leaked into QA frontend.');for(const {live} of Object.values(STRIPE))if(html.includes(live))throw new Error(`LIVE Stripe link leaked into QA frontend: ${live}`);
+if(/api\.openai\.com|OPENAI_API_KEY/.test(html))throw new Error('Generated QA browser must not contain OpenAI provider access or secret references.');
 
-mkdirSync(OUT_DIR,{recursive:true});
-writeFileSync(OUT,html,'utf8');
+mkdirSync(OUT_DIR,{recursive:true});writeFileSync(OUT,html,'utf8');
 console.log(`PASS — ${OUT} is the single cumulative QA frontend candidate.`);
 console.log(`PASS — release contract ${DAY7D_RELEASE_CONTRACT} binds the generated frontend to the authoritative Worker candidate.`);
-console.log('PASS — Day 3 governed-AI customer bridge projects only accepted/stored governed intelligence and never calls OpenAI from the browser.');
-console.log('PASS — obsolete get_or_generate_galviscore is bridged to the supported deterministic get_or_create_score action.');
+console.log('PASS — pre-entitlement follow-up evidence is saved without unlocking or generating a paid product.');
+console.log('PASS — Day 3 governed-AI customer bridge resolves canonical identity from the authoritative GalviCare session and never calls OpenAI from the browser.');
+console.log('PASS — deterministic GalviScore action and projection contract remain unchanged.');
 console.log('PASS — customer-facing Pre-Founder education is stage-gated to Idea and contains no Dreamer terminology.');
-console.log('PASS — Day 1 Human E2E Pre-Founder path is QA-only and uses the isolated Day 1 Worker.');
-console.log('PASS — Day 1 Human E2E panel has a QA-only ID-scoped visibility override and cannot be hidden by generic customer-view QA hardening.');
+console.log('PASS — Day 1 Human E2E Pre-Founder path remains QA-only and isolated.');
 console.log('PASS — canonical Production endpoints and LIVE payment links are transformed only in dist-qa.');
-console.log('PASS — GalviScore clarification is Worker-owned and objective score remains immutable.');
-console.log('PASS — Triage → Vitals → Score → governed Shot → governed Sight → governed Path → Clinic contract is present.');
+console.log('PASS — Triage → Vitals → Score → evidence intake → verified entitlement → governed Shot → governed Sight → governed Path → Clinic contract is present.');
