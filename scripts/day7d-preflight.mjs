@@ -7,13 +7,13 @@ const CONTRACT={
   release:'day7d_cumulative_customer_intelligence_v3'
 };
 const requiredFiles=[
-  'worker/worker.js','worker/day7d-engine.js','day7d-browser-customer-intelligence.js','index.html',
+  'worker/worker.js','worker/day7d-engine.js','worker/day7d-day3-critical-path.js','day7d-browser-customer-intelligence.js','index.html',
   'scripts/day7b-build-qa-frontend.mjs','migrations/0006_day7d_customer_intelligence.sql',
   'tests/day7d-customer-intelligence.test.mjs','tests/day7d-customer-path-contract.test.mjs',
   'wrangler.day7d.json','wrangler.qa-frontend.jsonc','qa-frontend-worker.js'
 ];
 const failures=[];
-for(const path of requiredFiles) if(!fs.existsSync(path)) failures.push(`missing required Day 7D file: ${path}`);
+for(const path of requiredFiles) if(!fs.existsSync(path)) failures.push(`missing required Day 7D/Day 3 customer-path file: ${path}`);
 
 const pkg=JSON.parse(fs.readFileSync('package.json','utf8'));
 for(const script of ['test:day7d','stabilization:gate','day7c:gate','day7d:gate']) if(!pkg.scripts?.[script]) failures.push(`package.json is missing ${script}`);
@@ -22,21 +22,14 @@ if(!pkg.scripts?.['test:day7d']?.includes('day7d-customer-path-contract.test.mjs
 const wrangler=JSON.parse(fs.readFileSync('wrangler.day7d.json','utf8'));
 if(wrangler.name!=='galvicare-triage-intake') failures.push(`API Worker name mismatch: ${wrangler.name}`);
 const continuityBridge=wrangler.vars?.GALVIVAULT_DAY9_CONTINUITY_BRIDGE==='true';
-const expectedMain=continuityBridge?'worker/day9-galvicare-continuity.js':'worker/day7d-engine.js';
+const expectedMain=continuityBridge?'worker/day9-galvicare-continuity.js':'worker/day7d-day3-critical-path.js';
 if(wrangler.main!==expectedMain) failures.push(`wrangler.day7d.json main must be ${expectedMain}, got ${wrangler.main}`);
 if(continuityBridge){
   if(wrangler.vars?.ENVIRONMENT!=='qa') failures.push('Day 9 GalviCare continuity wrapper is QA-only.');
   if(!fs.existsSync('worker/day9-galvicare-continuity.js')) failures.push('Day 9 continuity bridge is enabled but worker/day9-galvicare-continuity.js is missing.');
   else {
     const bridge=fs.readFileSync('worker/day9-galvicare-continuity.js','utf8');
-    for(const token of [
-      "import day7dWorker from './day7d-engine.js'",
-      "import day2Worker from './day2.js'",
-      'GALVIVAULT_DAY9_CONTINUITY_BRIDGE',
-      'DAY9_CANONICAL_CONTINUITY_FAILED',
-      'GALVICARE_SESSION_IDENTITY_CONFLICT',
-      'X-GalviVault-Day9-Continuity'
-    ]) if(!bridge.includes(token)) failures.push(`Day 9 continuity wrapper missing required guardrail token: ${token}`);
+    for(const token of ["import day7dWorker from './day7d-engine.js'","import day2Worker from './day2.js'",'GALVIVAULT_DAY9_CONTINUITY_BRIDGE','DAY9_CANONICAL_CONTINUITY_FAILED','GALVICARE_SESSION_IDENTITY_CONFLICT','X-GalviVault-Day9-Continuity']) if(!bridge.includes(token)) failures.push(`Day 9 continuity wrapper missing required guardrail token: ${token}`);
   }
 }
 const db=(wrangler.d1_databases||[]).find(x=>x.binding==='DB');
@@ -71,18 +64,27 @@ for(const token of [
 ]) if(!engine.includes(token)) failures.push(`worker/day7d-engine.js missing required contract token: ${token}`);
 if(engine.includes('preservedLegacyResult')) failures.push('Day 7D engine must not bypass progressive intelligence with a preserved legacy result');
 
+const critical=fs.readFileSync('worker/day7d-day3-critical-path.js','utf8');
+for(const token of [
+  "import day7d,",'pre-entitlement evidence','PRE_ENTITLEMENT_PRODUCTS','evaluate_galvishot','save_galvishot_followup',
+  'result_generation_locked','paid_result_generated: false','if (await entitled(env.DB, sessionId, product))',
+  "entrypoint: 'worker/day7d-day3-critical-path.js'",'pre_entitlement_evidence_capture: true','paid_generation_server_verified: true'
+]) if(!critical.includes(token)) failures.push(`Day 3 critical-path Worker wrapper missing: ${token}`);
+if(/INSERT INTO entitlements|UPDATE entitlements/.test(critical)) failures.push('Pre-entitlement evidence wrapper must never grant or mutate entitlement.');
+
 const browser=fs.readFileSync('day7d-browser-customer-intelligence.js','utf8');
 for(const token of [
   'Day 7D cumulative customer-intelligence browser adapter.','GalviScore:{','save_galviscore_followup','get_or_generate_galviscore',
   'galviscore-followup','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions',
   'save_galvishot_followup','save_galvisight_followup','save_galvipath_followup','skipCurrentQuestion','SKIPPED_ANSWER',
-  'stopImmediatePropagation','installAuthoritativeStageRoutes','invokeLegacyWithResponse','MAX_VISIBLE_TARGETED_QUESTIONS=3'
+  'stopImmediatePropagation','installAuthoritativeStageRoutes','invokeLegacyWithResponse','MAX_VISIBLE_TARGETED_QUESTIONS=3',
+  'entitlement_required','holdForEntitlement','result_generation_locked','Complete verified ${product} payment'
 ]) if(!browser.includes(token)) failures.push(`Day 7D browser adapter missing: ${token}`);
 if(browser.includes('galviscore_confidence||0)+12')) failures.push('Browser must not locally mutate GalviScore confidence');
 if(browser.includes('galviscore_followup_completed_')) failures.push('Browser adapter must not own GalviScore completion state');
 
 const builder=fs.readFileSync('scripts/day7b-build-qa-frontend.mjs','utf8');
-for(const token of [CONTRACT.release,'save_galviscore_followup','get_or_generate_galviscore','single cumulative QA frontend candidate','galvipath-book-galviclinic']) if(!builder.includes(token)) failures.push(`QA frontend builder missing cumulative contract: ${token}`);
+for(const token of [CONTRACT.release,'save_galviscore_followup','get_or_generate_galviscore','single cumulative QA frontend candidate','galvipath-book-galviclinic','GalviCare Day 3 governed AI customer bridge v2','X-Galvi-Day3-Session','/api/v1/day3/customer-bootstrap']) if(!builder.includes(token)) failures.push(`QA frontend builder missing cumulative contract: ${token}`);
 
 const migration=fs.readFileSync('migrations/0006_day7d_customer_intelligence.sql','utf8');
 for(const table of ['day7d_context_evidence','clinical_evidence_versions','day7d_observations']) if(!migration.includes(table)) failures.push(`migration 0006 missing dedicated Day 7D table: ${table}`);
@@ -94,6 +96,6 @@ console.log(JSON.stringify({
   galviscore_clarification_server_owned:true,objective_score_immutable:true,progressive_followups:true,dynamic_question_count:true,approved_low_confidence_question_count:3,
   prior_product_results_in_clinical_file:true,bounded_multi_question_submit:true,collision_safe_followup_save:true,legacy_generation_bypass_closed:true,
   atomic_followup_save:true,server_selected_question_validation:true,save_returns_regenerated_result:true,evidence_versioned_results:true,
-  matched_worker_and_frontend_release:true,day1_isolated:true,day7c_compatibility_only:true,production_untouched:true,
+  pre_entitlement_evidence_capture:true,paid_generation_server_verified:true,matched_worker_and_frontend_release:true,day1_isolated:true,day7c_compatibility_only:true,production_untouched:true,
   day9_canonical_continuity_bridge:continuityBridge
 },null,2));
