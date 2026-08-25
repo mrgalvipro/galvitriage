@@ -67,8 +67,10 @@ html=html.replace('</body>',`<script>\n${day7dBrowser}\n</script>\n<script>\n${d
 
 const adapterCount=html.split(AUTHORITATIVE_SIGNATURE).length-1;
 if(adapterCount!==1) throw new Error(`Generated QA frontend must contain exactly one Day 7D adapter; found ${adapterCount}.`);
+// The Day 1 signature intentionally appears twice inside the single injected script:
+// once in its source banner and once in its internal diagnostic constant.
 const day1Count=html.split(DAY1_HUMAN_SIGNATURE).length-1;
-if(day1Count!==1) throw new Error(`Generated QA frontend must contain exactly one Day 1 Human E2E adapter; found ${day1Count}.`);
+if(day1Count!==2) throw new Error(`Generated QA frontend must contain one Day 1 Human E2E script (two signature tokens); found ${day1Count}.`);
 if(html.includes(LEGACY_SIGNATURE)) throw new Error('Legacy Day 7D adapter marker survived the QA build.');
 
 for(const required of [
