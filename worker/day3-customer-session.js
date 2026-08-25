@@ -148,7 +148,7 @@ async function ensureConsent(db, sessionId, founderId, bmrId, legacyConsent) {
   await run(db, `INSERT INTO gv1_consent_events
     (consent_id,founder_id,bmr_id,purpose,policy_version,status,actor_type,actor_id,effective_at,recorded_at,
      supersedes_consent_id,client_request_id,source,metadata_json)
-    VALUES(?,?,?,'care_processing','day3_customer_qa_v2','granted','service','galvicare_day3_customer_bridge',?,?,?,?,?,'galvicare_day3_customer','{}')`,
+    VALUES(?,?,?,'care_processing','day3_customer_qa_v2','granted','service','galvicare_day3_customer_bridge',?,?,?,?,'galvicare_day3_customer','{}')`,
     consentId, founderId, bmrId, timestamp, timestamp, current?.consent_id || null, `d3consent.${safe(sessionId)}`);
   return { consent_id: consentId, status: 'granted' };
 }
@@ -165,6 +165,47 @@ function acuityFromClassification(value) {
 function confidenceComponents(value) {
   const c = Math.max(0, Math.min(100, Number(value) || 0));
   return { required_data_completeness: c, evidence_quality: c, answer_consistency: c, corroboration: c, context_completeness: c };
+}
+
+function governedFollowups(legacyFile) {
+  return (Array.isArray(legacyFile?.followup_rows) ? legacyFile.followup_rows : [])
+    .filter((row) => text(row?.answer) && !low(row.answer).startsWith('skipped for now'))
+    .slice(0, 40)
+    .map((row) => ({
+      product: text(row.product),
+      question_id: text(row.question_id),
+      question_text: text(row.question_text),
+      answer: text(row.answer).slice(0, 1000),
+      confidence_impact: Number(row.confidence_impact || 0)
+    }));
+}
+
+async function syncCustomerFollowupEvidence(db, sessionId, context, legacyFile = null) {
+  if (!context?.bmr_id) return { count: 0, evidence_id: null, evidence_version: 0 };
+  const file = legacyFile || await clinicalFile(db, sessionId);
+  const followups = governedFollowups(file);
+  if (!followups.length) return { count: 0, evidence_id: null, evidence_version: Number(file?.evidence_version || 0) };
+  const evidenceVersion = Math.max(1, Number(file?.evidence_version || 1));
+  const evidenceId = `evi_d3_customer_${safe(sessionId)}_${evidenceVersion}`;
+  const payload = {
+    validation_status: 'reported',
+    payload: {
+      legacy_session_id: sessionId,
+      evidence_version: evidenceVersion,
+      followups
+    },
+    provenance: {
+      source: 'galvicare_day7d_clinical_followups',
+      captured_server_side: true,
+      customer_session_bound: true
+    }
+  };
+  await run(db, `INSERT OR IGNORE INTO gv1_evidence_items
+    (evidence_id,bmr_id,session_id,evidence_type,source_product,source_reference,content_json,confidence,evidence_version,created_at)
+    VALUES(?,?,NULL,'customer_followup','GalviCare',?,?,?,?,?)`,
+    evidenceId, context.bmr_id, `legacy_session:${safe(sessionId)}`, JSON.stringify(payload),
+    Math.max(0, Math.min(1, Number(file?.reconciliation?.confidence || 0) / 100)), evidenceVersion, now());
+  return { count: followups.length, evidence_id: evidenceId, evidence_version: evidenceVersion };
 }
 
 async function internalDay2(env, path, { method = 'GET', key, body } = {}) {
@@ -268,10 +309,14 @@ async function ensureDay2Baseline(env, sessionId, context, input) {
     error.code = 'GV_DAY3_CUSTOMER_SCORE_MISMATCH';
     throw error;
   }
+  const followupEvidence = await syncCustomerFollowupEvidence(env.DB, sessionId, context, legacyFile);
   return {
     score: canonicalScore,
     clinical_confidence: Number(refreshed?.data?.score?.clinical_confidence ?? cumulativeConfidence),
-    followup_count: Array.isArray(legacyFile?.followup_rows) ? legacyFile.followup_rows.length : 0
+    followup_count: Array.isArray(legacyFile?.followup_rows) ? legacyFile.followup_rows.length : 0,
+    governed_followup_evidence_count: followupEvidence.count,
+    governed_followup_evidence_id: followupEvidence.evidence_id,
+    governed_followup_evidence_version: followupEvidence.evidence_version
   };
 }
 
@@ -309,9 +354,12 @@ async function bootstrap(request, env) {
         canonical_score: baseline.score,
         clinical_confidence: baseline.clinical_confidence,
         cumulative_followup_count: baseline.followup_count,
+        governed_followup_evidence_count: baseline.governed_followup_evidence_count,
+        governed_followup_evidence_id: baseline.governed_followup_evidence_id,
+        governed_followup_evidence_version: baseline.governed_followup_evidence_version,
         identity_source: 'authoritative_galvicare_session'
       },
-      meta: { customer_session_bridge: true, deterministic_fallback: true }
+      meta: { customer_session_bridge: true, deterministic_fallback: true, clarification_evidence_synced: true }
     }, 200, request);
   } catch (error) {
     return json({
@@ -330,11 +378,12 @@ async function authorizeCustomerRequest(request, env) {
   const contextId = text(input?.context_id);
   const legacy = await legacyIdentity(env.DB, sessionId);
   if (!legacy?.founder?.email) return { error: json({ success: false, status: 'unauthenticated', error: { code: 'GV_DAY3_SESSION_IDENTITY_MISSING', message: 'GalviCare session identity is unavailable.' } }, 401, request) };
-  const context = await first(env.DB, `SELECT c.context_id,f.email FROM gv1_principal_contexts c
+  const context = await first(env.DB, `SELECT c.context_id,c.bmr_id,f.email FROM gv1_principal_contexts c
     JOIN gv1_founders f ON f.founder_id=c.founder_id WHERE c.context_id=?`, contextId);
   if (!context || low(context.email) !== low(legacy.founder.email)) {
     return { error: json({ success: false, status: 'forbidden', error: { code: 'GV_AUTH_FORBIDDEN', message: 'The requested canonical record does not belong to this GalviCare session.' } }, 403, request) };
   }
+  await syncCustomerFollowupEvidence(env.DB, sessionId, context);
   const headers = new Headers(request.headers);
   headers.set('X-Galvi-Day1-Actor', 'business_physician');
   headers.delete(CUSTOMER_HEADER);
@@ -346,7 +395,12 @@ async function augmentHealth(response, request) {
   let body = {};
   try { body = await response.clone().json(); } catch { return response; }
   body.data = body.data || {};
-  body.data.capabilities = { ...(body.data.capabilities || {}), customer_session_bridge: true, canonical_session_identity: true };
+  body.data.capabilities = {
+    ...(body.data.capabilities || {}),
+    customer_session_bridge: true,
+    canonical_session_identity: true,
+    customer_clarification_evidence_sync: true
+  };
   body.meta = { ...(body.meta || {}), customer_session_bridge: true };
   const headers = new Headers(response.headers);
   headers.set('X-Galvi-Day3-Customer-Session', 'active');
