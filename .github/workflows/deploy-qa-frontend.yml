@@ -78,34 +78,41 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Verify QA runtime exposes Idea-only customer path and Human E2E controls
+      - name: Verify QA runtime converges on Idea-only customer path and Human E2E controls
         shell: bash
         run: |
           set -euo pipefail
           BASE='https://galvicare-0-5-qa.mrgalvipro.workers.dev'
-          for attempt in 1 2 3 4 5; do
-            curl -fsS "$BASE/health" -o qa-health.json && break
+          converged=0
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            curl -fsS "$BASE/health?day1=$RANDOM-$attempt" -o qa-health.json || true
+            curl -fsS "$BASE/?day1=$RANDOM-$attempt" -o qa-runtime.html || true
+            if grep -Fq '"environment":"qa"' qa-health.json 2>/dev/null \
+              && grep -Fq '"stripe_mode":"test"' qa-health.json 2>/dev/null \
+              && grep -Fq 'GALVICARE QA / TEST ENVIRONMENT' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'https://galvicare-triage-intake.mrgalvipro.workers.dev' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'https://buy.stripe.com/test_' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'Day 1 customer Pre-Founder pathway adapter.' qa-runtime.html 2>/dev/null \
+              && grep -Fq "const IDEA_STAGE='Idea'" qa-runtime.html 2>/dev/null \
+              && grep -Fq 'prefounder-customer-pathway' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'GALVICARE™ | PRE-FOUNDER PATHWAY' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'Founder Development Institute' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'Day 1 Human E2E Pre-Founder QA adapter.' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'day1-human-e2e-qa-visibility' qa-runtime.html 2>/dev/null \
+              && grep -Fq '#day1-human-e2e-panel[data-qa-only="true"]' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'display:block!important' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'visibility:visible!important' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'H3 Create Pre-Founder' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'H14 Runtime Health' qa-runtime.html 2>/dev/null \
+              && ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' qa-runtime.html 2>/dev/null; then
+              converged=1
+              echo "PASS: QA runtime converged on attempt $attempt."
+              break
+            fi
+            echo "QA runtime not converged yet (attempt $attempt); retrying..."
             sleep 3
           done
-          grep -Fq '"environment":"qa"' qa-health.json
-          grep -Fq '"stripe_mode":"test"' qa-health.json
-          curl -fsS "$BASE/?day1-human-e2e=$(date +%s)" -o qa-runtime.html
-          grep -Fq 'GALVICARE QA / TEST ENVIRONMENT' qa-runtime.html
-          grep -Fq 'https://galvicare-triage-intake.mrgalvipro.workers.dev' qa-runtime.html
-          grep -Fq 'https://buy.stripe.com/test_' qa-runtime.html
-          grep -Fq 'Day 1 customer Pre-Founder pathway adapter.' qa-runtime.html
-          grep -Fq "const IDEA_STAGE='Idea'" qa-runtime.html
-          grep -Fq 'prefounder-customer-pathway' qa-runtime.html
-          grep -Fq 'GALVICARE™ | PRE-FOUNDER PATHWAY' qa-runtime.html
-          grep -Fq 'Founder Development Institute' qa-runtime.html
-          grep -Fq 'Day 1 Human E2E Pre-Founder QA adapter.' qa-runtime.html
-          grep -Fq 'day1-human-e2e-qa-visibility' qa-runtime.html
-          grep -Fq '#day1-human-e2e-panel[data-qa-only="true"]' qa-runtime.html
-          grep -Fq 'display:block!important' qa-runtime.html
-          grep -Fq 'visibility:visible!important' qa-runtime.html
-          grep -Fq 'H3 Create Pre-Founder' qa-runtime.html
-          grep -Fq 'H14 Runtime Health' qa-runtime.html
-          ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' qa-runtime.html
+          test "$converged" = "1"
 
       - name: Verify QA backend health
         shell: bash
