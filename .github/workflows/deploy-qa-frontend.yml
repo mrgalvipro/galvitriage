@@ -7,6 +7,7 @@ on:
       - qa-revamped-galvicare-0-5
     paths:
       - index.html
+      - day1-prefounder-qa.js
       - qa-frontend-worker.js
       - wrangler.qa-frontend.jsonc
       - scripts/day7b-build-qa-frontend.mjs
@@ -35,7 +36,7 @@ jobs:
       - name: Generate isolated QA frontend
         run: node scripts/day7b-build-qa-frontend.mjs
 
-      - name: QA isolation gate
+      - name: QA isolation and Day 1 Human E2E visibility gate
         shell: bash
         run: |
           set -euo pipefail
@@ -44,6 +45,13 @@ jobs:
           grep -Fq 'https://galvicare-triage-intake.mrgalvipro.workers.dev' dist-qa/index.html
           grep -Fq 'https://galvicare-0-5-qa.mrgalvipro.workers.dev/#galvitriage' dist-qa/index.html
           grep -Fq 'https://buy.stripe.com/test_' dist-qa/index.html
+          grep -Fq 'Day 1 Human E2E Pre-Founder QA adapter.' dist-qa/index.html
+          grep -Fq 'day1-human-e2e-qa-visibility' dist-qa/index.html
+          grep -Fq '#day1-human-e2e-panel[data-qa-only="true"]' dist-qa/index.html
+          grep -Fq 'display:block!important' dist-qa/index.html
+          grep -Fq 'visibility:visible!important' dist-qa/index.html
+          grep -Fq 'H3 Create Pre-Founder' dist-qa/index.html
+          grep -Fq 'H14 Runtime Health' dist-qa/index.html
           ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
           ! grep -Fq 'https://buy.stripe.com/14A00kbivcypgoGfBY53000' dist-qa/index.html
           ! grep -Fq 'https://buy.stripe.com/bJe7sM5Ze9jdc8qgG253001' dist-qa/index.html
@@ -56,7 +64,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Verify QA frontend runtime
+      - name: Verify QA frontend runtime exposes Day 1 Human E2E controls
         shell: bash
         run: |
           set -euo pipefail
@@ -67,10 +75,17 @@ jobs:
           done
           grep -Fq '"environment":"qa"' qa-health.json
           grep -Fq '"stripe_mode":"test"' qa-health.json
-          curl -fsS "$BASE/" -o qa-runtime.html
+          curl -fsS "$BASE/?day1-human-e2e=$(date +%s)" -o qa-runtime.html
           grep -Fq 'GALVICARE QA / TEST ENVIRONMENT' qa-runtime.html
           grep -Fq 'https://galvicare-triage-intake.mrgalvipro.workers.dev' qa-runtime.html
           grep -Fq 'https://buy.stripe.com/test_' qa-runtime.html
+          grep -Fq 'Day 1 Human E2E Pre-Founder QA adapter.' qa-runtime.html
+          grep -Fq 'day1-human-e2e-qa-visibility' qa-runtime.html
+          grep -Fq '#day1-human-e2e-panel[data-qa-only="true"]' qa-runtime.html
+          grep -Fq 'display:block!important' qa-runtime.html
+          grep -Fq 'visibility:visible!important' qa-runtime.html
+          grep -Fq 'H3 Create Pre-Founder' qa-runtime.html
+          grep -Fq 'H14 Runtime Health' qa-runtime.html
           ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' qa-runtime.html
 
       - name: Verify QA backend health
@@ -84,10 +99,11 @@ jobs:
         run: |
           echo '## GalviCare 0.5 QA Browser E2E' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR HUMAN QA E2E**' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR DAY 1 HUMAN QA E2E**' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo '- Browser: https://galvicare-0-5-qa.mrgalvipro.workers.dev/#galvitriage' >> "$GITHUB_STEP_SUMMARY"
-          echo '- API: https://galvicare-triage-intake.mrgalvipro.workers.dev/api' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Database: QA D1 binding owned by galvicare-triage-intake' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 1 Human E2E controls H3-H14: PRESENT + QA VISIBILITY OVERRIDE VERIFIED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 1 API: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Existing GalviCare API: https://galvicare-triage-intake.mrgalvipro.workers.dev/api' >> "$GITHUB_STEP_SUMMARY"
           echo '- Payments: Stripe TEST only' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production analytics: disabled in QA artifact' >> "$GITHUB_STEP_SUMMARY"

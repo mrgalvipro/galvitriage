@@ -24,6 +24,8 @@ const DAY7D_RELEASE_CONTRACT='day7d_cumulative_customer_intelligence_v3';
 const AUTHORITATIVE_SIGNATURE='Day 7D cumulative customer-intelligence browser adapter.';
 const DAY1_HUMAN_SIGNATURE='Day 1 Human E2E Pre-Founder QA adapter.';
 const LEGACY_SIGNATURE='DAY7D_CUSTOMER_INTELLIGENCE_ADAPTER_SOURCE';
+const DAY1_VISIBILITY_ID='day1-human-e2e-qa-visibility';
+const DAY1_VISIBILITY_SELECTOR='#day1-human-e2e-panel[data-qa-only="true"]';
 
 let html=readFileSync(SOURCE,'utf8');
 const day7dBrowser=readFileSync(DAY7D_BROWSER,'utf8');
@@ -56,7 +58,8 @@ html=html.replace("const GALVICARE_CANONICAL_CUSTOMER_URL = 'https://www.galvipr
 html=html.replace(/const GALVICLINIC_FALLBACK_URL = '[^']+';/,`const GALVICLINIC_FALLBACK_URL = '${QA_CALENDLY}';`);
 const qaBanner=`\n<div id="galvicare-qa-environment-banner" role="status" style="position:sticky;top:0;z-index:99999;background:#7f1d1d;color:#fff;text-align:center;font:700 13px/1.3 Arial,sans-serif;padding:8px 12px;letter-spacing:.08em;">GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS</div>`;
 html=html.replace(/<body([^>]*)>/,`<body$1>${qaBanner}`);
-html=html.replace('</head>',`  <meta name="galvicare-environment" content="qa" />\n  <meta name="galvicare-qa-frontend" content="${DAY7D_RELEASE_CONTRACT}" />\n  <meta name="galvicare-day1-human-e2e" content="principal-only-enabled" />\n</head>`);
+const day1VisibilityStyle=`  <style id="${DAY1_VISIBILITY_ID}">\n    /* QA-only surgical override: the customer-view hardening rule intentionally hides generic data-qa-only content.\n       Day 1 Human E2E is the one approved QA control surface that must remain human-visible. */\n    ${DAY1_VISIBILITY_SELECTOR}{display:block!important;visibility:visible!important;}\n  </style>`;
+html=html.replace('</head>',`  <meta name="galvicare-environment" content="qa" />\n  <meta name="galvicare-qa-frontend" content="${DAY7D_RELEASE_CONTRACT}" />\n  <meta name="galvicare-day1-human-e2e" content="principal-only-enabled" />\n${day1VisibilityStyle}\n</head>`);
 
 function removeEmbeddedAdapter(signature){while(html.includes(signature)){const markerStart=html.indexOf(signature),scriptStart=html.lastIndexOf('<script>',markerStart),scriptEnd=html.indexOf('</script>',markerStart);if(scriptStart<0||scriptEnd<0)throw new Error(`Embedded adapter containing ${signature} is not bounded by a script tag.`);html=html.slice(0,scriptStart)+html.slice(scriptEnd+'</script>'.length);}}
 removeEmbeddedAdapter(LEGACY_SIGNATURE);
@@ -81,7 +84,8 @@ for(const required of [
   'save_galvishot_followup','save_galvisight_followup','save_galvipath_followup',
   'skipCurrentQuestion','SKIPPED_ANSWER','stopImmediatePropagation','installAuthoritativeStageRoutes',
   'invokeLegacyWithResponse','MAX_VISIBLE_TARGETED_QUESTIONS=3','galvipath-book-galviclinic',
-  DAY1_HUMAN_SIGNATURE,'day1-human-e2e-panel','H3 Create Pre-Founder','H14 Runtime Health'
+  DAY1_HUMAN_SIGNATURE,'day1-human-e2e-panel','H3 Create Pre-Founder','H14 Runtime Health',
+  DAY1_VISIBILITY_ID,DAY1_VISIBILITY_SELECTOR,'display:block!important','visibility:visible!important'
 ]) if(!html.includes(required)) throw new Error(`Generated QA frontend missing cumulative journey contract: ${required}`);
 if(html.includes(PROD_WORKER)) throw new Error('Production Worker leaked into QA frontend.');
 for(const {live} of Object.values(STRIPE)) if(html.includes(live)) throw new Error(`LIVE Stripe link leaked into QA frontend: ${live}`);
@@ -91,6 +95,7 @@ writeFileSync(OUT,html,'utf8');
 console.log(`PASS — ${OUT} is the single cumulative QA frontend candidate.`);
 console.log(`PASS — release contract ${DAY7D_RELEASE_CONTRACT} binds the generated frontend to the authoritative Worker candidate.`);
 console.log('PASS — Day 1 Human E2E Pre-Founder path is QA-only and uses the isolated Day 1 Worker.');
+console.log('PASS — Day 1 Human E2E panel has a QA-only ID-scoped visibility override and cannot be hidden by generic customer-view QA hardening.');
 console.log('PASS — canonical Production endpoints and LIVE payment links are transformed only in dist-qa.');
 console.log('PASS — GalviScore clarification is Worker-owned and objective score remains immutable.');
 console.log('PASS — Triage → Vitals → Score → Shot → Sight → Path → Clinic contract is present.');
