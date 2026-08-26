@@ -7,6 +7,7 @@ on:
     paths:
       - worker/day4-galvicare-1-0.js
       - day4-galvichart-browser.js
+      - day4-customer-experience-hardening.js
       - scripts/day4-build-qa-frontend.mjs
       - tests/day4-galvicare-1-0.test.mjs
       - wrangler.day4.json
@@ -62,10 +63,11 @@ jobs:
           set -euo pipefail
           node --check worker/day4-galvicare-1-0.js
           node --check day4-galvichart-browser.js
+          node --check day4-customer-experience-hardening.js
           node --check scripts/day4-build-qa-frontend.mjs
           node --test tests/day4-galvicare-1-0.test.mjs | tee /tmp/day4-contract.txt
           ! grep -E '# skipped [1-9]' /tmp/day4-contract.txt
-          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY' --include='day4-galvichart-browser.js' .
+          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY' --include='day4-galvichart-browser.js' --include='day4-customer-experience-hardening.js' .
 
       - name: Full inherited Day 3 and Day7D regression
         shell: bash
@@ -169,6 +171,8 @@ jobs:
           echo '- Signed Day 3 ancestry: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Inherited Day 3/Day7D regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- GalviChart 1.0 static contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Follow-up draft resilience static contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Customer-safe governed Chart interpretation contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- QA D1 0100-0103 reuse/no shadow DB: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Exact-SHA existing Worker deployment: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Runtime readiness/security negatives: PASS' >> "$GITHUB_STEP_SUMMARY"
