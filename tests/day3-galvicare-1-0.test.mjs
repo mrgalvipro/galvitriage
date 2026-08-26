@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
 import worker, { GALVICARE_RELEASE, GALVICARE_SCHEMA, PROMPT_VERSION } from '../worker/day3-galvicare-1-0.js';
+import unifiedWorker from '../worker/day3-unified-customer-api.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = p => fs.readFileSync(path.join(ROOT,p),'utf8');
@@ -84,6 +85,26 @@ test('T11 regulated red flag routes to referral without AI',async()=>{const {env
 test('T13/T14 provider outage preserves deterministic state',async()=>{const {env,sqlite}=db(),s=seed(sqlite,'outage');env.DAY3_PROVIDER_MOCK=async()=>{throw new Error('outage')};const x=await call(env,'/api/v1/day3/shot',{suffix:'outage',body:{context_id:s.context,current_stage:'GalviShot'}});assert.equal(x.r.status,200);assert.equal(x.p.meta.ai_status,'fallback_provider_error');assert.equal(x.p.data.generation_source,'rules');assert.equal(sqlite.prepare("SELECT COUNT(*) n FROM gv1_day2_intake_results WHERE context_id=?").get(s.context).n,3)});
 test('T20/T21 Sight and Path are bounded',async()=>{const {env,sqlite}=db(),s=seed(sqlite,'products');env.DAY3_PROVIDER_MOCK=async({task})=>({proposal:proposal(task,s.evidence)});const sight=await call(env,'/api/v1/day3/sight',{suffix:'products',body:{context_id:s.context,current_stage:'GalviSight'}});assert.equal(sight.r.status,201);assert.ok(sight.p.data.content.summary);const path=await call(env,'/api/v1/day3/path',{suffix:'products',body:{context_id:s.context,current_stage:'GalviPath'}});assert.equal(path.r.status,201);assert.ok(path.p.data.content.objective);assert.doesNotMatch(JSON.stringify(path.p.data.content),/treatment (?:is )?confirmed/i)});
 test('T22 Pre-Founder remains principal_only with no fabricated BHR',async()=>{const {env,sqlite}=db(),s=seed(sqlite,'prefounder',{operating:false});env.DAY3_PROVIDER_MOCK=async({task})=>({proposal:proposal(task,s.evidence)});const x=await call(env,'/api/v1/day3/shot',{suffix:'prefounder',body:{context_id:s.context,current_stage:'GalviShot'}});assert.equal(x.r.status,201);assert.equal(x.p.data.bmr_id,null);assert.equal(sqlite.prepare("SELECT bmr_id FROM gv1_day3_ai_generations WHERE context_id=?").get(s.context).bmr_id,null)});
+
+test('T23 browser-realistic governed /api preflight permits JSON and no-cache headers',async()=>{
+  const {env}=db();
+  const origin='https://galvicare-0-5-qa.mrgalvipro.workers.dev';
+  const response=await unifiedWorker.fetch(new Request('https://day3.test/api',{
+    method:'OPTIONS',
+    headers:{
+      Origin:origin,
+      'Access-Control-Request-Method':'POST',
+      'Access-Control-Request-Headers':'content-type,cache-control'
+    }
+  }),env);
+  assert.equal(response.status,204);
+  assert.equal(response.headers.get('access-control-allow-origin'),'*');
+  assert.match(response.headers.get('access-control-allow-methods')||'',/POST/i);
+  const allowed=(response.headers.get('access-control-allow-headers')||'').toLowerCase();
+  assert.match(allowed,/content-type/);
+  assert.match(allowed,/cache-control/);
+  assert.equal(response.headers.get('x-galvi-day3-cors-contract'),'customer-api-v1');
+});
 
 if(process.env.DAY3_V10_REMOTE_SMOKE==='1'){
   test('H01-H22 remote critical path smoke',async()=>{
