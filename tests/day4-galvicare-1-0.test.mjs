@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 // triggers both QA runtime workflows so backend and frontend prove the same candidate SHA.
 const worker=readFileSync(new URL('../worker/day4-galvicare-1-0.js',import.meta.url),'utf8');
 const browser=readFileSync(new URL('../day4-galvichart-browser.js',import.meta.url),'utf8');
+const hardening=readFileSync(new URL('../day4-customer-experience-hardening.js',import.meta.url),'utf8');
 const config=JSON.parse(readFileSync(new URL('../wrangler.day4.json',import.meta.url),'utf8'));
 
 test('Day 4 uses the existing QA Worker/D1 and the approved 1.0 entrypoint',()=>{
@@ -46,8 +47,31 @@ test('Day 4 browser is renderer-only and cannot create entitlement or call OpenA
   assert.ok(browser.includes('/api/v1/day4/chart'));
   assert.ok(browser.includes('X-Galvi-Day3-Session'));
   assert.ok(browser.includes('View GalviChart™'));
-  for(const forbidden of ['api.openai.com','OPENAI_API_KEY','wrangler','SELECT ','INSERT INTO ','UPDATE gv1_','payment_required=true'])
-    assert.equal(browser.includes(forbidden),false,`browser contains forbidden contract ${forbidden}`);
+  for(const source of [browser,hardening]){
+    for(const forbidden of ['api.openai.com','OPENAI_API_KEY','wrangler','SELECT ','INSERT INTO ','UPDATE gv1_','payment_required=true'])
+      assert.equal(source.includes(forbidden),false,`browser contains forbidden contract ${forbidden}`);
+  }
+});
+
+test('Day 4 preserves unsaved Shot/Sight/Path follow-up drafts until a successful server save',()=>{
+  for(const required of [
+    'GalviCare Day 4 customer experience hardening v1','GalviCare Day 4 follow-up draft resilience v1','galvicare_followup_drafts_v1',
+    'galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions',
+    'save_galvishot_followup','save_galvisight_followup','save_galvipath_followup',
+    "document.addEventListener('input'","document.addEventListener('visibilitychange'","window.addEventListener('blur'","window.addEventListener('pagehide'",'MutationObserver'
+  ]) assert.ok(hardening.includes(required),`missing draft resilience contract ${required}`);
+  assert.ok(hardening.includes('if(response.ok&&init?.body)'));
+  assert.ok(hardening.includes('clearSavedDrafts(product,answers)'));
+});
+
+test('Day 4 Chart translates authorized canonical data and accepted governed intelligence into customer-safe language',()=>{
+  for(const required of [
+    'GalviCare Day 4 customer-safe governed interpretation v1','What GalviCare understands right now',
+    'renderDimensions','How confident is this view?','Evidence that still needs validation',
+    'accepted GalviEngine reasoning already saved in GalviVault','Opening GalviChart does not rerun AI',
+    'Record version details'
+  ]) assert.ok(hardening.includes(required),`missing customer-safe Chart contract ${required}`);
+  assert.ok(hardening.includes("url.includes('/api/v1/day4/chart')"));
 });
 
 test('Day 3 closed-loop runtime remains inherited, not replaced',()=>{
