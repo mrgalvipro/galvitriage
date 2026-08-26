@@ -143,9 +143,6 @@ jobs:
             echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
           fi
 
-          # Cloudflare's version registry is briefly eventually consistent. Do not
-          # promote until the exact uploaded ID is queryable; this permanently avoids
-          # the historical 100146 race from deploying an ID before registration.
           for n in $(seq 1 20); do
             npx --yes wrangler@4 versions list --name "$QA_WORKER_NAME" --config /tmp/wrangler.day4.runtime.json --json > /tmp/day4-versions.json || true
             if grep -q "$VERSION_ID" /tmp/day4-versions.json; then
@@ -200,8 +197,6 @@ jobs:
           done
           test "$promoted" = "1"
 
-          # Deployment-control-plane PASS is only the first half of convergence.
-          # Require the newest deployment itself to point 100% at this exact ID.
           for n in $(seq 1 20); do
             npx --yes wrangler@4 deployments list --name "$QA_WORKER_NAME" --config /tmp/wrangler.day4.runtime.json --json > /tmp/day4-deployments.json || true
             if node --input-type=module <<'NODE'
@@ -286,7 +281,7 @@ jobs:
         run: |
           set -euo pipefail
           SESSION_ID=$(cat /tmp/day4-bootstrap-session.txt)
-          CONTEXT_ID=$(node --input-type=module -e "const p=JSON.parse(require('fs').readFileSync('/tmp/day4-bootstrap-1.json','utf8'));process.stdout.write(p.data.context_id)")
+          CONTEXT_ID=$(node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('/tmp/day4-bootstrap-1.json','utf8'));process.stdout.write(p.data.context_id)")
           STATUS=$(curl -sS -o /tmp/day4-chart-probe.json -w '%{http_code}' \
             -H 'Content-Type: application/json' \
             -H 'Cache-Control: no-cache' \
