@@ -11,7 +11,7 @@
  * 5) hide provider/model/prompt machinery from the normal customer surface.
  *
  * Projection-only: no OpenAI call, no D1 call, no identity/entitlement mutation, no
- * canonical write, and no read/clear/rewrite of follow-up draft storage or textareas.
+ * canonical write, and no read/clear/rewrite of follow-up draft storage or input fields.
  */
 (()=>{
   'use strict';
