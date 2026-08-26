@@ -12,6 +12,7 @@ on:
       - day3-governed-ai-customer-bridge.mjs
       - day4-galvichart-browser.js
       - day4-customer-experience-hardening.js
+      - day4-single-current-governed-product.js
       - qa-frontend-worker.js
       - wrangler.qa-frontend.jsonc
       - scripts/day7b-build-qa-frontend.mjs
@@ -67,6 +68,8 @@ jobs:
           grep -Fq 'GalviCare Day 4 customer experience hardening v1' dist-qa/index.html
           grep -Fq 'GalviCare Day 4 follow-up draft resilience v1' dist-qa/index.html
           grep -Fq 'GalviCare Day 4 customer-safe governed interpretation v1' dist-qa/index.html
+          grep -Fq 'GalviCare Day 4 single-current governed product projection v1' dist-qa/index.html
+          grep -Fq 'Current view — updated using your latest answers.' dist-qa/index.html
           grep -Fq 'What GalviCare understands right now' dist-qa/index.html
           grep -Fq 'View GalviChart™' dist-qa/index.html
           grep -Fq 'GALVICHART™ | BUSINESS HEALTH RECORD' dist-qa/index.html
@@ -79,7 +82,7 @@ jobs:
           grep -Fq 'GalviClinic' dist-qa/index.html
           grep -Fq 'History' dist-qa/index.html
           ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
-          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY' day4-galvichart-browser.js day4-customer-experience-hardening.js
+          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY' day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js
 
       - name: Deploy existing dedicated QA frontend Worker
         run: npx --yes wrangler@4 deploy --config wrangler.qa-frontend.jsonc
@@ -102,6 +105,8 @@ jobs:
               && grep -Fq 'GalviCare Day 4 customer experience hardening v1' qa-runtime.html 2>/dev/null \
               && grep -Fq 'GalviCare Day 4 follow-up draft resilience v1' qa-runtime.html 2>/dev/null \
               && grep -Fq 'GalviCare Day 4 customer-safe governed interpretation v1' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'GalviCare Day 4 single-current governed product projection v1' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'Current view — updated using your latest answers.' qa-runtime.html 2>/dev/null \
               && grep -Fq 'What GalviCare understands right now' qa-runtime.html 2>/dev/null \
               && grep -Fq 'View GalviChart™' qa-runtime.html 2>/dev/null \
               && grep -Fq '/api/v1/day4/chart' qa-runtime.html 2>/dev/null \
@@ -130,8 +135,9 @@ jobs:
           echo '- Day 3 clarification/governed-AI bridge: PRESERVED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 4 GalviChart adapter: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Shot/Sight/Path follow-up draft resilience: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Single current governed Sight/Path projection after follow-up: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Customer-safe governed GalviChart interpretation: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- GalviChart backend readiness: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- No browser-to-OpenAI/D1 authority: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR DAY 4 HUMAN E2E H01-H22.**' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR DAY 4 HUMAN E2E H12-H22 after H01-H11 regression confirmation.**' >> "$GITHUB_STEP_SUMMARY"

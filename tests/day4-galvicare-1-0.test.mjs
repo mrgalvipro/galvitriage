@@ -12,6 +12,7 @@ const projection=readFileSync(new URL('../worker/day4-customer-projection-v2.js'
 const identity=readFileSync(new URL('../worker/day4-session-identity-entry.js',import.meta.url),'utf8');
 const browser=readFileSync(new URL('../day4-galvichart-browser.js',import.meta.url),'utf8');
 const hardening=readFileSync(new URL('../day4-customer-experience-hardening.js',import.meta.url),'utf8');
+const singleCurrent=readFileSync(new URL('../day4-single-current-governed-product.js',import.meta.url),'utf8');
 const config=JSON.parse(readFileSync(new URL('../wrangler.day4.json',import.meta.url),'utf8'));
 
 test('Day 4 stays on the existing QA Worker/D1 and uses additive projection + identity compatibility adapters',()=>{
@@ -81,7 +82,7 @@ test('Base browser remains renderer-only and cannot create entitlement or call O
   assert.ok(browser.includes('/api/v1/day4/chart'));
   assert.ok(browser.includes('X-Galvi-Day3-Session'));
   assert.ok(browser.includes('View GalviChart™'));
-  for(const source of [browser,hardening]){
+  for(const source of [browser,hardening,singleCurrent]){
     for(const forbidden of ['api.openai.com','OPENAI_API_KEY','wrangler','SELECT ','INSERT INTO ','UPDATE gv1_','payment_required=true'])
       assert.equal(source.includes(forbidden),false,`browser contains forbidden contract ${forbidden}`);
   }
@@ -99,6 +100,21 @@ test('Unsaved Score/Shot/Sight/Path follow-up drafts survive focus loss and re-r
   ]) assert.ok(hardening.includes(required),`missing draft resilience contract ${required}`);
   assert.ok(hardening.includes('questionCode||field?.dataset?.questionId||field?.name||field?.id'));
   assert.ok(hardening.includes('if(payload?.success!==false)clearSavedDrafts'));
+});
+
+test('Sight/Path present one current governed customer result and refresh only after canonical evidence advances',()=>{
+  for(const required of [
+    'GalviCare Day 4 single-current governed product projection v1',
+    'save_galvisight_followup','save_galvipath_followup','evidence_version_bumped','evidenceAdvanced',
+    'day4-superseded-current','data-day4-governed-current','stale current projection invalidated after evidence-version advance',
+    'Current view — updated using your latest answers. Earlier accepted views remain preserved in GalviChart History.',
+    'galvisight-result-panel','galvipath-result-panel','day3-ai-galvisight','day3-ai-galvipath',
+    'galvipath-detail-section','day3-governed-primary','body.qa-debug-enabled [data-day4-technical-meta="1"]'
+  ]) assert.ok(singleCurrent.includes(required),`missing single-current contract ${required}`);
+  assert.ok(singleCurrent.includes("card?.remove();"),'GalviPath duplicate governed summary card must be removed after in-place governed plan projection.');
+  assert.ok(singleCurrent.includes("child.classList.add(SUPERSEDED)"),'GalviSight deterministic parallel current view must be suppressed only after governed projection succeeds.');
+  for(const forbidden of ['localStorage','sessionStorage','textarea','galvicare_followup_drafts','/api/v1/day4/chart','api.openai.com','OPENAI_API_KEY','SELECT ','INSERT INTO ','UPDATE ','DELETE FROM '])
+    assert.equal(singleCurrent.includes(forbidden),false,`single-current projection must not own canonical truth or follow-up draft state: ${forbidden}`);
 });
 
 test('Customer-safe Chart hardening is race-free and uses the authorized read projection, not raw machinery',()=>{
