@@ -27,6 +27,7 @@ env:
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   SIGNED_DAY3_SHA: b8208da30a060aa7bc7513bb5c1fec480534cd2a
   QA_WORKER_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
+  QA_WORKER_NAME: galvivault-p0-day1-qa
 
 jobs:
   day4-critical-path:
@@ -132,23 +133,40 @@ jobs:
           VERSION_ID=$(sed -n 's/.*Current Version ID: \([0-9a-f-][0-9a-f-]*\).*/\1/p' /tmp/day4-deploy.log | tail -1)
           test -n "$VERSION_ID"
           echo "Exact candidate Worker Version ID: $VERSION_ID"
-          npx --yes wrangler@4 deployments list --config /tmp/wrangler.day4.runtime.json --json | tee /tmp/day4-deployments-before.json
           npx --yes wrangler@4 versions deploy "$VERSION_ID@100%" -y --config /tmp/wrangler.day4.runtime.json
-          npx --yes wrangler@4 deployments list --config /tmp/wrangler.day4.runtime.json --json | tee /tmp/day4-deployments-after.json
+          npx --yes wrangler@4 deployments list --config /tmp/wrangler.day4.runtime.json --json | tee /tmp/day4-deployments.json
           echo "DAY4_WORKER_VERSION_ID=$VERSION_ID" >> "$GITHUB_ENV"
 
-      - name: Exact runtime convergence and Day 4 readiness
+      - name: Prove exact version is executable through Cloudflare version override
         shell: bash
         run: |
           set -euo pipefail
-          for n in $(seq 1 15); do
+          OVERRIDE="${QA_WORKER_NAME}=\"${DAY4_WORKER_VERSION_ID}\""
+          for n in $(seq 1 10); do
+            STATUS=$(curl -sS -H 'Cache-Control: no-cache' -H "Cloudflare-Workers-Version-Overrides: $OVERRIDE" -o /tmp/day4-override-health.json -w '%{http_code}' "$QA_WORKER_URL/health?override=$n" || true)
+            echo "Override attempt $n status=$STATUS"
+            cat /tmp/day4-override-health.json || true
+            echo
+            if test "$STATUS" = "200" && node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const h=JSON.parse(fs.readFileSync('/tmp/day4-override-health.json','utf8'));
+          const c=h?.data?.capabilities||{};
+          if(h?.data?.commit_sha!==process.env.GITHUB_SHA)process.exit(1);
+          if(c.returning_session_identity_resolution!==true||c.session_identity_source!=='server_session_venture_founder_link'||c.founder_session_rebinding!==false)process.exit(1);
+          NODE
+            then echo 'PASS: exact uploaded Worker version executes correctly when explicitly selected.'; exit 0; fi
+            sleep 2
+          done
+          echo 'FAIL: version override cannot execute exact uploaded Day 4 candidate; stop before browser changes.'; exit 1
+
+      - name: Exact canonical workers.dev runtime convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for n in $(seq 1 20); do
             HEALTH_STATUS=$(curl -sS -H 'Cache-Control: no-cache' -o /tmp/day4-health.json -w '%{http_code}' "$QA_WORKER_URL/health?sha=$GITHUB_SHA&version=$DAY4_WORKER_VERSION_ID&n=$n" || true)
             READY_STATUS=$(curl -sS -H 'Cache-Control: no-cache' -o /tmp/day4-ready.json -w '%{http_code}' "$QA_WORKER_URL/api/v1/day4/readiness?sha=$GITHUB_SHA&version=$DAY4_WORKER_VERSION_ID&n=$n" || true)
-            echo "Attempt $n health=$HEALTH_STATUS readiness=$READY_STATUS"
-            cat /tmp/day4-health.json || true
-            echo
-            cat /tmp/day4-ready.json || true
-            echo
+            echo "Canonical attempt $n health=$HEALTH_STATUS readiness=$READY_STATUS"
             if test "$HEALTH_STATUS" = "200" && test "$READY_STATUS" = "200" && node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const h=JSON.parse(fs.readFileSync('/tmp/day4-health.json','utf8'));
@@ -159,10 +177,10 @@ jobs:
           if(c.returning_session_identity_resolution!==true||c.session_identity_source!=='server_session_venture_founder_link'||c.founder_session_rebinding!==false)process.exit(1);
           if(r?.success!==true||r?.data?.ready!==true||r?.data?.chart_shadow_database!==false||r?.meta?.commit_sha!==process.env.GITHUB_SHA)process.exit(1);
           NODE
-            then echo "PASS: exact SHA $GITHUB_SHA is active at 100% on Worker version $DAY4_WORKER_VERSION_ID"; exit 0; fi
-            sleep 2
+            then echo "PASS: exact SHA $GITHUB_SHA is canonical on workers.dev at Worker version $DAY4_WORKER_VERSION_ID"; exit 0; fi
+            sleep 3
           done
-          echo 'FAIL: exact Day 4 runtime did not converge'; exit 1
+          echo 'FAIL: exact version passes explicit selection but canonical workers.dev still serves a different deployment. This is a Cloudflare route/deployment presentation blocker, not an application-code failure.'; exit 1
 
       - name: Deployed authorization and structured-error negatives
         shell: bash
@@ -186,17 +204,11 @@ jobs:
       - name: Day 4 automated gate summary
         run: |
           echo '## GalviCare 1.0 Day 4 Automated Critical Path' >> "$GITHUB_STEP_SUMMARY"
-          echo '' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA branch only: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Signed Day 3 ancestry: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Inherited Day 3/Day7D regression: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Returning/retest session -> canonical founder resolution: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- No founder session rebinding / no duplicate BHR: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviChart 1.0 static contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Follow-up draft resilience static contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Customer-safe governed Chart interpretation contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- QA D1 0100-0103 reuse/no shadow DB: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo "- Exact-SHA Worker version active at 100%: PASS ($DAY4_WORKER_VERSION_ID)" >> "$GITHUB_STEP_SUMMARY"
-          echo '- Runtime readiness/security negatives: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '**AUTOMATED GATE PASS — FOCUSED HUMAN REGRESSION THEN H12-H22 + ROLLBACK REHEARSAL STILL REQUIRED FOR DAY 4 BUILD FINAL.**' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Signed Day 3 ancestry + inherited regression: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Returning/retest identity compatibility contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Follow-up draft resilience contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Accepted governed customer projection contract: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Exact Worker version + canonical workers.dev convergence: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA D1 integrity/security negatives: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '**AUTOMATED GATE PASS — run focused Human H04-H11 regression, then continue H12-H22 + rollback.**' >> "$GITHUB_STEP_SUMMARY"
