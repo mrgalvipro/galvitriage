@@ -1,18 +1,28 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvivault-p0-day1-qa",
-  "main": "worker/day4-entry.js",
+  "main": "worker/day4-galvicare-1-0.js",
   "compatibility_date": "2026-07-23",
   "workers_dev": true,
-  "observability": {
-    "enabled": true
-  },
+  "observability": { "enabled": true },
   "vars": {
     "ENVIRONMENT": "qa",
     "FIXTURE_MODE": "true",
     "API_VERSION": "v1",
-    "MIN_SCHEMA_VERSION": "0004",
-    "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,http://localhost:8787,http://127.0.0.1:8787"
+    "MIN_SCHEMA_VERSION": "0103",
+    "AI_ENABLED": "true",
+    "OPENAI_MODEL_QA": "gpt-4.1-mini",
+    "OPENAI_TIMEOUT_MS": "20000",
+    "OPENAI_MAX_INPUT_BYTES": "24000",
+    "DAY3_CUSTOMER_PROJECTION": "v2",
+    "DAY3_CUSTOMER_EVIDENCE_PROJECTION": "v7",
+    "DAY3_CUSTOMER_SESSION_BRIDGE": "true",
+    "DAY3_CUSTOMER_CORS_VERSION": "v3",
+    "DAY3_CUSTOMER_EVIDENCE_API": "unified_governed_worker_v1",
+    "DAY3_CUSTOMER_EVIDENCE_RUNTIME": "collision_safe_v2",
+    "DAY4_GALVICHART_PROJECTION": "v1",
+    "GALVICLINIC_BOOKING_URL": "https://calendly.com/galvilpro/galviclinic-day7c-qa",
+    "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,https://galvicare-0-5-qa.mrgalvipro.workers.dev,http://localhost:8787,http://127.0.0.1:8787"
   },
   "d1_databases": [
     {
