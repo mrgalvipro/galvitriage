@@ -8,7 +8,8 @@
  *    deterministic content available as the safe fallback if governed projection fails;
  * 4) keep prior accepted versions in GalviChart History instead of rendering them as
  *    parallel "current" product results;
- * 5) hide provider/model/prompt machinery from the normal customer surface.
+ * 5) hide provider/model/prompt machinery and internal record vocabulary from the normal
+ *    customer surface without changing canonical evidence, lineage, or governed reasoning.
  *
  * Projection-only: no OpenAI call, no D1 call, no identity/entitlement mutation, no
  * canonical write, and no read/clear/rewrite of follow-up draft storage or input fields.
@@ -21,6 +22,19 @@
   const SUPERSEDED='day4-superseded-current';
   const CURRENT_ATTR='data-day4-governed-current';
   const CURRENT_NOTE='Current view — updated using your latest answers. Earlier accepted views remain preserved in GalviChart History.';
+  const SUPPORT_LEVEL_COPY=Object.freeze({
+    passive_care:'Ongoing monitoring',
+    active_care:'Business Physician-guided care',
+    human_review:'Business Physician review',
+    clinician_review:'Business Physician review',
+    self_guided:'Self-guided monitoring'
+  });
+  const OWNER_COPY=Object.freeze({
+    customer:'You',
+    founder:'You',
+    business_physician:'Your Business Physician',
+    clinician:'Your GalviClinician'
+  });
   const PRODUCTS=Object.freeze({
     GalviSight:Object.freeze({
       panel:'galvisight-result-panel',
@@ -54,6 +68,8 @@
     for(const value of values){const number=Number(value);if(Number.isFinite(number))return number;}
     return null;
   };
+  const humanize=(value)=>text(value).replaceAll('_',' ').replace(/\b\w/g,(c)=>c.toUpperCase());
+  const strongLabel=(node)=>text(node?.querySelector?.('strong')?.textContent).replace(/:\s*$/,'');
 
   function evidenceAdvanced(payload){
     const bumped=payload?.evidence_version_bumped===true||payload?.data?.evidence_version_bumped===true||payload?.evaluation?.evidence_version_bumped===true;
@@ -90,6 +106,57 @@
     ensureCurrentNote(card);
   }
 
+  function rewriteLabeledRow(row,nextLabel,nextValue){
+    if(!row||!nextLabel||!text(nextValue))return false;
+    const desired=`${nextLabel}: ${text(nextValue)}`;
+    if(text(row.textContent)===desired)return false;
+    row.innerHTML='';
+    const strong=document.createElement('strong');
+    strong.textContent=nextLabel+': ';
+    row.append(strong,document.createTextNode(text(nextValue)));
+    return true;
+  }
+
+  function customerizePathOperationalMetadata(panel){
+    if(!panel)return false;
+    let changed=false;
+    const sections=[...panel.querySelectorAll('.galvipath-detail-section')];
+    const pathway=sections.find((section)=>[...section.querySelectorAll('p')].some((row)=>['Owner','Recommended support level'].includes(strongLabel(row))));
+    if(pathway){
+      for(const row of [...pathway.querySelectorAll('p')]){
+        const label=strongLabel(row),strong=row.querySelector('strong');
+        if(!strong)continue;
+        const raw=text(row.textContent).slice(text(strong.textContent).length).trim();
+        if(label==='Owner')changed=rewriteLabeledRow(row,'Care owner',OWNER_COPY[text(raw).toLowerCase()]||humanize(raw))||changed;
+        if(label==='Recommended support level')changed=rewriteLabeledRow(row,'Recommended level of care',SUPPORT_LEVEL_COPY[text(raw).toLowerCase()]||humanize(raw))||changed;
+      }
+    }
+
+    const evidenceSection=sections.find((section)=>text(section.querySelector('h3')?.textContent).toLowerCase()==='galvilab samples to collect');
+    if(evidenceSection){
+      const heading=evidenceSection.querySelector('h3');
+      if(heading&&heading.textContent!=='Evidence to Strengthen Your Care Plan'){
+        heading.textContent='Evidence to Strengthen Your Care Plan';
+        changed=true;
+      }
+      const rawItems=[...evidenceSection.querySelectorAll('li')].filter((item)=>/^evi_[A-Za-z0-9:._-]+$/i.test(text(item.textContent)));
+      if(rawItems.length){
+        const count=rawItems.length;
+        rawItems.forEach((item)=>item.remove());
+        evidenceSection.querySelectorAll('ul,ol').forEach((list)=>{if(!list.querySelector('li'))list.remove()});
+        let status=evidenceSection.querySelector('.day4-customer-evidence-status');
+        if(!status){
+          status=document.createElement('p');
+          status.className='day4-customer-evidence-status';
+          evidenceSection.appendChild(status);
+        }
+        status.textContent=`GalviCare has identified ${count} follow-up evidence item${count===1?'':'s'} that can strengthen this care plan. You will receive each request in plain language when it is useful for the next care decision.`;
+        changed=true;
+      }
+    }
+    return changed;
+  }
+
   function sightGovernedComplete(cfg,panel,card){
     return Boolean(panel&&card&&!byId(cfg.failure)&&text(card.textContent));
   }
@@ -124,6 +191,7 @@
     // evidence-to-collect sections in place. The extra governed summary card is therefore
     // redundant and is removed so the customer sees one integrated current care plan.
     card?.remove();
+    customerizePathOperationalMetadata(panel);
     panel.setAttribute(CURRENT_ATTR,'1');
     let note=panel.querySelector('.day4-current-path-note');
     if(!note){
@@ -209,6 +277,7 @@
     style.textContent=`
       #galvisight-result-panel[${CURRENT_ATTR}="1"] > .${SUPERSEDED}{display:none!important}
       .day4-current-governed-note,.day4-current-path-note{margin:12px 0;padding:10px 12px;border:1px solid #dbe5ee;border-radius:9px;background:#f8fafc;color:#475569;font-size:12px;line-height:1.45}
+      .day4-customer-evidence-status{margin:8px 0;line-height:1.5;color:#334155}
       [data-day4-technical-meta="1"]{display:none!important}
       body.qa-debug-enabled [data-day4-technical-meta="1"]{display:block!important}
     `;
@@ -228,5 +297,5 @@
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',initialize,{once:true});
   else queueMicrotask(initialize);
 
-  window.GalviCareDay4SingleCurrent={reconcile,queueReconcile,evidenceAdvanced,signature:SIGNATURE};
+  window.GalviCareDay4SingleCurrent={reconcile,queueReconcile,evidenceAdvanced,customerizePathOperationalMetadata,signature:SIGNATURE};
 })();
