@@ -4,10 +4,15 @@
  * - Chart is a read-only browser projection of canonical GalviVault state.
  * - Browser never unlocks from URL/localStorage and never calls OpenAI/D1 directly.
  * - Day 3 clarification/evidence/governed intelligence remains upstream and intact.
+ * - Refresh/return re-resolves canonical identity from the authenticated session before
+ *   every Chart open; cached browser context is never authoritative.
+ * - Normal customer commands omit raw context/BHR identifiers so the Worker resolves the
+ *   same founder/BHR server-side and rejects explicit cross-record tampering independently.
  */
 (()=>{
   'use strict';
   const SIGNATURE='GalviCare Day 4 GalviChart customer projection v1';
+  const RETURN_SIGNATURE='GalviCare Day 4 server-authoritative return and command context v1';
   const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev';
   const SESSION_HEADER='X-Galvi-Day3-Session';
   const STORE='galvicare_day3_customer_bridge_v2';
@@ -43,10 +48,14 @@
   }
 
   async function context(){
-    const current=bridge();
-    if(current?.context_id&&current?.bmr_id)return current;
     const sid=session();
     if(!sid)throw Object.assign(new Error('Your GalviCare session is required to open GalviChart.'),{code:'GV_DAY4_SESSION_REQUIRED'});
+
+    // Never trust the cached bridge as record authority. Every open/command first resolves
+    // the authenticated session through the existing server-side customer bootstrap. This
+    // repairs stale browser state after refresh/retest/return without minting or rebinding
+    // identity, while keeping localStorage only as a convenience cache for the UI.
+    const current=bridge();
     const legacy=score();
     const response=await api('/api/v1/day3/customer-bootstrap',{body:{
       legacy_session_id:sid,
@@ -201,15 +210,40 @@
     addText(node,'div',`${text(error?.code||'GV_DAY4_ERROR')} ${text(error?.message||error)}`,'gchart-error');
   }
 
+  async function readCurrentChart({render=true}={}){
+    await context();
+    // Deliberately omit context_id for normal customer reads. The authenticated session is
+    // the authority; the Worker resolves the canonical context and validates any explicit
+    // IDs only for tamper/negative tests.
+    const payload=await api('/api/v1/day4/chart',{body:{}});
+    if(render){if(payload?.status==='locked')renderLocked(payload);else renderChart(payload)}
+    return payload;
+  }
+
   async function openChart(){
     const buttonTargets=document.querySelectorAll('[data-day4-chart-button]');
     buttonTargets.forEach((button)=>{button.disabled=true;button.textContent='Opening GalviChart…'});
-    try{
-      const ref=await context();
-      const payload=await api('/api/v1/day4/chart',{body:{context_id:ref.context_id}});
-      if(payload?.status==='locked')renderLocked(payload);else renderChart(payload);
-    }catch(error){renderError(error)}
+    try{await readCurrentChart({render:true})}
+    catch(error){renderError(error)}
     finally{buttonTargets.forEach((button)=>{button.disabled=false;button.textContent='View GalviChart™'})}
+  }
+
+  async function submitCommand(command,payload={},idempotencyKey=''){
+    const normalized=text(command).toLowerCase();
+    if(!normalized)throw Object.assign(new Error('A GalviChart command is required.'),{code:'GV_DAY4_COMMAND_REQUIRED'});
+    await context();
+    const key=text(idempotencyKey)||`day4-${normalized}-${crypto.randomUUID()}`;
+    // Do not send context_id/bmr_id for the normal customer path. The Worker resolves the
+    // record from the authenticated session, which prevents stale browser IDs from causing
+    // false 403/404 failures and prevents the customer from having to understand record IDs.
+    const result=await api('/api/v1/day4/chart/command',{body:{command:normalized,payload:payload&&typeof payload==='object'&&!Array.isArray(payload)?payload:{}},key});
+    const chart=await readCurrentChart({render:true});
+    return Object.freeze({result,chart,idempotency_key:key});
+  }
+
+  async function checkIn(summary='Business Health check-in',idempotencyKey=''){
+    const safeSummary=text(summary).slice(0,1000)||'Business Health check-in';
+    return submitCommand('submit_check_in',{check_in_type:'customer_check_in',summary:safeSummary},idempotencyKey);
   }
 
   function addButton(container){
@@ -231,8 +265,9 @@
       addButton(s?.querySelector('.button-row')||s);addButton(p?.querySelector('.button-row')||p);
     });
     observer.observe(document.body,{subtree:true,childList:true});
-    window.GalviChartDay4=Object.freeze({open:openChart,signature:SIGNATURE});
+    window.GalviChartDay4=Object.freeze({open:openChart,read:()=>readCurrentChart({render:false}),command:submitCommand,checkIn,signature:SIGNATURE,returnSignature:RETURN_SIGNATURE});
     if(localStorage.getItem(OPEN_STORE)==='1'&&session())openChart().catch(()=>{});
+    console.info(RETURN_SIGNATURE,'active');
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
