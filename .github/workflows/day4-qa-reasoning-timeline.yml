@@ -125,7 +125,7 @@ jobs:
           fs.writeFileSync('/tmp/wrangler.day4.runtime.json',JSON.stringify(c,null,2));
           NODE
 
-      - name: Deploy and force exact candidate to 100 percent on existing QA Worker
+      - name: Atomic exact-SHA deploy to existing QA Worker
         shell: bash
         run: |
           set -euo pipefail
@@ -133,16 +133,30 @@ jobs:
           VERSION_ID=$(sed -n 's/.*Current Version ID: \([0-9a-f-][0-9a-f-]*\).*/\1/p' /tmp/day4-deploy.log | tail -1)
           test -n "$VERSION_ID"
           echo "Exact candidate Worker Version ID: $VERSION_ID"
-          npx --yes wrangler@4 versions deploy "$VERSION_ID@100%" -y --config /tmp/wrangler.day4.runtime.json
-          npx --yes wrangler@4 deployments list --config /tmp/wrangler.day4.runtime.json --json | tee /tmp/day4-deployments.json
           echo "DAY4_WORKER_VERSION_ID=$VERSION_ID" >> "$GITHUB_ENV"
+          # Wrangler deploy is atomic and deploys the uploaded version to 100% by default.
+          # Do not immediately issue a second versions-deploy mutation: Cloudflare's
+          # versions API can be briefly eventually consistent and previously returned
+          # code 100146 for the just-created version.
+          for n in $(seq 1 15); do
+            npx --yes wrangler@4 versions list --config /tmp/wrangler.day4.runtime.json --json > /tmp/day4-versions.json || true
+            if grep -q "$VERSION_ID" /tmp/day4-versions.json; then
+              echo "PASS: exact version registered in Cloudflare version control plane on attempt $n."
+              break
+            fi
+            if test "$n" = "15"; then
+              echo "FAIL: exact Worker version never became queryable after atomic deploy."; exit 1
+            fi
+            sleep 2
+          done
+          npx --yes wrangler@4 deployments list --config /tmp/wrangler.day4.runtime.json --json | tee /tmp/day4-deployments.json
 
       - name: Prove exact version is executable through Cloudflare version override
         shell: bash
         run: |
           set -euo pipefail
           OVERRIDE="${QA_WORKER_NAME}=\"${DAY4_WORKER_VERSION_ID}\""
-          for n in $(seq 1 10); do
+          for n in $(seq 1 12); do
             STATUS=$(curl -sS -H 'Cache-Control: no-cache' -H "Cloudflare-Workers-Version-Overrides: $OVERRIDE" -o /tmp/day4-override-health.json -w '%{http_code}' "$QA_WORKER_URL/health?override=$n" || true)
             echo "Override attempt $n status=$STATUS"
             cat /tmp/day4-override-health.json || true
@@ -157,13 +171,13 @@ jobs:
             then echo 'PASS: exact uploaded Worker version executes correctly when explicitly selected.'; exit 0; fi
             sleep 2
           done
-          echo 'FAIL: version override cannot execute exact uploaded Day 4 candidate; stop before browser changes.'; exit 1
+          echo 'FAIL: exact uploaded Day 4 version cannot be selected at runtime; stop before browser changes.'; exit 1
 
       - name: Exact canonical workers.dev runtime convergence
         shell: bash
         run: |
           set -euo pipefail
-          for n in $(seq 1 20); do
+          for n in $(seq 1 25); do
             HEALTH_STATUS=$(curl -sS -H 'Cache-Control: no-cache' -o /tmp/day4-health.json -w '%{http_code}' "$QA_WORKER_URL/health?sha=$GITHUB_SHA&version=$DAY4_WORKER_VERSION_ID&n=$n" || true)
             READY_STATUS=$(curl -sS -H 'Cache-Control: no-cache' -o /tmp/day4-ready.json -w '%{http_code}' "$QA_WORKER_URL/api/v1/day4/readiness?sha=$GITHUB_SHA&version=$DAY4_WORKER_VERSION_ID&n=$n" || true)
             echo "Canonical attempt $n health=$HEALTH_STATUS readiness=$READY_STATUS"
@@ -180,7 +194,7 @@ jobs:
             then echo "PASS: exact SHA $GITHUB_SHA is canonical on workers.dev at Worker version $DAY4_WORKER_VERSION_ID"; exit 0; fi
             sleep 3
           done
-          echo 'FAIL: exact version passes explicit selection but canonical workers.dev still serves a different deployment. This is a Cloudflare route/deployment presentation blocker, not an application-code failure.'; exit 1
+          echo 'FAIL: exact version is executable but canonical workers.dev still serves a different deployment. Stop as Cloudflare route/deployment presentation blocker.'; exit 1
 
       - name: Deployed authorization and structured-error negatives
         shell: bash
