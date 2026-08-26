@@ -8,24 +8,33 @@
  *   every Chart open; cached browser context is never authoritative.
  * - Normal customer commands omit raw context/BHR identifiers so the Worker resolves the
  *   same founder/BHR server-side and rejects explicit cross-record tampering independently.
+ * - An activated Chart automatically receives an opaque secure-return URL fragment; a
+ *   fresh browser/device exchanges that server-verified grant, restores the existing
+ *   GalviCare session and opens the same Chart without re-submitting GalviTriage.
  */
 (()=>{
   'use strict';
   const SIGNATURE='GalviCare Day 4 GalviChart customer projection v1';
   const RETURN_SIGNATURE='GalviCare Day 4 server-authoritative return and command context v1';
+  const SECURE_RETURN_SIGNATURE='GalviCare Day 4 secure cross-device return v1';
   const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev';
   const SESSION_HEADER='X-Galvi-Day3-Session';
   const STORE='galvicare_day3_customer_bridge_v2';
   const OPEN_STORE='galvicare_day4_chart_open_v1';
+  const RETURN_FRAGMENT_KEY='galvireturn';
+  const RETURN_TOKEN_RE=/^gvr1_[a-f0-9]{64}$/;
   const q=(selector)=>document.querySelector(selector);
   const byId=(id)=>document.getElementById(id);
   const text=(value)=>String(value??'').trim();
   const session=()=>typeof window.getStoredSessionId==='function'?text(window.getStoredSessionId()):text(localStorage.getItem('galvicare_session_id')||localStorage.getItem('galvishot_session_id'));
   const bridge=()=>{try{return JSON.parse(localStorage.getItem(STORE)||'{}')}catch{return{}}};
   const score=()=>{try{return typeof window.getCachedGalviScoreResult==='function'?(window.getCachedGalviScoreResult()||{}):JSON.parse(localStorage.getItem('galviscore_last_result')||'{}')}catch{return{}}};
+  let returnIssuePromise=null;
+  let returnExchangePromise=null;
+  let secureReturnState=null;
 
-  async function api(path,{body,key}={}){
-    const sid=session();
+  async function api(path,{body,key,omitSession=false}={}){
+    const sid=omitSession?'':session();
     const headers={
       'Accept':'application/json',
       'Cache-Control':'no-cache',
@@ -51,10 +60,8 @@
     const sid=session();
     if(!sid)throw Object.assign(new Error('Your GalviCare session is required to open GalviChart.'),{code:'GV_DAY4_SESSION_REQUIRED'});
 
-    // Never trust the cached bridge as record authority. Every open/command first resolves
-    // the authenticated session through the existing server-side customer bootstrap. This
-    // repairs stale browser state after refresh/retest/return without minting or rebinding
-    // identity, while keeping localStorage only as a convenience cache for the UI.
+    // Never trust the cached bridge as record authority. Every normal open/command first
+    // resolves the authenticated session through the existing server-side bootstrap.
     const current=bridge();
     const legacy=score();
     const response=await api('/api/v1/day3/customer-bootstrap',{body:{
@@ -70,6 +77,39 @@
     return next;
   }
 
+  function returnTokenFromLocation(){
+    try{
+      const raw=text(location.hash).replace(/^#/,'');
+      if(!raw)return '';
+      const params=new URLSearchParams(raw.replace(/^galvitriage\?/,'galvitriage&'));
+      const token=text(params.get(RETURN_FRAGMENT_KEY)).toLowerCase();
+      return RETURN_TOKEN_RE.test(token)?token:'';
+    }catch{return''}
+  }
+
+  function installReturnUrl(token){
+    if(!RETURN_TOKEN_RE.test(text(token).toLowerCase()))return '';
+    const url=new URL(location.href);
+    url.hash=`galvitriage&${RETURN_FRAGMENT_KEY}=${encodeURIComponent(text(token).toLowerCase())}`;
+    history.replaceState(null,'',url.pathname+url.search+url.hash);
+    return url.href;
+  }
+
+  function persistRecoveredSession(sessionId){
+    const sid=text(sessionId);
+    if(typeof window.persistSessionId==='function')return window.persistSessionId(sid);
+    if(!/^gt_[A-Za-z0-9_-]{5,92}$/.test(sid))throw new Error('Recovered GalviCare session is invalid.');
+    ['galvicare_session_id','galvitriage_session_id','galvicare_day1_qa_session_id'].forEach((key)=>localStorage.setItem(key,sid));
+    return sid;
+  }
+
+  function hideInitialJourneyForReturn(){
+    try{if(typeof window.hideGalviCareCustomerStates==='function'){window.hideGalviCareCustomerStates();return}}catch{}
+    for(const id of ['assessmentForm','result','galviscore-paywall','galviscore-result','galvishot-paywall','galvishot-result','galvisight-paywall','galvisight-handoff','galvipath-paywall','galvipath-result']){
+      const node=byId(id);if(node)node.style.display='none';
+    }
+  }
+
   function installStyle(){
     if(byId('day4-galvichart-style'))return;
     const style=document.createElement('style');
@@ -79,6 +119,7 @@
       #galvichart-day4.active{display:block}
       .gchart-eyebrow{letter-spacing:.12em;text-transform:uppercase;font-weight:800;color:#174a73;font-size:12px;margin:0 0 7px}
       .gchart-status{padding:11px 13px;border:1px solid #dbe5ee;background:#f8fbff;border-radius:10px;color:#334155;margin:12px 0;line-height:1.45}
+      .gchart-return{padding:11px 13px;border:1px solid #c9dfcf;background:#f5fbf6;border-radius:10px;color:#244c31;margin:12px 0;line-height:1.45}
       .gchart-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:13px;margin-top:16px}
       .gchart-section{border:1px solid #dbe5ee;border-radius:12px;padding:15px;background:#fbfdff;min-width:0}
       .gchart-section h3{margin:0 0 9px;color:#0f2f47;font-size:17px}
@@ -87,6 +128,7 @@
       .gchart-muted{color:#64748b;font-size:13px}
       .gchart-error{border:1px solid #f0c7c7;background:#fff7f7;color:#7f1d1d;border-radius:10px;padding:12px;margin:12px 0}
       .gchart-locked{border:1px solid #f0d8ad;background:#fff8ed;color:#7c4a12;border-radius:10px;padding:12px;margin:12px 0}
+      html.day4-secure-return-pending #assessmentForm,html.day4-secure-return-pending #result,html.day4-secure-return-pending #galviscore-paywall,html.day4-secure-return-pending #galviscore-result,html.day4-secure-return-pending #galvishot-paywall,html.day4-secure-return-pending #galvishot-result,html.day4-secure-return-pending #galvisight-paywall,html.day4-secure-return-pending #galvisight-handoff,html.day4-secure-return-pending #galvipath-paywall,html.day4-secure-return-pending #galvipath-result{display:none!important}
       @media(max-width:640px){#galvichart-day4{padding:18px 14px}.gchart-grid{grid-template-columns:1fr}}
     `;
     document.head.appendChild(style);
@@ -144,6 +186,15 @@
     const next=payload?.data?.next_action;
     if(next)addText(node,'p','Next step: '+next,'gchart-muted');
     node.scrollIntoView({behavior:'smooth',block:'start'});
+  }
+
+  function renderReturnGuidance(expiresAt=''){
+    const node=host();if(!node.classList.contains('active'))return;
+    let card=node.querySelector('[data-day4-secure-return]');
+    if(!card){card=document.createElement('div');card.dataset.day4SecureReturn='1';card.className='gchart-return';(node.querySelector('.gchart-status')||node.querySelector('h2'))?.insertAdjacentElement('afterend',card)}
+    const expiry=expiresAt?new Date(expiresAt):null;
+    const until=expiry&&!Number.isNaN(expiry.getTime())?` through ${expiry.toLocaleDateString()}`:'';
+    card.textContent=`Secure return is ready${until}. Bookmark or copy this page address to reopen this same Business Health Record on another supported browser or device. No new GalviTriage is required. Treat this return link as private access to your record.`;
   }
 
   function renderChart(payload){
@@ -210,6 +261,58 @@
     addText(node,'div',`${text(error?.code||'GV_DAY4_ERROR')} ${text(error?.message||error)}`,'gchart-error');
   }
 
+  async function issueSecureReturn(chartPayload){
+    if(chartPayload?.success!==true||chartPayload?.status!=='ok'||chartPayload?.data?.activated!==true||!session())return null;
+    const existingToken=returnTokenFromLocation();
+    if(existingToken){renderReturnGuidance(secureReturnState?.expires_at||'');return secureReturnState||{return_url:location.href}}
+    if(returnIssuePromise)return returnIssuePromise;
+    returnIssuePromise=(async()=>{
+      const issued=await api('/api/v1/day4/secure-return/issue',{body:{}});
+      const data=issued?.data||{},chart=chartPayload.data||{};
+      if(!RETURN_TOKEN_RE.test(text(data.return_token).toLowerCase()))throw new Error('Secure return token was not issued.');
+      if(data.principal_id!==chart.principal_id||data.context_id!==chart.context_id||data.bmr_id!==chart.bmr_id)throw new Error('Secure return record continuity verification failed.');
+      const returnUrl=installReturnUrl(data.return_token);
+      secureReturnState={...data,return_url:returnUrl,same_record_verified:true};
+      renderReturnGuidance(data.expires_at);
+      console.info(SECURE_RETURN_SIGNATURE,'ready');
+      return secureReturnState;
+    })();
+    try{return await returnIssuePromise}finally{returnIssuePromise=null}
+  }
+
+  async function exchangeSecureReturn(token){
+    const candidate=text(token).toLowerCase();
+    if(!RETURN_TOKEN_RE.test(candidate))return false;
+    if(returnExchangePromise)return returnExchangePromise;
+    returnExchangePromise=(async()=>{
+      document.documentElement.classList.add('day4-secure-return-pending');
+      try{
+        const exchanged=await api('/api/v1/day4/secure-return/exchange',{body:{return_token:candidate},omitSession:true});
+        const data=exchanged?.data||{};
+        if(data.same_record_verified!==true||!data.legacy_session_id||!data.principal_id||!data.context_id||!data.bmr_id)throw new Error('Secure return did not verify the existing Business Health Record.');
+        const sid=persistRecoveredSession(data.legacy_session_id);
+        localStorage.setItem('galvitriage_session_submitted','true');
+        const current=bridge();
+        localStorage.setItem(STORE,JSON.stringify({...current,legacy_session_id:sid,session_id:sid,principal_id:data.principal_id,context_id:data.context_id,bmr_id:data.bmr_id}));
+        localStorage.setItem(OPEN_STORE,'1');
+        secureReturnState={...data,return_url:location.href,same_record_verified:true};
+        hideInitialJourneyForReturn();
+        const chart=await api('/api/v1/day4/chart',{body:{}});
+        if(chart?.success!==true||chart?.status!=='ok'||chart?.data?.principal_id!==data.principal_id||chart?.data?.context_id!==data.context_id||chart?.data?.bmr_id!==data.bmr_id)throw new Error('Recovered GalviChart did not match the secure return record.');
+        renderChart(chart);
+        renderReturnGuidance(data.expires_at);
+        document.documentElement.classList.remove('day4-secure-return-pending');
+        console.info(SECURE_RETURN_SIGNATURE,'restored same record');
+        return true;
+      }catch(error){
+        document.documentElement.classList.remove('day4-secure-return-pending');
+        renderError(error);
+        return false;
+      }
+    })();
+    try{return await returnExchangePromise}finally{returnExchangePromise=null}
+  }
+
   async function readCurrentChart({render=true}={}){
     await context();
     // Deliberately omit context_id for normal customer reads. The authenticated session is
@@ -223,7 +326,7 @@
   async function openChart(){
     const buttonTargets=document.querySelectorAll('[data-day4-chart-button]');
     buttonTargets.forEach((button)=>{button.disabled=true;button.textContent='Opening GalviChart…'});
-    try{await readCurrentChart({render:true})}
+    try{const payload=await readCurrentChart({render:true});await issueSecureReturn(payload)}
     catch(error){renderError(error)}
     finally{buttonTargets.forEach((button)=>{button.disabled=false;button.textContent='View GalviChart™'})}
   }
@@ -234,10 +337,11 @@
     await context();
     const key=text(idempotencyKey)||`day4-${normalized}-${crypto.randomUUID()}`;
     // Do not send context_id/bmr_id for the normal customer path. The Worker resolves the
-    // record from the authenticated session, which prevents stale browser IDs from causing
-    // false 403/404 failures and prevents the customer from having to understand record IDs.
+    // record from the authenticated session, preventing stale browser IDs and arbitrary
+    // record selection from becoming customer-facing machinery.
     const result=await api('/api/v1/day4/chart/command',{body:{command:normalized,payload:payload&&typeof payload==='object'&&!Array.isArray(payload)?payload:{}},key});
     const chart=await readCurrentChart({render:true});
+    await issueSecureReturn(chart);
     return Object.freeze({result,chart,idempotency_key:key});
   }
 
@@ -256,6 +360,9 @@
 
   function install(){
     installStyle();
+    const returnToken=returnTokenFromLocation();
+    if(returnToken)document.documentElement.classList.add('day4-secure-return-pending');
+
     const shot=byId('galvishot-result');
     const path=byId('galvipath-result')||byId('galvipath-result-panel');
     addButton(shot?.querySelector('.button-row')||shot);
@@ -265,8 +372,21 @@
       addButton(s?.querySelector('.button-row')||s);addButton(p?.querySelector('.button-row')||p);
     });
     observer.observe(document.body,{subtree:true,childList:true});
-    window.GalviChartDay4=Object.freeze({open:openChart,read:()=>readCurrentChart({render:false}),command:submitCommand,checkIn,signature:SIGNATURE,returnSignature:RETURN_SIGNATURE});
-    if(localStorage.getItem(OPEN_STORE)==='1'&&session())openChart().catch(()=>{});
+
+    window.GalviChartDay4=Object.freeze({
+      open:openChart,
+      read:()=>readCurrentChart({render:false}),
+      command:submitCommand,
+      checkIn,
+      secureReturn:()=>secureReturnState?Object.freeze({...secureReturnState}):null,
+      returnUrl:()=>returnTokenFromLocation()?location.href:'',
+      signature:SIGNATURE,
+      returnSignature:RETURN_SIGNATURE,
+      secureReturnSignature:SECURE_RETURN_SIGNATURE
+    });
+
+    if(returnToken)exchangeSecureReturn(returnToken).catch(()=>{});
+    else if(localStorage.getItem(OPEN_STORE)==='1'&&session())openChart().catch(()=>{});
     console.info(RETURN_SIGNATURE,'active');
   }
 
