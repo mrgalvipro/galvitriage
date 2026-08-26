@@ -6,6 +6,8 @@ on:
     branches: [qa-revamped-galvicare-0-5]
     paths:
       - worker/day4-galvicare-1-0.js
+      - worker/day4-customer-projection-v2.js
+      - worker/day4-session-identity-entry.js
       - day4-galvichart-browser.js
       - day4-customer-experience-hardening.js
       - scripts/day4-build-qa-frontend.mjs
@@ -62,11 +64,16 @@ jobs:
         run: |
           set -euo pipefail
           node --check worker/day4-galvicare-1-0.js
+          node --check worker/day4-customer-projection-v2.js
+          node --check worker/day4-session-identity-entry.js
           node --check day4-galvichart-browser.js
           node --check day4-customer-experience-hardening.js
           node --check scripts/day4-build-qa-frontend.mjs
           node --test tests/day4-galvicare-1-0.test.mjs | tee /tmp/day4-contract.txt
           ! grep -E '# skipped [1-9]' /tmp/day4-contract.txt
+          grep -q '"main": "worker/day4-session-identity-entry.js"' wrangler.day4.json
+          grep -q 'server_session_venture_founder_link' worker/day4-session-identity-entry.js
+          grep -q 'founder_session_rebinding: false' worker/day4-session-identity-entry.js
           ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY' --include='day4-galvichart-browser.js' --include='day4-customer-experience-hardening.js' .
 
       - name: Full inherited Day 3 and Day7D regression
@@ -137,6 +144,7 @@ jobs:
           const c=h?.data?.capabilities||{};
           if(h?.success!==true||h?.data?.release_version!=='galvicare_1_0_day4'||h?.data?.commit_sha!==process.env.GITHUB_SHA)process.exit(1);
           if(c.galvichart_1_0!==true||c.chart_read_side_effect_free!==true||c.day3_closed_loop_inherited!==true)process.exit(1);
+          if(c.returning_session_identity_resolution!==true||c.session_identity_source!=='server_session_venture_founder_link'||c.founder_session_rebinding!==false)process.exit(1);
           if(r?.success!==true||r?.data?.ready!==true||r?.data?.chart_shadow_database!==false)process.exit(1);
           NODE
             then cat /tmp/day4-health.json; cat /tmp/day4-ready.json; exit 0; fi
@@ -170,6 +178,8 @@ jobs:
           echo '- Existing QA branch only: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Signed Day 3 ancestry: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Inherited Day 3/Day7D regression: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Returning/retest session -> canonical founder resolution: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- No founder session rebinding / no duplicate BHR: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- GalviChart 1.0 static contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Follow-up draft resilience static contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Customer-safe governed Chart interpretation contract: PASS' >> "$GITHUB_STEP_SUMMARY"
