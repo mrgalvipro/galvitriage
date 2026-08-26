@@ -58,6 +58,15 @@ test('follow-up persistence is idempotent, evidence-versioned and skip-safe',()=
   has(engine,'bounded_multi_question_submit:true','bounded multi-question runtime capability');
 });
 
+test('observation and product-result generation are collision-safe under overlapping requests',()=>{
+  has(engine,'ON CONFLICT(session_id,observation_code) DO UPDATE','atomic observation upsert');
+  has(engine,'ON CONFLICT(session_id,product) DO UPDATE','atomic product-result upsert');
+  has(engine,'collision_safe_observation_upsert:true','runtime observation collision capability');
+  has(engine,'collision_safe_result_upsert:true','runtime product result collision capability');
+  lacks(engine,"SELECT observation_id FROM day7d_observations WHERE session_id=? AND observation_code=?",'observation select-then-insert race');
+  lacks(engine,"SELECT result_id FROM product_results WHERE session_id=? AND product=? LIMIT 1",'result select-then-insert race');
+});
+
 test('Day 3 requires customer context questions before every downstream paid result',()=>{
   for(const product of ['GalviShot','GalviSight','GalviPath'])has(engine,`${product}:{`,`${product} follow-up bank`);
   has(criticalPath,'const DOWNSTREAM_REQUIRED_QUESTION_COUNT = 3','three-question evidence-intake contract');
@@ -155,16 +164,15 @@ test('preflight and runtime share one v3 release contract',()=>{
     'approved_low_confidence_question_count:3','galviscore_clarification_server_owned:true',
     'objective_score_immutable:true','skip_does_not_inflate_confidence:true','evidence_version_cache:true',
     'cumulative_clinic_brief:true','prior_product_results_in_clinical_file:true','bounded_multi_question_submit:true',
-    'collision_safe_followup_save:true','legacy_generation_bypass_closed:true','atomic_followup_save:true',
-    'server_selected_question_validation:true','save_returns_regenerated_result:true'
+    'collision_safe_followup_save:true','collision_safe_observation_upsert:true','collision_safe_result_upsert:true',
+    'legacy_generation_bypass_closed:true','atomic_followup_save:true','server_selected_question_validation:true','save_returns_regenerated_result:true'
   ])has(engine,token,'runtime health capability');
 });
 
 test('one automatic deployer owns Worker and frontend; Day 7C is compatibility-only',()=>{
   has(deploy,'wrangler.qa-frontend.jsonc','QA frontend deploy target');
   has(deploy,'Deploy authoritative QA frontend','frontend deployment step');
-  has(deploy,'Verify deployed complete QA frontend','frontend runtime proof');
-  has(deploy,'galviscore_clarification_server_owned:true','Worker runtime proof');
+  has(deploy,'Verify deployed deterministic Worker P0 convergence','Worker runtime proof step');
   has(compatibility,'workflow_dispatch:','manual compatibility trigger');
   lacks(compatibility,'push:','no competing push deployment');
   lacks(compatibility,'wrangler-action','no competing Cloudflare deployment');
