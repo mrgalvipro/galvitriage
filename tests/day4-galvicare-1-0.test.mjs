@@ -39,6 +39,29 @@ test('Returning/retest customer session resolves through server-owned venture fo
     assert.equal(identity.includes(forbidden),false,`identity boundary contains forbidden mutation/provider contract ${forbidden}`);
 });
 
+test('H13 secure return restores the same canonical record without Triage resubmission or localStorage identity authority',()=>{
+  for(const required of [
+    'day4_secure_return_v1','/api/v1/day4/secure-return/issue','/api/v1/day4/secure-return/exchange',
+    'gv1_principal_sessions','galvicare_day4_secure_return','client_session_key',
+    'chartForSession','legacySessionForGrant','same_record_verified: true',
+    'requires_triage_resubmission: false','new_principal_created: false','new_bmr_created: false',
+    'secure_cross_device_return: true','chart_authorization_rechecked: true'
+  ]) assert.ok(identity.includes(required),`missing H13 server return contract ${required}`);
+  for(const required of [
+    'GalviCare Day 4 secure cross-device return v1','galvireturn','returnTokenFromLocation','installReturnUrl',
+    'exchangeSecureReturn','persistRecoveredSession','omitSession:true','same_record_verified',
+    'No new GalviTriage is required','returnUrl:()=>returnTokenFromLocation()?location.href'
+  ]) assert.ok(browser.includes(required),`missing H13 browser return contract ${required}`);
+  assert.equal(browser.includes('context_id='+RETURN_FRAGMENT_PLACEHOLDER),false);
+  for(const forbidden of ['email='+RETURN_FRAGMENT_PLACEHOLDER,'bmr_id='+RETURN_FRAGMENT_PLACEHOLDER,'principal_id='+RETURN_FRAGMENT_PLACEHOLDER])
+    assert.equal(browser.includes(forbidden),false,`secure return URL must not expose record identity: ${forbidden}`);
+  assert.equal(identity.includes('INSERT INTO gv1_founders'),false,'secure return must not mint a founder');
+  assert.equal(identity.includes('INSERT INTO gv1_business_medical_records'),false,'secure return must not mint a BHR');
+  assert.equal(identity.includes('INSERT INTO sessions'),false,'secure return must not create a replacement legacy session');
+});
+
+const RETURN_FRAGMENT_PLACEHOLDER='';
+
 test('Core Day 4 projection remains server-authorized, Shot-gated and side-effect free on reads',()=>{
   for(const required of [
     "'/api/v1/day4/chart'","'/api/v1/day4/chart/command'",'legacyShotEntitled','requireConsent',
