@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+// Day 4 release-convergence marker: this shared critical-path contract intentionally
+// triggers both QA runtime workflows so backend and frontend prove the same candidate SHA.
 const worker=readFileSync(new URL('../worker/day4-galvicare-1-0.js',import.meta.url),'utf8');
 const browser=readFileSync(new URL('../day4-galvichart-browser.js',import.meta.url),'utf8');
 const config=JSON.parse(readFileSync(new URL('../wrangler.day4.json',import.meta.url),'utf8'));
