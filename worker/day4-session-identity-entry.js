@@ -84,11 +84,21 @@ export function createIdentityCompatibleDb(db) {
   });
 }
 
+function createIdentityCompatibleEnv(env) {
+  if (!env?.DB) return env;
+  const compatibleDb = createIdentityCompatibleDb(env.DB);
+  return new Proxy(env, {
+    get(target, property) {
+      if (property === 'DB') return compatibleDb;
+      return Reflect.get(target, property, target);
+    }
+  });
+}
+
 async function augmentHealth(response) {
   if (!response?.ok) return response;
   let payload;
   try { payload = await response.clone().json(); } catch { return response; }
-  if (payload?.success !== true) return response;
   payload.data = payload.data || {};
   payload.data.capabilities = {
     ...(payload.data.capabilities || {}),
@@ -109,9 +119,7 @@ async function augmentHealth(response) {
 
 export default {
   async fetch(request, env, ctx) {
-    const compatibleEnv = env?.DB
-      ? { ...env, DB: createIdentityCompatibleDb(env.DB) }
-      : env;
+    const compatibleEnv = createIdentityCompatibleEnv(env);
     const response = await day4.fetch(request, compatibleEnv, ctx);
     const path = new URL(request.url).pathname.replace(/\/+$/, '') || '/';
     return request.method === 'GET' && path === '/health'
