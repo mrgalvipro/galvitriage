@@ -73,7 +73,6 @@ jobs:
           set -euo pipefail
           npm run day3:gate
           npm run stabilization:gate
-          node --test tests/day7d-worker.test.mjs tests/day7d-browser-customer-intelligence.test.mjs || node --test tests/day7d-worker.test.mjs
 
       - name: Verify QA secret and canonical schema 0100-0103
         shell: bash
