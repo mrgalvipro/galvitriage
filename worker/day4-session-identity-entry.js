@@ -197,7 +197,7 @@ async function auditReturn(db, grant, operation, reasonCode) {
   await run(db, `INSERT INTO gv1_audit_log
     (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,
      correlation_id,environment,occurred_at,created_at)
-    VALUES(?,?,?,?,NULL,NULL,'customer',?,?,?,'{}',?,'qa',?,?)`,
+    VALUES(?,?,?,?,NULL,NULL,'customer',?,?,'{}',?,'qa',?,?)`,
     auditId,
     'secure_return',
     grant.context_id,
