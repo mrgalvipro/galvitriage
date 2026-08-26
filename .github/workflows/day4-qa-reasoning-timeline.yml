@@ -125,59 +125,104 @@ jobs:
           fs.writeFileSync('/tmp/wrangler.day4.runtime.json',JSON.stringify(c,null,2));
           NODE
 
-      - name: Atomic exact-SHA deploy to existing QA Worker
+      - name: Upload exact Day 4 Worker version without changing traffic
+        id: day4_upload
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4 deploy --config /tmp/wrangler.day4.runtime.json 2>&1 | tee /tmp/day4-deploy.log
-          VERSION_ID=$(sed -n 's/.*Current Version ID: \([0-9a-f-][0-9a-f-]*\).*/\1/p' /tmp/day4-deploy.log | tail -1)
+          TAG="day4-${GITHUB_SHA:0:12}"
+          npx --yes wrangler@4 versions upload --config /tmp/wrangler.day4.runtime.json --tag "$TAG" --message "GalviCare Day 4 exact SHA $GITHUB_SHA" 2>&1 | tee /tmp/day4-upload.log
+          VERSION_ID=$(sed -n 's/.*Worker Version ID: \([0-9a-f-][0-9a-f-]*\).*/\1/p' /tmp/day4-upload.log | tail -1)
+          PREVIEW_URL=$(sed -n 's#.*Version Preview URL: \(https://[^[:space:]]*\).*#\1#p' /tmp/day4-upload.log | tail -1)
           test -n "$VERSION_ID"
           echo "Exact candidate Worker Version ID: $VERSION_ID"
           echo "DAY4_WORKER_VERSION_ID=$VERSION_ID" >> "$GITHUB_ENV"
-          # Wrangler deploy is atomic and deploys the uploaded version to 100% by default.
-          # Do not immediately issue a second versions-deploy mutation: Cloudflare's
-          # versions API can be briefly eventually consistent and previously returned
-          # code 100146 for the just-created version.
-          for n in $(seq 1 15); do
-            npx --yes wrangler@4 versions list --config /tmp/wrangler.day4.runtime.json --json > /tmp/day4-versions.json || true
+          echo "version_id=$VERSION_ID" >> "$GITHUB_OUTPUT"
+          if test -n "$PREVIEW_URL"; then
+            echo "DAY4_VERSION_PREVIEW_URL=$PREVIEW_URL" >> "$GITHUB_ENV"
+            echo "preview_url=$PREVIEW_URL" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Cloudflare's version registry is briefly eventually consistent. Do not
+          # promote until the exact uploaded ID is queryable; this permanently avoids
+          # the historical 100146 race from deploying an ID before registration.
+          for n in $(seq 1 20); do
+            npx --yes wrangler@4 versions list --name "$QA_WORKER_NAME" --config /tmp/wrangler.day4.runtime.json --json > /tmp/day4-versions.json || true
             if grep -q "$VERSION_ID" /tmp/day4-versions.json; then
-              echo "PASS: exact version registered in Cloudflare version control plane on attempt $n."
-              break
-            fi
-            if test "$n" = "15"; then
-              echo "FAIL: exact Worker version never became queryable after atomic deploy."; exit 1
+              npx --yes wrangler@4 versions view "$VERSION_ID" --name "$QA_WORKER_NAME" --config /tmp/wrangler.day4.runtime.json --json > /tmp/day4-version.json
+              echo "PASS: exact version is registered and queryable on attempt $n."
+              exit 0
             fi
             sleep 2
           done
-          npx --yes wrangler@4 deployments list --config /tmp/wrangler.day4.runtime.json --json | tee /tmp/day4-deployments.json
+          echo 'FAIL: exact uploaded Day 4 version never became queryable; no traffic changed.'; exit 1
 
-      - name: Prove exact version is executable through Cloudflare version override
+      - name: Prove uploaded exact-SHA candidate before promotion
         shell: bash
         run: |
           set -euo pipefail
-          OVERRIDE="${QA_WORKER_NAME}=\"${DAY4_WORKER_VERSION_ID}\""
-          for n in $(seq 1 12); do
-            STATUS=$(curl -sS -H 'Cache-Control: no-cache' -H "Cloudflare-Workers-Version-Overrides: $OVERRIDE" -o /tmp/day4-override-health.json -w '%{http_code}' "$QA_WORKER_URL/health?override=$n" || true)
-            echo "Override attempt $n status=$STATUS"
-            cat /tmp/day4-override-health.json || true
-            echo
+          if test -z "${DAY4_VERSION_PREVIEW_URL:-}"; then
+            echo 'INFO: Cloudflare did not expose a public version preview URL; exact version registry proof already passed.'
+            exit 0
+          fi
+          for n in $(seq 1 20); do
+            STATUS=$(curl -sS -H 'Cache-Control: no-cache' -o /tmp/day4-preview-health.json -w '%{http_code}' "${DAY4_VERSION_PREVIEW_URL}/health?sha=$GITHUB_SHA&n=$n" || true)
             if test "$STATUS" = "200" && node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          const h=JSON.parse(fs.readFileSync('/tmp/day4-override-health.json','utf8'));
+          const h=JSON.parse(fs.readFileSync('/tmp/day4-preview-health.json','utf8'));
           const c=h?.data?.capabilities||{};
-          if(h?.data?.commit_sha!==process.env.GITHUB_SHA)process.exit(1);
+          if(h?.success!==true||h?.data?.commit_sha!==process.env.GITHUB_SHA)process.exit(1);
           if(c.returning_session_identity_resolution!==true||c.session_identity_source!=='server_session_venture_founder_link'||c.founder_session_rebinding!==false)process.exit(1);
           NODE
-            then echo 'PASS: exact uploaded Worker version executes correctly when explicitly selected.'; exit 0; fi
+            then echo "PASS: exact candidate executes at version preview ${DAY4_WORKER_VERSION_ID}."; exit 0; fi
             sleep 2
           done
-          echo 'FAIL: exact uploaded Day 4 version cannot be selected at runtime; stop before browser changes.'; exit 1
+          echo 'FAIL: uploaded candidate itself does not execute the expected Day 4 contract; do not promote.'; exit 1
+
+      - name: Explicitly promote exact registered version to 100 percent
+        shell: bash
+        run: |
+          set -euo pipefail
+          promoted=0
+          for n in $(seq 1 12); do
+            echo "Promotion attempt $n for version $DAY4_WORKER_VERSION_ID"
+            if npx --yes wrangler@4 versions deploy \
+              --name "$QA_WORKER_NAME" \
+              --version-id "$DAY4_WORKER_VERSION_ID" \
+              --percentage 100 \
+              --message "Day 4 exact SHA $GITHUB_SHA" \
+              --config /tmp/wrangler.day4.runtime.json \
+              -y; then
+              promoted=1
+              break
+            fi
+            sleep 3
+          done
+          test "$promoted" = "1"
+
+          # Deployment-control-plane PASS is only the first half of convergence.
+          # Require the newest deployment itself to point 100% at this exact ID.
+          for n in $(seq 1 20); do
+            npx --yes wrangler@4 deployments list --name "$QA_WORKER_NAME" --config /tmp/wrangler.day4.runtime.json --json > /tmp/day4-deployments.json || true
+            if node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const id=process.env.DAY4_WORKER_VERSION_ID;
+          let d=[];try{d=JSON.parse(fs.readFileSync('/tmp/day4-deployments.json','utf8'));}catch{process.exit(1)}
+          if(!Array.isArray(d)||!d.length)process.exit(1);
+          const latest=[...d].sort((a,b)=>Date.parse(b.created_on||0)-Date.parse(a.created_on||0))[0];
+          const versions=Array.isArray(latest?.versions)?latest.versions:[];
+          if(versions.length!==1||versions[0]?.version_id!==id||Number(versions[0]?.percentage)!==100)process.exit(1);
+          NODE
+            then echo "PASS: active deployment control plane routes 100% to $DAY4_WORKER_VERSION_ID."; exit 0; fi
+            sleep 2
+          done
+          echo 'FAIL: Cloudflare active deployment did not converge to the exact registered version.'; exit 1
 
       - name: Exact canonical workers.dev runtime convergence
         shell: bash
         run: |
           set -euo pipefail
-          for n in $(seq 1 25); do
+          for n in $(seq 1 45); do
             HEALTH_STATUS=$(curl -sS -H 'Cache-Control: no-cache' -o /tmp/day4-health.json -w '%{http_code}' "$QA_WORKER_URL/health?sha=$GITHUB_SHA&version=$DAY4_WORKER_VERSION_ID&n=$n" || true)
             READY_STATUS=$(curl -sS -H 'Cache-Control: no-cache' -o /tmp/day4-ready.json -w '%{http_code}' "$QA_WORKER_URL/api/v1/day4/readiness?sha=$GITHUB_SHA&version=$DAY4_WORKER_VERSION_ID&n=$n" || true)
             echo "Canonical attempt $n health=$HEALTH_STATUS readiness=$READY_STATUS"
@@ -191,10 +236,78 @@ jobs:
           if(c.returning_session_identity_resolution!==true||c.session_identity_source!=='server_session_venture_founder_link'||c.founder_session_rebinding!==false)process.exit(1);
           if(r?.success!==true||r?.data?.ready!==true||r?.data?.chart_shadow_database!==false||r?.meta?.commit_sha!==process.env.GITHUB_SHA)process.exit(1);
           NODE
-            then echo "PASS: exact SHA $GITHUB_SHA is canonical on workers.dev at Worker version $DAY4_WORKER_VERSION_ID"; exit 0; fi
+            then echo "PASS: public workers.dev serves exact SHA $GITHUB_SHA at promoted Worker version $DAY4_WORKER_VERSION_ID."; exit 0; fi
             sleep 3
           done
-          echo 'FAIL: exact version is executable but canonical workers.dev still serves a different deployment. Stop as Cloudflare route/deployment presentation blocker.'; exit 1
+          echo 'FAIL: active deployment says exact version at 100%, but public workers.dev still serves a different runtime. Stop before browser/Human E2E.'; exit 1
+
+      - name: Prove returning customer bootstrap is 200 and identity stable
+        shell: bash
+        run: |
+          set -euo pipefail
+          SQL="SELECT v.session_id AS session_id,CASE WHEN COALESCE(f.session_id,'')<>v.session_id THEN 1 ELSE 0 END AS returning_identity FROM ventures v JOIN sessions s ON s.session_id=v.session_id JOIN founders f ON f.founder_id=v.founder_id WHERE v.session_id IS NOT NULL AND trim(COALESCE(f.email,''))<>'' AND lower(COALESCE(f.consent_status,'')) IN ('accepted','granted') AND EXISTS (SELECT 1 FROM product_results pr WHERE pr.session_id=v.session_id AND pr.product='GalviScore') ORDER BY returning_identity DESC,v.updated_at DESC LIMIT 1;"
+          npx --yes wrangler@4 d1 execute galvivault-0-5-qa --remote --config wrangler.day4.json --json --command="$SQL" > /tmp/day4-bootstrap-session.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('/tmp/day4-bootstrap-session.json','utf8'));const rows=[];
+          const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){if(v.session_id)rows.push(v);Object.values(v).forEach(walk)}};walk(p);
+          const row=rows.find(x=>x.session_id);
+          if(!row)throw new Error('No consented QA GalviScore session is available for deployed customer-bootstrap proof.');
+          fs.writeFileSync('/tmp/day4-bootstrap-session.txt',String(row.session_id));
+          fs.writeFileSync('/tmp/day4-bootstrap-mode.txt',String(Number(row.returning_identity||0)));
+          console.log(`Bootstrap probe session selected; returning_identity=${Number(row.returning_identity||0)}.`);
+          NODE
+          SESSION_ID=$(cat /tmp/day4-bootstrap-session.txt)
+          for pass in 1 2; do
+            STATUS=$(curl -sS -o "/tmp/day4-bootstrap-$pass.json" -w '%{http_code}' \
+              -H 'Content-Type: application/json' \
+              -H 'Cache-Control: no-cache' \
+              -H "X-Galvi-Day3-Session: $SESSION_ID" \
+              -d '{}' \
+              "$QA_WORKER_URL/api/v1/day3/customer-bootstrap?sha=$GITHUB_SHA&pass=$pass")
+            echo "customer-bootstrap pass $pass status=$STATUS"
+            test "$STATUS" = "200"
+          done
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const a=JSON.parse(fs.readFileSync('/tmp/day4-bootstrap-1.json','utf8'));
+          const b=JSON.parse(fs.readFileSync('/tmp/day4-bootstrap-2.json','utf8'));
+          for(const x of [a,b]){
+            if(x?.success!==true||x?.status!=='ok')throw new Error('customer-bootstrap did not return success/ok.');
+            if(x?.data?.identity_source!=='authoritative_galvicare_session')throw new Error('customer-bootstrap identity source is not authoritative GalviCare session.');
+            for(const key of ['principal_id','bmr_id','context_id'])if(!x?.data?.[key])throw new Error(`customer-bootstrap missing ${key}.`);
+          }
+          for(const key of ['principal_id','bmr_id','context_id'])if(a.data[key]!==b.data[key])throw new Error(`customer-bootstrap changed ${key} across exact replay.`);
+          console.log(`PASS: customer-bootstrap=200 twice with stable principal/BMR/context; returning_identity=${fs.readFileSync('/tmp/day4-bootstrap-mode.txt','utf8').trim()}.`);
+          NODE
+
+      - name: Prove same customer Chart projection when Shot is already activated
+        shell: bash
+        run: |
+          set -euo pipefail
+          SESSION_ID=$(cat /tmp/day4-bootstrap-session.txt)
+          CONTEXT_ID=$(node --input-type=module -e "const p=JSON.parse(require('fs').readFileSync('/tmp/day4-bootstrap-1.json','utf8'));process.stdout.write(p.data.context_id)")
+          STATUS=$(curl -sS -o /tmp/day4-chart-probe.json -w '%{http_code}' \
+            -H 'Content-Type: application/json' \
+            -H 'Cache-Control: no-cache' \
+            -H "X-Galvi-Day3-Session: $SESSION_ID" \
+            -d "{\"context_id\":\"$CONTEXT_ID\"}" \
+            "$QA_WORKER_URL/api/v1/day4/chart?sha=$GITHUB_SHA")
+          if test "$STATUS" = "200"; then
+            node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('/tmp/day4-chart-probe.json','utf8'));
+          if(p?.success!==true)throw new Error('GalviChart 200 did not return success.');
+          const sections=p?.data?.sections||{};
+          for(const key of ['overview','health','timeline','care_plan','evidence','documents','galviclinic','history'])if(!(key in sections))throw new Error(`GalviChart missing ${key}.`);
+          console.log('PASS: activated same-record GalviChart projection is available from the canonical BHR.');
+          NODE
+          elif test "$STATUS" = "402"; then
+            echo 'INFO: selected bootstrap session is not Shot-activated; structured locked state is correct and bootstrap proof remains PASS.'
+            grep -q 'locked' /tmp/day4-chart-probe.json
+          else
+            echo "FAIL: GalviChart same-record probe returned unexpected HTTP $STATUS"; cat /tmp/day4-chart-probe.json; exit 1
+          fi
 
       - name: Deployed authorization and structured-error negatives
         shell: bash
@@ -211,18 +324,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4 d1 execute galvivault-0-5-qa --remote --config wrangler.day4.json --json --command="SELECT COUNT(*) AS duplicate_founders FROM (SELECT lower(email) FROM gv1_founders WHERE email IS NOT NULL AND email<>'' GROUP BY lower(email) HAVING COUNT(*)>1); SELECT COUNT(*) AS duplicate_bmrs FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1);" > /tmp/day4-post.json
+          npx --yes wrangler@4 d1 execute galvivault-0-5-qa --remote --config wrangler.day4.json --json --command="SELECT COUNT(*) AS duplicate_founders FROM (SELECT lower(email) FROM gv1_founders WHERE email IS NOT NULL AND email<>'' GROUP BY lower(email) HAVING COUNT(*)>1); SELECT COUNT(*) AS duplicate_bmrs FROM (SELECT venture_id FROM gv1_business_medical_records GROUP BY venture_id HAVING COUNT(*)>1); SELECT COUNT(*) AS invalid_projectable FROM gv1_day3_ai_generations WHERE customer_projection=1 AND validation_status<>'accepted';" > /tmp/day4-post.json
           grep -q '"duplicate_founders": 0' /tmp/day4-post.json
           grep -q '"duplicate_bmrs": 0' /tmp/day4-post.json
+          grep -q '"invalid_projectable": 0' /tmp/day4-post.json
 
       - name: Day 4 automated gate summary
         run: |
           echo '## GalviCare 1.0 Day 4 Automated Critical Path' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA branch only: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Signed Day 3 ancestry + inherited regression: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Returning/retest identity compatibility contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Follow-up draft resilience contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Accepted governed customer projection contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Exact Worker version + canonical workers.dev convergence: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Exact Worker version registered/promoted: $DAY4_WORKER_VERSION_ID" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Public workers.dev exact SHA: $GITHUB_SHA — PASS" >> "$GITHUB_STEP_SUMMARY"
+          echo '- Returning customer-bootstrap HTTP 200 + stable principal/BMR/context: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- No founder session rebinding / no duplicate canonical record: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- QA D1 integrity/security negatives: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '**AUTOMATED GATE PASS — run focused Human H04-H11 regression, then continue H12-H22 + rollback.**' >> "$GITHUB_STEP_SUMMARY"
