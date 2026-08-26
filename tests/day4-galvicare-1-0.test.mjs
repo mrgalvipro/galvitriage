@@ -3,22 +3,39 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 // Day 4 release-convergence contract: core authorization remains inherited while
-// the v2 adapter adds only accepted, customer-projectable intelligence to reads.
+// the v2 adapter adds only accepted, customer-projectable intelligence to reads
+// and the outer identity compatibility boundary resolves a current legacy session
+// through its server-owned venture -> founder relationship without rebinding or
+// minting a second founder/BHR.
 const core=readFileSync(new URL('../worker/day4-galvicare-1-0.js',import.meta.url),'utf8');
 const projection=readFileSync(new URL('../worker/day4-customer-projection-v2.js',import.meta.url),'utf8');
+const identity=readFileSync(new URL('../worker/day4-session-identity-entry.js',import.meta.url),'utf8');
 const browser=readFileSync(new URL('../day4-galvichart-browser.js',import.meta.url),'utf8');
 const hardening=readFileSync(new URL('../day4-customer-experience-hardening.js',import.meta.url),'utf8');
 const config=JSON.parse(readFileSync(new URL('../wrangler.day4.json',import.meta.url),'utf8'));
 
-test('Day 4 stays on the existing QA Worker/D1 and uses an additive read-only projection adapter',()=>{
+test('Day 4 stays on the existing QA Worker/D1 and uses additive projection + identity compatibility adapters',()=>{
   assert.equal(config.name,'galvivault-p0-day1-qa');
-  assert.equal(config.main,'worker/day4-customer-projection-v2.js');
+  assert.equal(config.main,'worker/day4-session-identity-entry.js');
   assert.equal(config.d1_databases?.[0]?.database_name,'galvivault-0-5-qa');
   assert.equal(config.d1_databases?.[0]?.database_id,'cdf9042b-ab09-498a-ac66-010b6cce47d4');
   assert.equal(config.vars?.ENVIRONMENT,'qa');
   assert.equal(config.vars?.AI_ENABLED,'true');
   assert.equal(config.vars?.DAY4_GALVICHART_CUSTOMER_PROJECTION,'v2');
+  assert.equal(config.vars?.DAY4_SESSION_IDENTITY_COMPAT,'v1');
   assert.ok(projection.startsWith("import day4 from './day4-galvicare-1-0.js';"));
+  assert.ok(identity.startsWith("import day4 from './day4-customer-projection-v2.js';"));
+});
+
+test('Returning/retest customer session resolves through server-owned venture founder link without rebinding identity',()=>{
+  for(const required of [
+    'day4_session_identity_v1','LEGACY_FOUNDER_BY_SESSION','SESSION_VENTURE_FOUNDER',
+    'FROM ventures v','JOIN founders f ON f.founder_id=v.founder_id','WHERE v.session_id=?',
+    'returning_session_identity_resolution: true',"session_identity_source: 'server_session_venture_founder_link'",
+    'founder_session_rebinding: false','createIdentityCompatibleDb'
+  ]) assert.ok(identity.includes(required),`missing identity compatibility contract ${required}`);
+  for(const forbidden of ['UPDATE founders','INSERT INTO founders','DELETE FROM founders','CREATE TABLE','api.openai.com','OPENAI_API_KEY'])
+    assert.equal(identity.includes(forbidden),false,`identity boundary contains forbidden mutation/provider contract ${forbidden}`);
 });
 
 test('Core Day 4 projection remains server-authorized, Shot-gated and side-effect free on reads',()=>{
@@ -103,4 +120,5 @@ test('Day 3 closed-loop runtime remains inherited, not replaced',()=>{
   assert.equal(core.includes('get_or_generate_galviscore'),false);
   assert.equal(core.includes('save_galvishot_followup'),false);
   assert.ok(projection.includes('return upstream;'));
+  assert.ok(identity.includes('day4.fetch(request, compatibleEnv, ctx)'));
 });
