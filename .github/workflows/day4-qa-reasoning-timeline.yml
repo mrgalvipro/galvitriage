@@ -134,10 +134,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for n in $(seq 1 50); do
-            if curl -fsS "$QA_WORKER_URL/health?sha=$GITHUB_SHA&n=$n" > /tmp/day4-health.json \
-              && curl -fsS "$QA_WORKER_URL/api/v1/day4/readiness?sha=$GITHUB_SHA&n=$n" > /tmp/day4-ready.json \
-              && node --input-type=module <<'NODE'
+          for n in $(seq 1 8); do
+            HEALTH_STATUS=$(curl -sS -o /tmp/day4-health.json -w '%{http_code}' "$QA_WORKER_URL/health?sha=$GITHUB_SHA&n=$n" || true)
+            READY_STATUS=$(curl -sS -o /tmp/day4-ready.json -w '%{http_code}' "$QA_WORKER_URL/api/v1/day4/readiness?sha=$GITHUB_SHA&n=$n" || true)
+            echo "Attempt $n health=$HEALTH_STATUS readiness=$READY_STATUS"
+            cat /tmp/day4-health.json || true
+            echo
+            cat /tmp/day4-ready.json || true
+            echo
+            if test "$HEALTH_STATUS" = "200" && test "$READY_STATUS" = "200" && node --input-type=module <<'NODE'
           import fs from 'node:fs';
           const h=JSON.parse(fs.readFileSync('/tmp/day4-health.json','utf8'));
           const r=JSON.parse(fs.readFileSync('/tmp/day4-ready.json','utf8'));
@@ -147,8 +152,8 @@ jobs:
           if(c.returning_session_identity_resolution!==true||c.session_identity_source!=='server_session_venture_founder_link'||c.founder_session_rebinding!==false)process.exit(1);
           if(r?.success!==true||r?.data?.ready!==true||r?.data?.chart_shadow_database!==false)process.exit(1);
           NODE
-            then cat /tmp/day4-health.json; cat /tmp/day4-ready.json; exit 0; fi
-            sleep 3
+            then exit 0; fi
+            sleep 2
           done
           echo 'FAIL: exact Day 4 runtime did not converge'; exit 1
 
