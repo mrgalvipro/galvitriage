@@ -124,19 +124,26 @@ jobs:
           fs.writeFileSync('/tmp/wrangler.day4.runtime.json',JSON.stringify(c,null,2));
           NODE
 
-      - name: Deploy exact candidate to existing QA Worker
+      - name: Deploy and force exact candidate to 100 percent on existing QA Worker
         shell: bash
         run: |
           set -euo pipefail
           npx --yes wrangler@4 deploy --config /tmp/wrangler.day4.runtime.json 2>&1 | tee /tmp/day4-deploy.log
+          VERSION_ID=$(sed -n 's/.*Current Version ID: \([0-9a-f-][0-9a-f-]*\).*/\1/p' /tmp/day4-deploy.log | tail -1)
+          test -n "$VERSION_ID"
+          echo "Exact candidate Worker Version ID: $VERSION_ID"
+          npx --yes wrangler@4 deployments list --config /tmp/wrangler.day4.runtime.json --json | tee /tmp/day4-deployments-before.json
+          npx --yes wrangler@4 versions deploy "$VERSION_ID@100%" -y --config /tmp/wrangler.day4.runtime.json
+          npx --yes wrangler@4 deployments list --config /tmp/wrangler.day4.runtime.json --json | tee /tmp/day4-deployments-after.json
+          echo "DAY4_WORKER_VERSION_ID=$VERSION_ID" >> "$GITHUB_ENV"
 
       - name: Exact runtime convergence and Day 4 readiness
         shell: bash
         run: |
           set -euo pipefail
-          for n in $(seq 1 8); do
-            HEALTH_STATUS=$(curl -sS -o /tmp/day4-health.json -w '%{http_code}' "$QA_WORKER_URL/health?sha=$GITHUB_SHA&n=$n" || true)
-            READY_STATUS=$(curl -sS -o /tmp/day4-ready.json -w '%{http_code}' "$QA_WORKER_URL/api/v1/day4/readiness?sha=$GITHUB_SHA&n=$n" || true)
+          for n in $(seq 1 15); do
+            HEALTH_STATUS=$(curl -sS -H 'Cache-Control: no-cache' -o /tmp/day4-health.json -w '%{http_code}' "$QA_WORKER_URL/health?sha=$GITHUB_SHA&version=$DAY4_WORKER_VERSION_ID&n=$n" || true)
+            READY_STATUS=$(curl -sS -H 'Cache-Control: no-cache' -o /tmp/day4-ready.json -w '%{http_code}' "$QA_WORKER_URL/api/v1/day4/readiness?sha=$GITHUB_SHA&version=$DAY4_WORKER_VERSION_ID&n=$n" || true)
             echo "Attempt $n health=$HEALTH_STATUS readiness=$READY_STATUS"
             cat /tmp/day4-health.json || true
             echo
@@ -150,9 +157,9 @@ jobs:
           if(h?.success!==true||h?.data?.release_version!=='galvicare_1_0_day4'||h?.data?.commit_sha!==process.env.GITHUB_SHA)process.exit(1);
           if(c.galvichart_1_0!==true||c.chart_read_side_effect_free!==true||c.day3_closed_loop_inherited!==true)process.exit(1);
           if(c.returning_session_identity_resolution!==true||c.session_identity_source!=='server_session_venture_founder_link'||c.founder_session_rebinding!==false)process.exit(1);
-          if(r?.success!==true||r?.data?.ready!==true||r?.data?.chart_shadow_database!==false)process.exit(1);
+          if(r?.success!==true||r?.data?.ready!==true||r?.data?.chart_shadow_database!==false||r?.meta?.commit_sha!==process.env.GITHUB_SHA)process.exit(1);
           NODE
-            then exit 0; fi
+            then echo "PASS: exact SHA $GITHUB_SHA is active at 100% on Worker version $DAY4_WORKER_VERSION_ID"; exit 0; fi
             sleep 2
           done
           echo 'FAIL: exact Day 4 runtime did not converge'; exit 1
@@ -189,7 +196,7 @@ jobs:
           echo '- Follow-up draft resilience static contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Customer-safe governed Chart interpretation contract: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- QA D1 0100-0103 reuse/no shadow DB: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Exact-SHA existing Worker deployment: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Exact-SHA Worker version active at 100%: PASS ($DAY4_WORKER_VERSION_ID)" >> "$GITHUB_STEP_SUMMARY"
           echo '- Runtime readiness/security negatives: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '**AUTOMATED GATE PASS — HUMAN E2E H01-H22 + ROLLBACK REHEARSAL STILL REQUIRED FOR DAY 4 BUILD FINAL.**' >> "$GITHUB_STEP_SUMMARY"
+          echo '**AUTOMATED GATE PASS — FOCUSED HUMAN REGRESSION THEN H12-H22 + ROLLBACK REHEARSAL STILL REQUIRED FOR DAY 4 BUILD FINAL.**' >> "$GITHUB_STEP_SUMMARY"
