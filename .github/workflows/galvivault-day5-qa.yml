@@ -30,12 +30,14 @@ env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   DAY5_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
+  QA_WORKER_NAME: galvivault-p0-day1-qa
   SIGNED_DAY4_SHA: 4a492d5766fb964b103ed8dcf37a130e9e7d4e3a
+  SIGNED_DAY4_WORKER_VERSION_ID: 6638ff9a-07b6-4392-9110-d032a61969d0
 
 jobs:
   day5-gate-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 45
     environment: qa
     steps:
       - name: Checkout exact existing QA candidate
@@ -54,7 +56,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git merge-base --is-ancestor "$SIGNED_DAY4_SHA" "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
-          echo "PASS: GitHub Actions owns networked QA execution; Codex work/tunnel state is not a release dependency."
+          echo "PASS: existing QA ref only; work/main/new branch are not release dependencies."
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -70,10 +72,18 @@ jobs:
           set -euo pipefail
           echo "STRIPE_WEBHOOK_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
-      - name: Prove QA-only configuration
+      - name: Prove QA-only configuration and governed-AI secret
+        shell: bash
         run: |
-          node -e "const w=require('./wrangler.day5.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='0005'||w.d1_databases?.[0]?.binding!=='DB'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
+          set -euo pipefail
+          node -e "const w=require('./wrangler.day5.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='0005'||w.vars.AI_ENABLED!=='true'||w.d1_databases?.[0]?.binding!=='DB'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
           test ! -e wrangler.production.day5.json
+          npx --yes wrangler@4.120.0 secret list --config wrangler.day5.json > /tmp/day5-secrets.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p=JSON.parse(fs.readFileSync('/tmp/day5-secrets.json','utf8'));
+          if(!Array.isArray(p)||!p.some(x=>x?.name==='OPENAI_API_KEY')) throw new Error('OPENAI_API_KEY missing on existing QA Worker.');
+          NODE
 
       - name: Day 5 local contract and inherited regression gate
         run: npm run day5:gate
@@ -95,14 +105,7 @@ jobs:
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id='0005';" | tee day5-d1-migration.txt
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT type,name FROM sqlite_master WHERE name IN ('idx_recommendations_bmr','idx_treatment_plans_bmr','idx_treatment_events_plan','idx_outcomes_bmr','idx_feedback_target','idx_adapter_status','trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete') ORDER BY type,name;" | tee day5-d1-schema.txt
           grep -q "day5_governed_care_v1" day5-d1-migration.txt
-          grep -q "idx_recommendations_bmr" day5-d1-schema.txt
-          grep -q "idx_treatment_plans_bmr" day5-d1-schema.txt
-          grep -q "idx_treatment_events_plan" day5-d1-schema.txt
-          grep -q "idx_outcomes_bmr" day5-d1-schema.txt
-          grep -q "idx_feedback_target" day5-d1-schema.txt
-          grep -q "idx_adapter_status" day5-d1-schema.txt
-          grep -q "trg_gv1_treatment_events_no_update" day5-d1-schema.txt
-          grep -q "trg_gv1_treatment_events_no_delete" day5-d1-schema.txt
+          for key in idx_recommendations_bmr idx_treatment_plans_bmr idx_treatment_events_plan idx_outcomes_bmr idx_feedback_target idx_adapter_status trg_gv1_treatment_events_no_update trg_gv1_treatment_events_no_delete; do grep -q "$key" day5-d1-schema.txt; done
 
       - name: Deploy exact-SHA cumulative Day 5 QA Worker
         shell: bash
@@ -111,11 +114,26 @@ jobs:
           npx --yes wrangler@4.120.0 deploy --config wrangler.day5.json \
             --var STRIPE_WEBHOOK_SECRET:$STRIPE_WEBHOOK_SECRET \
             --var COMMIT_SHA:$GITHUB_SHA | tee day5-deploy.txt
+          VERSION_ID=$(sed -nE 's/.*(Current|Worker) Version ID: ([0-9a-f-]+).*/\2/p' day5-deploy.txt | tail -1)
+          if test -z "$VERSION_ID"; then
+            npx --yes wrangler@4.120.0 versions list --name "$QA_WORKER_NAME" --config wrangler.day5.json --json > /tmp/day5-versions.json
+            VERSION_ID=$(node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const v=JSON.parse(fs.readFileSync('/tmp/day5-versions.json','utf8'));
+          const rows=Array.isArray(v)?v:[];
+          rows.sort((a,b)=>Date.parse(b.created_on||b.created_at||0)-Date.parse(a.created_on||a.created_at||0));
+          console.log(rows[0]?.id||rows[0]?.version_id||'');
+          NODE
+            )
+          fi
+          test -n "$VERSION_ID"
+          echo "DAY5_WORKER_VERSION_ID=$VERSION_ID" >> "$GITHUB_ENV"
+          echo "$VERSION_ID" > day5-worker-version-id.txt
 
       - name: Wait for Worker convergence
         run: sleep 12
 
-      - name: Verify deployed Day 5 readiness and exact SHA
+      - name: Verify deployed Day 5 readiness, exact SHA, and inherited governed AI
         shell: bash
         run: |
           set -euo pipefail
@@ -126,13 +144,11 @@ jobs:
           import fs from 'node:fs';
           const h=JSON.parse(fs.readFileSync('day5-health.json','utf8'));
           const r=JSON.parse(fs.readFileSync('day5-readiness.json','utf8'));
-          if(!r.success||r.environment!=='qa'||!r.data?.ready||r.data?.current_schema_version!=='0005'||r.data?.required_schema_version!=='0005'){
-            console.error(r); process.exit(1);
-          }
-          const served=h?.data?.commit_sha;
-          if(served && served!==process.env.GITHUB_SHA){
-            console.error({expected:process.env.GITHUB_SHA,served}); process.exit(1);
-          }
+          const c=h?.data?.capabilities||{};
+          if(h?.success!==true||h?.data?.commit_sha!==process.env.GITHUB_SHA||h?.data?.release_version!=='galvicare_1_0_day4') throw new Error('Exact inherited Day 4 runtime proof failed.');
+          if(c.galvichart_1_0!==true||c.secure_return_same_record!==true||c.day3_closed_loop_inherited!==true) throw new Error('Day 4 Chart/secure-return inheritance failed.');
+          if(c.governed_ai!==true||c.provider_configured!==true||c.responses_api_server_side!==true) throw new Error('Governed OpenAI capability regressed in Day 5 runtime.');
+          if(!r.success||r.environment!=='qa'||!r.data?.ready||r.data?.current_schema_version!=='0005'||r.data?.required_schema_version!=='0005'||r.data?.inherited_runtime!=='galvicare_1_0_day4') throw new Error('Day 5 readiness failed.');
           NODE
 
       - name: Execute deployed Day 5 BLOCK and Human E2E evidence
@@ -144,9 +160,52 @@ jobs:
       - name: Prove Production and GalviCare runtime files were not changed
         run: |
           git diff --exit-code "$SIGNED_DAY4_SHA" "$GITHUB_SHA" -- worker/production-entry.js wrangler.production.jsonc index.html day7d-browser-customer-intelligence.js qa-frontend-worker.js || {
-            echo 'Unexpected Production/GalviCare runtime change detected in Day 5 candidate.' >&2
+            echo 'Unexpected Production/GalviCare baseline runtime change detected in Day 5 candidate.' >&2
             exit 1
           }
+
+      - name: Rehearse non-destructive rollback to exact signed Day 4 Worker version
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 versions deploy \
+            --name "$QA_WORKER_NAME" \
+            --version-id "$SIGNED_DAY4_WORKER_VERSION_ID" \
+            --percentage 100 \
+            --message "Day 5 rollback rehearsal to signed Day 4 $SIGNED_DAY4_SHA" \
+            --config wrangler.day5.json -y
+          sleep 10
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY5_QA_URL/health?rollback=$GITHUB_SHA" | tee day5-rollback-day4-health.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const h=JSON.parse(fs.readFileSync('day5-rollback-day4-health.json','utf8'));
+          if(h?.success!==true||h?.data?.commit_sha!==process.env.SIGNED_DAY4_SHA||h?.data?.release_version!=='galvicare_1_0_day4') throw new Error('Day 4 rollback runtime identity failed.');
+          const c=h?.data?.capabilities||{};
+          if(c.galvichart_1_0!==true||c.secure_return_same_record!==true||c.day3_closed_loop_inherited!==true) throw new Error('Day 1-4 smoke failed after rollback.');
+          NODE
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name FROM gv1_schema_migrations WHERE migration_id='0005'; SELECT COUNT(*) AS treatment_plan_count FROM gv1_treatment_plans;" | tee day5-rollback-d1.txt
+          grep -q "day5_governed_care_v1" day5-rollback-d1.txt
+
+      - name: Restore exact Day 5 candidate after rollback rehearsal
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 versions deploy \
+            --name "$QA_WORKER_NAME" \
+            --version-id "$DAY5_WORKER_VERSION_ID" \
+            --percentage 100 \
+            --message "Restore Day 5 exact SHA $GITHUB_SHA after rollback rehearsal" \
+            --config wrangler.day5.json -y
+          sleep 10
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY5_QA_URL/health?restore=$GITHUB_SHA" | tee day5-restore-health.json
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY5_QA_URL/api/v1/day5/readiness?restore=$GITHUB_SHA" | tee day5-restore-readiness.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const h=JSON.parse(fs.readFileSync('day5-restore-health.json','utf8'));
+          const r=JSON.parse(fs.readFileSync('day5-restore-readiness.json','utf8'));
+          if(h?.success!==true||h?.data?.commit_sha!==process.env.GITHUB_SHA) throw new Error('Day 5 exact candidate restore failed.');
+          if(r?.success!==true||r?.data?.ready!==true||r?.data?.current_schema_version!=='0005') throw new Error('Day 5 readiness failed after restore.');
+          NODE
 
       - name: Upload Day 5 hosted evidence
         if: always()
@@ -158,10 +217,15 @@ jobs:
             day5-d1-migration.txt
             day5-d1-schema.txt
             day5-deploy.txt
+            day5-worker-version-id.txt
             day5-health.json
             day5-ready.json
             day5-readiness.json
             day5-deployed-e2e-console.txt
+            day5-rollback-day4-health.json
+            day5-rollback-d1.txt
+            day5-restore-health.json
+            day5-restore-readiness.json
             release-evidence/day5-runtime/deployed-e2e.json
             release-evidence/day5-runtime/deployed-e2e.txt
           if-no-files-found: warn
