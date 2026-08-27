@@ -4,6 +4,7 @@ import { all, first, findBmr, findFinding, findPlan } from '../repositories/care
 const PHYSICIAN_ROLES=new Set(['business_physician','operator','admin']);
 const CLINIC_ROLES=new Set(['business_physician','galviclinician','operator','admin']);
 const CHECKIN_ROLES=new Set(['customer','business_physician','galviclinician','operator','admin','galviguide']);
+const CUSTOMER_ACK_ROLES=new Set(['customer']);
 
 function requireRole(actor,allowed,message='This action is not authorized for the current role.'){
   if(!allowed.has(clean(actor?.role).toLowerCase())) throw new GVError('GV_AUTH_FORBIDDEN',message,403);
@@ -66,6 +67,20 @@ export async function createReferral(env,ctx,actor,key,input){
 
 export async function updateReferralStatus(env,ctx,actor,key,referralId,input){
   requireRole(actor,PHYSICIAN_ROLES,'Authorized referral management scope is required.');const row=await first(env.DB,`SELECT * FROM gv1_referrals WHERE referral_id=?`,requireId('referral_id',referralId));if(!row)throw new GVError('GV_NOT_FOUND','Referral was not found.',404);const status=clean(input.status).toLowerCase(),allowed=['proposed','accepted','sent','scheduled','completed','declined','closed'];if(!allowed.includes(status))throw new GVError('GV_REQ_SCHEMA','Referral status is invalid.',422);if(['sent','scheduled','completed'].includes(status)&&row.consent_status!=='consented')throw new GVError('GV_CONSENT_REQUIRED','Consent is required before protected referral handoff.',409);const fp=await hash('day5:referral-status',{referral_id:row.referral_id,status,outcome_summary:input.outcome_summary||null});const prior=await replay(env.DB,'day5:referral-status',key,fp,async()=>({referral:await first(env.DB,`SELECT * FROM gv1_referrals WHERE referral_id=?`,row.referral_id)}));if(prior)return prior;const ts=now();await env.DB.batch([env.DB.prepare(`UPDATE gv1_referrals SET status=?,outcome_summary=COALESCE(?,outcome_summary),updated_at=?,correlation_id=? WHERE referral_id=?`).bind(status,input.outcome_summary||null,ts,ctx.correlation,row.referral_id),audit(env.DB,ctx,actor,{entityType:'referral',entityId:row.referral_id,operation:'status',change:{from:row.status,to:status},ts}),receiptInsert(env.DB,{scope:'day5:referral-status',key,fp,type:'referral',id:row.referral_id,ts})]);return {referral:await first(env.DB,`SELECT * FROM gv1_referrals WHERE referral_id=?`,row.referral_id),idempotent_replay:false};
+}
+
+export async function acknowledgeTreatmentPlan(env,ctx,actor,key,planId,input){
+  requireRole(actor,CUSTOMER_ACK_ROLES,'Customer acknowledgement must come from the authenticated customer context.');
+  const record=await bmr(env.DB,input.bmr_id);const plan=await planInBmr(env.DB,record.bmr_id,planId);
+  if(!['approved','active'].includes(clean(plan.status).toLowerCase()))throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','Only an approved or active Treatment Plan may be acknowledged.',409);
+  const item=await first(env.DB,`SELECT treatment_plan_item_id FROM gv1_treatment_plan_items WHERE treatment_plan_id=? ORDER BY sequence_number,created_at LIMIT 1`,plan.treatment_plan_id);if(!item?.treatment_plan_item_id)throw new GVError('GV_LINEAGE_REQUIRED','Treatment Plan acknowledgement requires a valid plan action.',422);
+  const note=optionalText('note',input.note,800);const fp=await hash('day5:treatment-acknowledgement',{bmr_id:record.bmr_id,plan_id:plan.treatment_plan_id,plan_version:Number(plan.version_no||1),note});const prior=await replay(env.DB,'day5:treatment-acknowledgement',key,fp,async id=>({acknowledgement:await first(env.DB,`SELECT treatment_event_id,treatment_plan_id,bmr_id,event_type,occurred_at,created_at,actor_type FROM gv1_treatment_events WHERE treatment_event_id=?`,id)}));if(prior)return prior;
+  const ts=now(),id=newId('tre');await env.DB.batch([
+    env.DB.prepare(`INSERT INTO gv1_treatment_events (treatment_event_id,treatment_plan_item_id,event_type,event_payload_json,occurred_at,created_at,treatment_plan_id,bmr_id,actor_type,actor_id,notes,metadata_json,correlation_id) VALUES (?,?, 'customer_acknowledged',?,?,?,?,?,?,?,?,?,?)`).bind(id,item.treatment_plan_item_id,JSON.stringify({acknowledgement:'received',plan_version:Number(plan.version_no||1)}),ts,ts,plan.treatment_plan_id,record.bmr_id,actor.role,actor.id,note,JSON.stringify({authorship_changed:false}),ctx.correlation),
+    audit(env.DB,ctx,actor,{entityType:'treatment_acknowledgement',entityId:id,operation:'acknowledge',change:{treatment_plan_id:plan.treatment_plan_id,plan_version:Number(plan.version_no||1),authorship_changed:false},ts}),
+    receiptInsert(env.DB,{scope:'day5:treatment-acknowledgement',key,fp,type:'treatment_event',id,ts})
+  ]);
+  return {acknowledgement:await first(env.DB,`SELECT treatment_event_id,treatment_plan_id,bmr_id,event_type,occurred_at,created_at,actor_type FROM gv1_treatment_events WHERE treatment_event_id=?`,id),idempotent_replay:false};
 }
 
 export async function submitCheckin(env,ctx,actor,key,input){
