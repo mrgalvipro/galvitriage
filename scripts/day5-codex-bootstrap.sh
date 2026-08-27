@@ -6,9 +6,9 @@ set -euo pipefail
 # This script configures the authoritative public origin when the Codex snapshot omits it,
 # fetches ONLY the approved QA/main refs, and proves the current QA head before Day 5 edits.
 
-EXPECTED_REPO="mrgalvipro/galvitriage"
 EXPECTED_ORIGIN="https://github.com/mrgalvipro/galvitriage.git"
 QA_REF="qa-revamped-galvicare-0-5"
+BOOTSTRAP_PATH="scripts/day5-codex-bootstrap.sh"
 
 repo_root="$(git rev-parse --show-toplevel)"
 cd "$repo_root"
@@ -27,7 +27,7 @@ if git remote get-url origin >/dev/null 2>&1; then
   esac
 else
   # Codex Web can materialize a repository snapshot without .git/config remote metadata.
-  # The repository is public, so adding the canonical read/write URL does not create a branch.
+  # Adding the canonical public origin repairs that task-shell metadata only; it creates no branch.
   git remote add origin "$EXPECTED_ORIGIN"
   origin_url="$EXPECTED_ORIGIN"
 fi
@@ -58,8 +58,9 @@ printf '%s\n' \
   "new_branch_created=NO"
 
 # Optional exact Day 4 proof supplied by the execution runbook.
-# A docs-only QA descendant is valid as the Day 5 starting ref when its code ancestor is the
-# signed Day 4 Build Final and every intervening change is non-runtime documentation only.
+# The signed Day 4 runtime may have approved non-runtime descendants on QA before Day 5 coding,
+# specifically the Day 5 Builder documentation and this bootstrap guard. Any other post-Day-4
+# path is treated as runtime/code drift and stops execution for explicit review.
 if [[ -n "${SIGNED_DAY4_SHA:-}" ]]; then
   git cat-file -e "${SIGNED_DAY4_SHA}^{commit}" 2>/dev/null || {
     echo "STOP: SIGNED_DAY4_SHA is not available after fetch: ${SIGNED_DAY4_SHA}" >&2
@@ -70,22 +71,22 @@ if [[ -n "${SIGNED_DAY4_SHA:-}" ]]; then
     echo "day4_relation=EXACT_REMOTE_QA"
   elif git merge-base --is-ancestor "$SIGNED_DAY4_SHA" "$remote_qa_sha"; then
     changed="$(git diff --name-only "$SIGNED_DAY4_SHA..$remote_qa_sha")"
-    runtime_changed="$(printf '%s\n' "$changed" | grep -Ev '^(docs/|.*\.md$|.*\.txt$|$)' || true)"
-    if [[ -n "$runtime_changed" ]]; then
-      echo "STOP: QA is ahead of signed Day 4 with runtime/code changes:" >&2
-      printf '%s\n' "$runtime_changed" >&2
+    unexpected="$(printf '%s\n' "$changed" | grep -Ev "^(docs/|.*\\.md$|.*\\.txt$|${BOOTSTRAP_PATH//\//\\/}|$)" || true)"
+    if [[ -n "$unexpected" ]]; then
+      echo "STOP: QA is ahead of signed Day 4 with unapproved runtime/code changes:" >&2
+      printf '%s\n' "$unexpected" >&2
       exit 44
     fi
-    echo "day4_relation=DOCS_ONLY_DESCENDANT"
+    echo "day4_relation=APPROVED_NON_RUNTIME_DESCENDANT"
     echo "signed_day4_sha=$SIGNED_DAY4_SHA"
-    echo "docs_only_delta_begin"
+    echo "approved_non_runtime_delta_begin"
     printf '%s\n' "$changed"
-    echo "docs_only_delta_end"
+    echo "approved_non_runtime_delta_end"
   else
     echo "STOP: remote QA does not descend from signed Day 4 Build Final." >&2
     exit 45
   fi
 fi
 
-# Do not switch branches or write files here. The caller must author Day 5 in a detached
-# exact-QA worktree or use the approved GitHub blob/tree/commit path and update only QA_REF.
+# Do not switch branches or write application files here. The caller must author Day 5 in a
+# detached exact-QA worktree or use the approved GitHub blob/tree/commit path and update only QA_REF.
