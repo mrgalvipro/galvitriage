@@ -74,3 +74,10 @@ test('AC-14 Day 5 timeline includes treatment decisions, Rx, diagnostics, referr
   assert.ok(has(timeline,['finding_decision','galvirx','galviaudit','referral','checkin','milestone','reassessment']));
   assert.equal(timeline.includes('UNION ALL'),false);
 });
+
+test('AC-15 Treatment Plan revision preserves the full governed Day 5 contract',()=>{
+  assert.ok(has(treatment,['reviseGovernedTreatmentPlan','Only the current governed Treatment Plan version may be revised.','A newer Treatment Plan version already exists.','Clinic brief is stale; refresh before revising treatment.','day5:governed-treatment:revise','supersedes_treatment_plan_id','source_versions','brief_fingerprint']));
+  assert.ok(entry.includes('reviseGovernedTreatmentPlan'));
+  assert.ok(entry.includes("const governedRevision=path.match(/^\\/api\\/v1\\/treatment-plans\\/([^/]+)\\/revisions$/)"));
+  assert.ok(entry.includes("governed_treatment_revision:'v1'"));
+});
