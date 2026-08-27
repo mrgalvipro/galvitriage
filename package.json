@@ -24,8 +24,8 @@
     "stabilization:gate": "npm run check && npm test",
     "test:session": "node --test tests/session-continuity.test.mjs",
     "test:day4": "node --test tests/day4-worker.test.mjs",
-    "test:day5": "node --test tests/day5-care.test.mjs",
-    "day5:syntax": "node --check worker/day5-entry.js && node --check worker/day5-common.js && node --check worker/routes/care.js && node --check worker/domain/care-service.js && node --check worker/domain/day5-timeline-service.js && node --check worker/repositories/care-repository.js",
+    "test:day5": "node --test tests/day5-care.test.mjs tests/day5-active-care.test.mjs",
+    "day5:syntax": "node --check worker/day5-entry.js && node --check worker/day5-common.js && node --check worker/routes/care.js && node --check worker/domain/care-service.js && node --check worker/domain/day5-active-care-service.js && node --check worker/domain/day5-timeline-service.js && node --check worker/repositories/care-repository.js",
     "day5:regression": "npm run test:day3:regression && npm run test:day4 && npm run test:session",
     "day5:gate": "npm run day5:syntax && npm run test:day5 && npm run day5:regression",
     "deploy:day5:qa": "npx wrangler@4.120.0 deploy --config wrangler.day5.json",
@@ -42,9 +42,9 @@
     "day7d:gate": "npm run day7d:preflight && npm run test:day7d && npm run stabilization:gate && npm run day7c:gate",
     "test:day8": "node --test tests/day3-evidence-versioning.test.mjs tests/day4-reasoning-integration.test.mjs tests/day5-care.test.mjs tests/day8-clinician-workspace.test.mjs",
     "day8:gate": "node --check worker/day8-entry.js && node --check worker/auth/operator-identity.js && node --check worker/routes/operator-auth.js && node --check worker/routes/operator-workspace.js && node --check clinician-portal/app.js && npm run test:day8 && npm run stabilization:gate",
-    "deploy:day8:qa": "npx wrangler@4.120.0 deploy --config wrangler.day8.json"
-    ,"test:day9": "node --test tests/day9-fhr-bhr-integration.test.mjs"
-    ,"day9:import:dry-run": "node scripts/day9-fhr-backfill.mjs"
-    ,"day9:gate": "node --check worker/domain/founder-history-service.js && node --check worker/routes/operator-workspace.js && node --check clinician-portal/app.js && npm run test:day9"
+    "deploy:day8:qa": "npx wrangler@4.120.0 deploy --config wrangler.day8.json",
+    "test:day9": "node --test tests/day9-fhr-bhr-integration.test.mjs",
+    "day9:import:dry-run": "node scripts/day9-fhr-backfill.mjs",
+    "day9:gate": "node --check worker/domain/founder-history-service.js && node --check worker/routes/operator-workspace.js && node --check clinician-portal/app.js && npm run test:day9"
   }
 }
