@@ -2,6 +2,22 @@ name: GalviVault Day 5 QA Governed Care
 
 on:
   workflow_dispatch:
+  push:
+    branches: [qa-revamped-galvicare-0-5]
+    paths:
+      - worker/day5-entry.js
+      - worker/day5-common.js
+      - worker/routes/care.js
+      - worker/domain/care-service.js
+      - worker/domain/day5-timeline-service.js
+      - worker/repositories/care-repository.js
+      - migrations/day1/0005_day5_governed_care.sql
+      - tests/day5-care.test.mjs
+      - scripts/day5-deployed-e2e.mjs
+      - scripts/day5-codex-bootstrap.sh
+      - wrangler.day5.json
+      - package.json
+      - .github/workflows/galvivault-day5-qa.yml
 
 permissions:
   contents: read
@@ -14,22 +30,39 @@ env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   DAY5_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
+  SIGNED_DAY4_SHA: 4a492d5766fb964b103ed8dcf37a130e9e7d4e3a
 
 jobs:
   day5-gate-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     environment: qa
     steps:
-      - name: Checkout exact QA candidate
+      - name: Checkout exact existing QA candidate
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: P0 exact-ref and Day 4 ancestry proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "mrgalvipro/galvitriage"
+          test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
+          test "$(git branch --show-current)" != "work"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$SIGNED_DAY4_SHA" "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          echo "PASS: GitHub Actions owns networked QA execution; Codex work/tunnel state is not a release dependency."
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '22'
+
+      - name: Install repository dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
 
       - name: Generate QA-only Stripe replay key
         shell: bash
@@ -42,7 +75,7 @@ jobs:
           node -e "const w=require('./wrangler.day5.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='0005'||w.d1_databases?.[0]?.binding!=='DB'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
           test ! -e wrangler.production.day5.json
 
-      - name: Day 5 local contract and regression gate
+      - name: Day 5 local contract and inherited regression gate
         run: npm run day5:gate
 
       - name: Inspect canonical Day 5 migration ledger
@@ -71,22 +104,34 @@ jobs:
           grep -q "trg_gv1_treatment_events_no_update" day5-d1-schema.txt
           grep -q "trg_gv1_treatment_events_no_delete" day5-d1-schema.txt
 
-      - name: Deploy cumulative Day 5 QA Worker
-        run: npx --yes wrangler@4.120.0 deploy --config wrangler.day5.json --var STRIPE_WEBHOOK_SECRET:$STRIPE_WEBHOOK_SECRET | tee day5-deploy.txt
+      - name: Deploy exact-SHA cumulative Day 5 QA Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 deploy --config wrangler.day5.json \
+            --var STRIPE_WEBHOOK_SECRET:$STRIPE_WEBHOOK_SECRET \
+            --var COMMIT_SHA:$GITHUB_SHA | tee day5-deploy.txt
 
       - name: Wait for Worker convergence
         run: sleep 12
 
-      - name: Verify deployed Day 5 readiness
+      - name: Verify deployed Day 5 readiness and exact SHA
+        shell: bash
         run: |
-          curl --fail --silent --show-error "$DAY5_QA_URL/health" | tee day5-health.json
-          curl --fail --silent --show-error "$DAY5_QA_URL/ready" | tee day5-ready.json
-          curl --fail --silent --show-error "$DAY5_QA_URL/api/v1/day5/readiness" | tee day5-readiness.json
+          set -euo pipefail
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY5_QA_URL/health?sha=$GITHUB_SHA" | tee day5-health.json
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY5_QA_URL/ready?sha=$GITHUB_SHA" | tee day5-ready.json
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY5_QA_URL/api/v1/day5/readiness?sha=$GITHUB_SHA" | tee day5-readiness.json
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
+          const h=JSON.parse(fs.readFileSync('day5-health.json','utf8'));
           const r=JSON.parse(fs.readFileSync('day5-readiness.json','utf8'));
           if(!r.success||r.environment!=='qa'||!r.data?.ready||r.data?.current_schema_version!=='0005'||r.data?.required_schema_version!=='0005'){
             console.error(r); process.exit(1);
+          }
+          const served=h?.data?.commit_sha;
+          if(served && served!==process.env.GITHUB_SHA){
+            console.error({expected:process.env.GITHUB_SHA,served}); process.exit(1);
           }
           NODE
 
@@ -96,10 +141,10 @@ jobs:
       - name: Final Day 1-Day 4 affected regression
         run: npm run day5:regression
 
-      - name: Prove Production and GalviCare runtime files were not changed by Day 5 evidence harness
+      - name: Prove Production and GalviCare runtime files were not changed
         run: |
-          git diff --exit-code HEAD^ HEAD -- worker/production-entry.js wrangler.production.jsonc index.html day7d-browser-customer-intelligence.js qa-frontend-worker.js || {
-            echo 'Unexpected Production/GalviCare runtime change detected in final Day 5 evidence commit.' >&2
+          git diff --exit-code "$SIGNED_DAY4_SHA" "$GITHUB_SHA" -- worker/production-entry.js wrangler.production.jsonc index.html day7d-browser-customer-intelligence.js qa-frontend-worker.js || {
+            echo 'Unexpected Production/GalviCare runtime change detected in Day 5 candidate.' >&2
             exit 1
           }
 
@@ -107,7 +152,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: galvivault-day5-hosted-evidence-${{ github.sha }}
+          name: galvicare-day5-hosted-evidence-${{ github.sha }}
           path: |
             day5-migration-before.txt
             day5-d1-migration.txt
