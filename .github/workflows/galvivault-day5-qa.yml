@@ -16,6 +16,7 @@ on:
       - migrations/day1/0005_day5_governed_care.sql
       - migrations/day1/0006_day5_active_care_loop.sql
       - migrations/day1/0007_day5_treatment_contract.sql
+      - migrations/day1/0590_day5_active_care_ledger_reconcile.sql
       - tests/day5-care.test.mjs
       - tests/day5-active-care.test.mjs
       - scripts/day5-deployed-e2e.mjs
@@ -81,7 +82,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node -e "const w=require('./wrangler.day5.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='0007'||w.vars.AI_ENABLED!=='true'||w.vars.DAY5_ACTIVE_CARE_SCHEMA!=='v1'||w.vars.DAY5_TREATMENT_CONTRACT!=='evidence_bound_v1'||w.d1_databases?.[0]?.binding!=='DB'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
+          node -e "const w=require('./wrangler.day5.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='D5A2'||w.vars.AI_ENABLED!=='true'||w.vars.DAY5_ACTIVE_CARE_SCHEMA!=='v1'||w.vars.DAY5_TREATMENT_CONTRACT!=='evidence_bound_v1'||w.d1_databases?.[0]?.binding!=='DB'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
           test ! -e wrangler.production.day5.json
           npx --yes wrangler@4.120.0 secret list --config wrangler.day5.json > /tmp/day5-secrets.json
           node --input-type=module <<'NODE'
@@ -93,29 +94,38 @@ jobs:
       - name: Day 5 local contract and inherited regression gate
         run: npm run day5:gate
 
-      - name: Inspect canonical Day 5 migration ledger
-        run: |
-          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0005','0006','0007') ORDER BY migration_id;" | tee day5-migration-before.txt
-
-      - name: Apply Day 5 active-care migrations when absent
+      - name: Inspect canonical Day 5 schema and shared migration ledger
         shell: bash
         run: |
           set -euo pipefail
-          if ! grep -q "day5_active_care_loop_v1" day5-migration-before.txt; then
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE name IN ('day5_governed_care_v1','day5_active_care_loop_v1','day5_treatment_contract_v1') OR migration_id IN ('0006','0007') ORDER BY migration_id;" | tee day5-migration-before.txt
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT COUNT(*) AS active_table FROM sqlite_master WHERE type='table' AND name='gv1_finding_decisions'; SELECT COUNT(*) AS treatment_column FROM pragma_table_info('gv1_treatment_plans') WHERE name='brief_fingerprint';" | tee day5-schema-before.txt
+
+      - name: Reconcile Day 5 active-care schema without replaying applied ALTERs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! grep -q '"active_table": 1' day5-schema-before.txt; then
             npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --file migrations/day1/0006_day5_active_care_loop.sql
           fi
-          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name FROM gv1_schema_migrations WHERE migration_id IN ('0006','0007') ORDER BY migration_id;" > /tmp/day5-after-0006.txt
-          if ! grep -q "day5_treatment_contract_v1" /tmp/day5-after-0006.txt; then
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT COUNT(*) AS treatment_column FROM pragma_table_info('gv1_treatment_plans') WHERE name='brief_fingerprint';" > /tmp/day5-treatment-column.txt
+          if ! grep -q '"treatment_column": 1' /tmp/day5-treatment-column.txt; then
             npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --file migrations/day1/0007_day5_treatment_contract.sql
           fi
+          # Shared D1 already owns numeric 0006/0007 for Day 8. Record collision-safe Day 5 ledger IDs only.
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --file migrations/day1/0590_day5_active_care_ledger_reconcile.sql
 
       - name: Capture direct remote D1 schema assertions
+        shell: bash
         run: |
-          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE migration_id IN ('0005','0006','0007') ORDER BY migration_id;" | tee day5-d1-migration.txt
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE name IN ('day5_governed_care_v1','day5_active_care_loop_v1','day5_treatment_contract_v1') ORDER BY migration_id;" | tee day5-d1-migration.txt
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT type,name FROM sqlite_master WHERE name IN ('idx_recommendations_bmr','idx_treatment_plans_bmr','idx_treatment_events_plan','idx_outcomes_bmr','idx_feedback_target','idx_adapter_status','idx_finding_decisions_bmr_finding','idx_galvirx_bmr_plan','idx_galviaudit_bmr_status','idx_referrals_bmr_status','idx_checkins_bmr_plan','idx_milestones_bmr_plan','idx_reassessments_bmr_plan','idx_treatment_plans_bmr_group_version','trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete') ORDER BY type,name;" | tee day5-d1-schema.txt
           grep -q "day5_governed_care_v1" day5-d1-migration.txt
           grep -q "day5_active_care_loop_v1" day5-d1-migration.txt
           grep -q "day5_treatment_contract_v1" day5-d1-migration.txt
+          grep -q '"migration_id": "D5A1"' day5-d1-migration.txt
+          grep -q '"migration_id": "D5A2"' day5-d1-migration.txt
           for key in idx_recommendations_bmr idx_treatment_plans_bmr idx_treatment_events_plan idx_outcomes_bmr idx_feedback_target idx_adapter_status idx_finding_decisions_bmr_finding idx_galvirx_bmr_plan idx_galviaudit_bmr_status idx_referrals_bmr_status idx_checkins_bmr_plan idx_milestones_bmr_plan idx_reassessments_bmr_plan idx_treatment_plans_bmr_group_version trg_gv1_treatment_events_no_update trg_gv1_treatment_events_no_delete; do grep -q "$key" day5-d1-schema.txt; done
 
       - name: Deploy exact-SHA cumulative Day 5 QA Worker
@@ -159,7 +169,7 @@ jobs:
           if(h?.success!==true||h?.data?.commit_sha!==process.env.GITHUB_SHA||h?.data?.release_version!=='galvicare_1_0_day4') throw new Error('Exact inherited Day 4 runtime proof failed.');
           if(c.galvichart_1_0!==true||c.secure_return_same_record!==true||c.day3_closed_loop_inherited!==true) throw new Error('Day 4 Chart/secure-return inheritance failed.');
           if(c.governed_ai!==true||c.provider_configured!==true||c.responses_api_server_side!==true) throw new Error('Governed OpenAI capability regressed in Day 5 runtime.');
-          if(!r.success||r.environment!=='qa'||!r.data?.ready||r.data?.current_schema_version!=='0007'||r.data?.required_schema_version!=='0007'||r.data?.active_care_contract!=='v1'||r.data?.treatment_contract!=='evidence_bound_v1'||r.data?.inherited_runtime!=='galvicare_1_0_day4') throw new Error('Day 5 active-care readiness failed.');
+          if(!r.success||r.environment!=='qa'||!r.data?.ready||r.data?.current_schema_version!=='D5A2'||r.data?.required_schema_version!=='D5A2'||r.data?.active_care_contract!=='v1'||r.data?.treatment_contract!=='evidence_bound_v1'||r.data?.inherited_runtime!=='galvicare_1_0_day4') throw new Error('Day 5 active-care readiness failed.');
           NODE
 
       - name: Execute deployed Day 5 BLOCK and Human E2E evidence
@@ -194,7 +204,7 @@ jobs:
           const c=h?.data?.capabilities||{};
           if(c.galvichart_1_0!==true||c.secure_return_same_record!==true||c.day3_closed_loop_inherited!==true) throw new Error('Day 1-4 smoke failed after rollback.');
           NODE
-          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name FROM gv1_schema_migrations WHERE migration_id IN ('0005','0006','0007') ORDER BY migration_id; SELECT COUNT(*) AS treatment_plan_count FROM gv1_treatment_plans; SELECT COUNT(*) AS active_care_object_count FROM gv1_finding_decisions;" | tee day5-rollback-d1.txt
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --command "SELECT migration_id,name FROM gv1_schema_migrations WHERE name IN ('day5_governed_care_v1','day5_active_care_loop_v1','day5_treatment_contract_v1') ORDER BY migration_id; SELECT COUNT(*) AS treatment_plan_count FROM gv1_treatment_plans; SELECT COUNT(*) AS active_care_object_count FROM gv1_finding_decisions;" | tee day5-rollback-d1.txt
           grep -q "day5_treatment_contract_v1" day5-rollback-d1.txt
 
       - name: Restore exact Day 5 candidate after rollback rehearsal
@@ -215,7 +225,7 @@ jobs:
           const h=JSON.parse(fs.readFileSync('day5-restore-health.json','utf8'));
           const r=JSON.parse(fs.readFileSync('day5-restore-readiness.json','utf8'));
           if(h?.success!==true||h?.data?.commit_sha!==process.env.GITHUB_SHA) throw new Error('Day 5 exact candidate restore failed.');
-          if(r?.success!==true||r?.data?.ready!==true||r?.data?.current_schema_version!=='0007') throw new Error('Day 5 readiness failed after restore.');
+          if(r?.success!==true||r?.data?.ready!==true||r?.data?.current_schema_version!=='D5A2') throw new Error('Day 5 readiness failed after restore.');
           NODE
 
       - name: Upload Day 5 hosted evidence
@@ -225,6 +235,7 @@ jobs:
           name: galvicare-day5-hosted-evidence-${{ github.sha }}
           path: |
             day5-migration-before.txt
+            day5-schema-before.txt
             day5-d1-migration.txt
             day5-d1-schema.txt
             day5-deploy.txt
