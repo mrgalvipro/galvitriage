@@ -91,3 +91,11 @@ test('AC-16 H19 customer acknowledgement is separate from physician authorship, 
   assert.ok(has(common,['CUSTOMER_SESSION_HEADER','X-Galvi-Day3-Session','Access-Control-Allow-Headers']));
   assert.ok(has(projection,["event_type='customer_acknowledged'",'acknowledgements','customer_acknowledgement_projection']));
 });
+
+test('AC-17 inherited Day3/Day4 customer routes preserve the exact browser CORS contract through Day5',()=>{
+  assert.ok(has(common,['Cache-Control',CUSTOMER_HEADER_TOKEN(),'Access-Control-Request-Headers']));
+  assert.ok(has(entry,['preserveDay5Cors','inheritedResponse','Access-Control-Allow-Origin','Access-Control-Allow-Headers','X-Galvi-Day5-Inherited-Cors','return inheritedResponse(request,env,executionContext,ctx)']));
+  assert.ok(wrangler.vars.ALLOWED_ORIGINS.includes('https://galvicare-0-5-qa.mrgalvipro.workers.dev'));
+});
+
+function CUSTOMER_HEADER_TOKEN(){return 'X-Galvi-Day3-Session';}
