@@ -3,6 +3,7 @@ import { GVError, actor, context, failure, headers, idempotencyKey, jsonBody, re
 import { first } from './repositories/care-repository.js';
 import { handleCareRoute } from './routes/care.js';
 import { createGovernedTreatmentPlan } from './domain/day5-treatment-service.js';
+import { augmentCustomerChartResponse } from './domain/day5-projection-service.js';
 
 async function readiness(env,ctx){
   const migration=await first(env.DB,`SELECT migration_id,name,environment,checksum,applied_at FROM gv1_schema_migrations WHERE name='day5_treatment_contract_v1' ORDER BY applied_at DESC LIMIT 1`);
@@ -28,7 +29,7 @@ async function readiness(env,ctx){
   const indexRow=await env.DB.prepare(`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='index' AND name IN (${placeholders})`).bind(...indexNames).first();
   const triggerRow=await first(env.DB,`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='trigger' AND name IN ('trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete')`);
   const ready=Boolean(migration&&activeCareMigration&&Object.values(tables).every(v=>v===1)&&Number(indexRow?.count)===indexNames.length&&Number(triggerRow?.count)===2);
-  return success(ctx,{service:'galvicare-1-0-day5',ready,current_schema_version:'D5A2',required_schema_version:'D5A2',migration:migration||null,active_care_migration:activeCareMigration||null,care_tables:tables,contracted_index_count:Number(indexRow?.count||0),expected_index_count:indexNames.length,append_only_trigger_count:Number(triggerRow?.count||0),inherited_runtime:'galvicare_1_0_day4',active_care_contract:'v1',treatment_contract:'evidence_bound_v1',business_physician_governance:'v1'},ready?200:503,ready?'ok':'unavailable');
+  return success(ctx,{service:'galvicare-1-0-day5',ready,current_schema_version:'D5A2',required_schema_version:'D5A2',migration:migration||null,active_care_migration:activeCareMigration||null,care_tables:tables,contracted_index_count:Number(indexRow?.count||0),expected_index_count:indexNames.length,append_only_trigger_count:Number(triggerRow?.count||0),inherited_runtime:'galvicare_1_0_day4',active_care_contract:'v1',treatment_contract:'evidence_bound_v1',business_physician_governance:'v1',active_care_projection:'v1',care_result_evidence:'v1'},ready?200:503,ready?'ok':'unavailable');
 }
 
 const worker={
@@ -43,6 +44,10 @@ const worker={
       if(request.method==='POST'&&path==='/api/v1/treatment-plans'){
         const input=await jsonBody(request),data=await createGovernedTreatmentPlan(env,ctx,actor(request),idempotencyKey(request),input);
         return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
+      }
+      if(request.method==='POST'&&path==='/api/v1/day4/chart'){
+        const upstream=await day4Worker.fetch(request,env,executionContext);
+        return augmentCustomerChartResponse(upstream,env);
       }
       const response=await handleCareRoute(request,env,ctx,path);
       if(response) return response;

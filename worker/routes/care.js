@@ -8,10 +8,12 @@ import {
   retryAdapterDelivery, recordStripeWebhook
 } from '../domain/care-service.js';
 import {
-  getClinicBrief, recordFindingDecision, addGalviRx, orderGalviAudit,
+  recordFindingDecision, addGalviRx, orderGalviAudit,
   createReferral, updateReferralStatus, submitCheckin, reportMilestone,
   reassessCare, enforceGalviGuideBoundary
 } from '../domain/day5-active-care-service.js';
+import { getGovernedClinicBrief } from '../domain/day5-projection-service.js';
+import { recordGalviAuditResult, recordReferralOutcome } from '../domain/day5-care-result-service.js';
 import { getDay5Timeline } from '../domain/day5-timeline-service.js';
 
 async function verifyStripe(request,env){
@@ -39,7 +41,7 @@ export async function handleCareRoute(request,env,ctx,path){
   const clinicBrief=path.match(/^\/api\/v1\/business-medical-records\/([^/]+)\/clinic-brief$/);
   if(request.method==='GET'&&clinicBrief){
     enforceGalviGuideBoundary(caller,'get_clinic_brief');
-    const data=await getClinicBrief(env,caller,decodeURIComponent(clinicBrief[1]));
+    const data=await getGovernedClinicBrief(env,caller,decodeURIComponent(clinicBrief[1]));
     return success(ctx,data);
   }
   if(request.method==='POST'&&path==='/api/v1/finding-decisions'){
@@ -57,6 +59,11 @@ export async function handleCareRoute(request,env,ctx,path){
     const input=await jsonBody(request),data=await orderGalviAudit(env,ctx,caller,idempotencyKey(request),input);
     return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
   }
+  const auditResult=path.match(/^\/api\/v1\/galviaudit-orders\/([^/]+)\/result$/);
+  if(request.method==='POST'&&auditResult){
+    const input=await jsonBody(request),data=await recordGalviAuditResult(env,ctx,caller,idempotencyKey(request),decodeURIComponent(auditResult[1]),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
+  }
   if(request.method==='POST'&&path==='/api/v1/referrals'){
     enforceGalviGuideBoundary(caller,'create_referral');
     const input=await jsonBody(request),data=await createReferral(env,ctx,caller,idempotencyKey(request),input);
@@ -67,6 +74,11 @@ export async function handleCareRoute(request,env,ctx,path){
     enforceGalviGuideBoundary(caller,'update_referral_status');
     const input=await jsonBody(request),data=await updateReferralStatus(env,ctx,caller,idempotencyKey(request),decodeURIComponent(referralStatus[1]),input);
     return success(ctx,data,200,data.idempotent_replay?'no_change':'ok',{idempotent_replay:data.idempotent_replay});
+  }
+  const referralOutcome=path.match(/^\/api\/v1\/referrals\/([^/]+)\/outcome$/);
+  if(request.method==='POST'&&referralOutcome){
+    const input=await jsonBody(request),data=await recordReferralOutcome(env,ctx,caller,idempotencyKey(request),decodeURIComponent(referralOutcome[1]),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
   }
   if(request.method==='POST'&&path==='/api/v1/checkins'){
     enforceGalviGuideBoundary(caller,'submit_checkin');

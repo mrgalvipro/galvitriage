@@ -8,6 +8,9 @@ const ledger=read('migrations/day1/0590_day5_active_care_ledger_reconcile.sql');
 const routes=read('worker/routes/care.js');
 const service=read('worker/domain/day5-active-care-service.js');
 const treatment=read('worker/domain/day5-treatment-service.js');
+const projection=read('worker/domain/day5-projection-service.js');
+const results=read('worker/domain/day5-care-result-service.js');
+const timeline=read('worker/domain/day5-timeline-service.js');
 const entry=read('worker/day5-entry.js');
 const wrangler=JSON.parse(read('wrangler.day5.json'));
 const has=(t,a)=>a.every(x=>t.includes(x));
@@ -46,4 +49,28 @@ test('AC-10 readiness uses collision-safe Day 5 ledger IDs while preserving sign
   assert.equal(wrangler.vars.MIN_SCHEMA_VERSION,'D5A2');assert.equal(wrangler.vars.DAY5_ACTIVE_CARE_SCHEMA,'v1');assert.equal(wrangler.vars.DAY5_TREATMENT_CONTRACT,'evidence_bound_v1');
   assert.ok(has(ledger,["'D5A1'","'D5A2'",'day5_active_care_loop_v1','day5_treatment_contract_v1']));
   assert.ok(entry.includes("name='day5_treatment_contract_v1'"));assert.ok(entry.includes("required_schema_version:'D5A2'"));assert.ok(entry.includes("import day4Worker from './day4-session-identity-entry.js'"));
+});
+
+test('AC-11 governed Clinic brief exposes canonical Score/Shot/Sight/Path versions without AI regeneration',()=>{
+  assert.ok(has(projection,['gv1_day2_intake_results','result_type=\'score\'','gv1_day3_governed_artifacts','GalviShot','GalviSight','GalviPath','source_versions','source_refs','getGovernedClinicBrief']));
+  assert.equal(projection.toLowerCase().includes('openai.responses'),false);
+  assert.ok(routes.includes('getGovernedClinicBrief'));
+});
+
+test('AC-12 GalviAudit and referral returned results become immutable governed BHR evidence',()=>{
+  assert.ok(has(results,['recordGalviAuditResult','recordReferralOutcome','gv1_evidence_items','status=\'completed\'','result_evidence_id','GV_CONSENT_REQUIRED','day5:galviaudit-result','day5:referral-outcome']));
+  assert.ok(has(routes,['/galviaudit-orders\\/([^/]+)\\/result$/','/referrals\\/([^/]+)\\/outcome$/']));
+  assert.equal(results.includes('DELETE FROM'),false);
+});
+
+test('AC-13 customer Chart active-care projection is read-only and customer-safe',()=>{
+  assert.ok(has(projection,['augmentCustomerChartResponse','active_care','customer_visible=1',"consent_status='consented'",'active_care_ai_called_on_read:false']));
+  assert.ok(entry.includes("path==='/api/v1/day4/chart'"));
+  const augment=projection.slice(projection.indexOf('export async function augmentCustomerChartResponse'));
+  assert.equal(augment.includes('INSERT INTO'),false);assert.equal(augment.includes('UPDATE '),false);assert.equal(augment.includes('DELETE FROM'),false);
+});
+
+test('AC-14 Day 5 timeline includes treatment decisions, Rx, diagnostics, referrals and monitoring',()=>{
+  assert.ok(has(timeline,['finding_decision','galvirx','galviaudit','referral','checkin','milestone','reassessment']));
+  assert.equal(timeline.includes('UNION ALL'),false);
 });
