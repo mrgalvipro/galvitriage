@@ -3,6 +3,15 @@
  * expose bounded GalviGuide navigation, and make passive-vs-active routing visible.
  * It does not recompute Score/Acuity, does not call OpenAI, does not submit BMR
  * authority, and does not alter the Day 3/Day7D clarification or governed-AI routes.
+ *
+ * H02 runtime remediation:
+ * - Never query/render care routing while a Score/Shot/Sight/Path clarification is active.
+ * - Discard any route response that races with a clarification transition so stale
+ *   pre-answer Score/Acuity cannot be projected after the customer submits evidence.
+ * - Render idempotently and insert relative to the actual button-row parent; never call
+ *   host.insertBefore(panel,row) when row may be a nested descendant.
+ * - The MutationObserver may observe this adapter's own DOM, but an unchanged route
+ *   fingerprint is a no-op, preventing self-triggered render loops/freezes.
  */
 (()=>{
   'use strict';
@@ -10,6 +19,7 @@
   const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev';
   const SESSION_HEADER='X-Galvi-Day3-Session';
   const STAGES=['galviscore-result','galvishot-result','galvisight-handoff','galvipath-result'];
+  const FOLLOWUP_IDS=['followup-question-container','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions'];
   const text=(value)=>String(value??'').trim();
   const byId=(id)=>document.getElementById(id);
   const esc=(value)=>String(value??'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -119,23 +129,62 @@
     });
   }
 
-  function render(route){
-    installStyle();
-    for(const id of STAGES){
-      const host=byId(id);if(!host)continue;
-      const existing=host.querySelector(`[data-day5-care-routing="${id}"]`);
-      if(existing)existing.remove();
-      const holder=document.createElement('div');holder.innerHTML=markup(route,id);
-      const panel=holder.firstElementChild;
-      const row=host.querySelector('.button-row');
-      if(row)host.insertBefore(panel,row);else host.appendChild(panel);
-      bind(panel);
-    }
+  function visible(node){
+    if(!node||!node.isConnected)return false;const style=getComputedStyle(node);
+    return !node.classList.contains('hidden')&&style.display!=='none'&&style.visibility!=='hidden';
   }
 
-  function visible(node){
-    if(!node)return false;const style=getComputedStyle(node);
-    return !node.classList.contains('hidden')&&style.display!=='none'&&style.visibility!=='hidden';
+  function followupActive(){
+    return FOLLOWUP_IDS.some(id=>{
+      const host=byId(id);
+      if(!visible(host))return false;
+      return Boolean(host.querySelector('textarea,[data-question-id],[data-question-code]'));
+    });
+  }
+
+  function resultReady(){
+    return !followupActive()&&STAGES.some(id=>visible(byId(id)));
+  }
+
+  function routeFingerprint(route){
+    return JSON.stringify([
+      text(route?.source_result_id),Number(route?.source_record_version||0),
+      route?.overall_score??null,route?.acuity_score??null,text(route?.acuity_band),
+      route?.clinical_confidence??null,text(route?.disposition),text(route?.support_level),
+      Boolean(route?.clinic_recommended),Boolean(route?.referral_required)
+    ]);
+  }
+
+  function insertPanelSafely(host,panel){
+    if(!host?.isConnected||!panel)return false;
+    const row=host.querySelector('.button-row');
+    if(row?.isConnected&&host.contains(row)){
+      try{
+        row.insertAdjacentElement('beforebegin',panel);
+        return true;
+      }catch(error){
+        if(error?.name!=='NotFoundError')throw error;
+      }
+    }
+    if(host.isConnected){host.appendChild(panel);return true}
+    return false;
+  }
+
+  function render(route){
+    if(followupActive())return;
+    installStyle();
+    const fingerprint=routeFingerprint(route);
+    for(const id of STAGES){
+      const host=byId(id);if(!host||!visible(host))continue;
+      const existing=host.querySelector(`[data-day5-care-routing="${id}"]`);
+      if(existing?.dataset?.day5CareFingerprint===fingerprint)continue;
+      if(existing)existing.remove();
+      const holder=document.createElement('div');holder.innerHTML=markup(route,id);
+      const panel=holder.firstElementChild;if(!panel)continue;
+      panel.dataset.day5CareFingerprint=fingerprint;
+      if(!insertPanelSafely(host,panel))continue;
+      bind(panel);
+    }
   }
 
   function scheduleRetry(){
@@ -145,10 +194,13 @@
   }
 
   async function refresh(force=false){
+    if(followupActive()){cached=null;return null}
     if(inFlight)return inFlight;
     if(cached&&!force){render(cached);return cached}
     inFlight=(async()=>{
-      const route=await api('explain_route');cached=route;retryCount=0;render(route);return route;
+      const route=await api('explain_route');
+      if(followupActive()){cached=null;return null}
+      cached=route;retryCount=0;render(route);return route;
     })();
     try{return await inFlight}
     catch(error){
@@ -161,13 +213,14 @@
   function install(){
     installStyle();
     const observer=new MutationObserver(()=>{
-      if(STAGES.some(id=>visible(byId(id))))queueMicrotask(()=>refresh(false).catch(()=>{}));
+      if(followupActive()){cached=null;return}
+      if(resultReady())queueMicrotask(()=>refresh(false).catch(()=>{}));
     });
     observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});
     for(const event of ['pageshow','hashchange','popstate','focus'])window.addEventListener(event,()=>{
-      if(STAGES.some(id=>visible(byId(id))))refresh(true).catch(()=>{});
+      if(resultReady())refresh(true).catch(()=>{});
     });
-    if(STAGES.some(id=>visible(byId(id))))refresh(false).catch(()=>{});
+    if(resultReady())refresh(false).catch(()=>{});
     window.GalviCareDay5Routing=Object.freeze({
       refresh,
       getRoute:()=>refresh(true),

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const entry=readFileSync(new URL('../worker/day5-entry.js',import.meta.url),'utf8');
+const browser=readFileSync(new URL('../day5-customer-care-routing.js',import.meta.url),'utf8');
 const section=(from,to)=>entry.slice(entry.indexOf(from),to?entry.indexOf(to):undefined);
 
 test('H02/H06/H08 customer care route reads canonical Day 2 Score/Acuity from authenticated session without client recomputation',()=>{
@@ -31,4 +32,25 @@ test('H07 GalviGuide customer endpoint is bounded, read-only and fails prohibite
   assert.equal(/\bINSERT\b|\bUPDATE\b|\bDELETE\b/i.test(guide),false);
   assert.equal(guide.includes('openai'),false);
   assert.equal(guide.includes('bmr_id'),false);
+});
+
+test('H02 clarification transition cannot be broken by Day 5 routing projection',()=>{
+  for(const required of [
+    'FOLLOWUP_IDS','followupActive','resultReady','routeFingerprint','insertPanelSafely',
+    "row.insertAdjacentElement('beforebegin',panel)",
+    'if(followupActive()){cached=null;return null}',
+    'if(followupActive()){cached=null;return}',
+    "observer.observe(document.body,{subtree:true,childList:true,attributes:true"
+  ]) assert.ok(browser.includes(required),required);
+
+  for(const followupId of [
+    'followup-question-container','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions'
+  ]) assert.ok(browser.includes(followupId),followupId);
+
+  assert.equal(browser.includes('host.insertBefore(panel,row)'),false);
+  assert.ok(browser.includes('existing?.dataset?.day5CareFingerprint===fingerprint'));
+  assert.ok(browser.includes('if(!host||!visible(host))continue'));
+  assert.ok(browser.includes('/api/v1/day5/customer/galviguide'));
+  assert.ok(browser.includes('testBoundary'));
+  assert.equal(/api\.openai\.com|OPENAI_API_KEY|bmr_id\s*:/.test(browser),false);
 });
