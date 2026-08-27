@@ -112,7 +112,6 @@ jobs:
           if ! grep -q '"treatment_column": 1' /tmp/day5-treatment-column.txt; then
             npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --file migrations/day1/0007_day5_treatment_contract.sql
           fi
-          # Shared D1 already owns numeric 0006/0007 for Day 8. Record collision-safe Day 5 ledger IDs only.
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5.json --file migrations/day1/0590_day5_active_care_ledger_reconcile.sql
 
       - name: Capture direct remote D1 schema assertions
@@ -217,16 +216,31 @@ jobs:
             --percentage 100 \
             --message "Restore Day 5 exact SHA $GITHUB_SHA after rollback rehearsal" \
             --config wrangler.day5.json -y
-          sleep 10
-          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY5_QA_URL/health?restore=$GITHUB_SHA" | tee day5-restore-health.json
-          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY5_QA_URL/api/v1/day5/readiness?restore=$GITHUB_SHA" | tee day5-restore-readiness.json
-          node --input-type=module <<'NODE'
+          rm -f day5-restore-health.json day5-restore-readiness.json
+          ready=0
+          for attempt in 1 2 3 4 5 6; do
+            sleep 10
+            if curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY5_QA_URL/health?restore=$GITHUB_SHA&attempt=$attempt" -o /tmp/day5-restore-health.json && \
+               curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY5_QA_URL/api/v1/day5/readiness?restore=$GITHUB_SHA&attempt=$attempt" -o /tmp/day5-restore-readiness.json; then
+              if node --input-type=module <<'NODE'
           import fs from 'node:fs';
-          const h=JSON.parse(fs.readFileSync('day5-restore-health.json','utf8'));
-          const r=JSON.parse(fs.readFileSync('day5-restore-readiness.json','utf8'));
-          if(h?.success!==true||h?.data?.commit_sha!==process.env.GITHUB_SHA) throw new Error('Day 5 exact candidate restore failed.');
-          if(r?.success!==true||r?.data?.ready!==true||r?.data?.current_schema_version!=='D5A2') throw new Error('Day 5 readiness failed after restore.');
+          const h=JSON.parse(fs.readFileSync('/tmp/day5-restore-health.json','utf8'));
+          const r=JSON.parse(fs.readFileSync('/tmp/day5-restore-readiness.json','utf8'));
+          if(h?.success!==true||h?.data?.commit_sha!==process.env.GITHUB_SHA) process.exit(1);
+          if(r?.success!==true||r?.data?.ready!==true||r?.data?.current_schema_version!=='D5A2') process.exit(1);
           NODE
+              then
+                cp /tmp/day5-restore-health.json day5-restore-health.json
+                cp /tmp/day5-restore-readiness.json day5-restore-readiness.json
+                ready=1
+                break
+              fi
+            fi
+            echo "Day 5 restore not converged yet (attempt $attempt/6)."
+          done
+          test "$ready" = "1"
+          cat day5-restore-health.json
+          cat day5-restore-readiness.json
 
       - name: Upload Day 5 hosted evidence
         if: always()
