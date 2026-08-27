@@ -9,7 +9,7 @@
     "ENVIRONMENT": "qa",
     "FIXTURE_MODE": "true",
     "API_VERSION": "v1",
-    "MIN_SCHEMA_VERSION": "0005",
+    "MIN_SCHEMA_VERSION": "0006",
     "AI_ENABLED": "true",
     "OPENAI_MODEL_QA": "gpt-4.1-mini",
     "OPENAI_TIMEOUT_MS": "20000",
@@ -23,6 +23,8 @@
     "DAY4_GALVICHART_PROJECTION": "v1",
     "DAY4_GALVICHART_CUSTOMER_PROJECTION": "v2",
     "DAY4_SESSION_IDENTITY_COMPAT": "v1",
+    "DAY5_ACTIVE_CARE_SCHEMA": "v1",
+    "DAY5_BUSINESS_PHYSICIAN_GOVERNANCE": "v1",
     "GALVICLINIC_BOOKING_URL": "https://calendly.com/galvilpro/galviclinic-day7c-qa",
     "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,https://galvicare-0-5-qa.mrgalvipro.workers.dev,http://localhost:8787,http://127.0.0.1:8787"
   },
