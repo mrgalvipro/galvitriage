@@ -7,6 +7,11 @@ import {
   createLearningCandidate, reviewLearningCandidate, transitionCareBmr, getCare,
   retryAdapterDelivery, recordStripeWebhook
 } from '../domain/care-service.js';
+import {
+  getClinicBrief, recordFindingDecision, addGalviRx, orderGalviAudit,
+  createReferral, updateReferralStatus, submitCheckin, reportMilestone,
+  reassessCare, enforceGalviGuideBoundary
+} from '../domain/day5-active-care-service.js';
 import { getDay5Timeline } from '../domain/day5-timeline-service.js';
 
 async function verifyStripe(request,env){
@@ -29,6 +34,56 @@ async function verifyStripe(request,env){
 }
 
 export async function handleCareRoute(request,env,ctx,path){
+  const caller=actor(request);
+
+  const clinicBrief=path.match(/^\/api\/v1\/business-medical-records\/([^/]+)\/clinic-brief$/);
+  if(request.method==='GET'&&clinicBrief){
+    enforceGalviGuideBoundary(caller,'get_clinic_brief');
+    const data=await getClinicBrief(env,caller,decodeURIComponent(clinicBrief[1]));
+    return success(ctx,data);
+  }
+  if(request.method==='POST'&&path==='/api/v1/finding-decisions'){
+    enforceGalviGuideBoundary(caller,'record_finding_decision');
+    const input=await jsonBody(request),data=await recordFindingDecision(env,ctx,caller,idempotencyKey(request),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
+  }
+  if(request.method==='POST'&&path==='/api/v1/galvirx'){
+    enforceGalviGuideBoundary(caller,'add_galvirx');
+    const input=await jsonBody(request),data=await addGalviRx(env,ctx,caller,idempotencyKey(request),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
+  }
+  if(request.method==='POST'&&path==='/api/v1/galviaudit-orders'){
+    enforceGalviGuideBoundary(caller,'order_galviaudit');
+    const input=await jsonBody(request),data=await orderGalviAudit(env,ctx,caller,idempotencyKey(request),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
+  }
+  if(request.method==='POST'&&path==='/api/v1/referrals'){
+    enforceGalviGuideBoundary(caller,'create_referral');
+    const input=await jsonBody(request),data=await createReferral(env,ctx,caller,idempotencyKey(request),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
+  }
+  const referralStatus=path.match(/^\/api\/v1\/referrals\/([^/]+)\/status$/);
+  if(request.method==='POST'&&referralStatus){
+    enforceGalviGuideBoundary(caller,'update_referral_status');
+    const input=await jsonBody(request),data=await updateReferralStatus(env,ctx,caller,idempotencyKey(request),decodeURIComponent(referralStatus[1]),input);
+    return success(ctx,data,200,data.idempotent_replay?'no_change':'ok',{idempotent_replay:data.idempotent_replay});
+  }
+  if(request.method==='POST'&&path==='/api/v1/checkins'){
+    enforceGalviGuideBoundary(caller,'submit_checkin');
+    const input=await jsonBody(request),data=await submitCheckin(env,ctx,caller,idempotencyKey(request),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
+  }
+  if(request.method==='POST'&&path==='/api/v1/milestones'){
+    enforceGalviGuideBoundary(caller,'report_milestone');
+    const input=await jsonBody(request),data=await reportMilestone(env,ctx,caller,idempotencyKey(request),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
+  }
+  if(request.method==='POST'&&path==='/api/v1/reassessments'){
+    enforceGalviGuideBoundary(caller,'reassess_care');
+    const input=await jsonBody(request),data=await reassessCare(env,ctx,caller,idempotencyKey(request),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
+  }
+
   if(request.method==='POST'&&path==='/api/v1/recommendations'){
     const operator=requireOperator(request), input=await jsonBody(request);
     const data=await createRecommendation(env,ctx,operator,idempotencyKey(request),input);
@@ -41,12 +96,14 @@ export async function handleCareRoute(request,env,ctx,path){
     return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
   }
   if(request.method==='POST'&&path==='/api/v1/treatment-plans'){
+    enforceGalviGuideBoundary(caller,'create_treatment_plan');
     const operator=requireOperator(request), input=await jsonBody(request);
     const data=await createTreatmentPlan(env,ctx,operator,idempotencyKey(request),input);
     return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
   }
   const revision=path.match(/^\/api\/v1\/treatment-plans\/([^/]+)\/revisions$/);
   if(request.method==='POST'&&revision){
+    enforceGalviGuideBoundary(caller,'revise_treatment_plan');
     const operator=requireOperator(request), input=await jsonBody(request);
     const data=await reviseTreatmentPlan(env,ctx,operator,idempotencyKey(request),decodeURIComponent(revision[1]),input);
     return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
@@ -68,7 +125,7 @@ export async function handleCareRoute(request,env,ctx,path){
     return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
   }
   if(request.method==='POST'&&path==='/api/v1/learning-candidates'){
-    const caller=actor(request), input=await jsonBody(request);
+    const input=await jsonBody(request);
     const data=await createLearningCandidate(env,ctx,caller,idempotencyKey(request),input);
     return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
   }
