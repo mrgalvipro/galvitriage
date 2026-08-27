@@ -12,6 +12,7 @@
     "FIXTURE_MODE": "true",
     "API_VERSION": "v1",
     "MIN_SCHEMA_VERSION": "0005",
+    "AI_ENABLED": "true",
     "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,http://localhost:8787,http://127.0.0.1:8787"
   },
   "d1_databases": [

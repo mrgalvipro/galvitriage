@@ -69,11 +69,12 @@ test('CR-012 care and timeline use bounded typed remote-D1-safe reads',()=>{
   assert.equal(timeline.includes('UNION ALL'),false);
 });
 
-test('Day 5 cumulative Worker preserves isolated QA authority and inherits the signed Day 4 cumulative runtime',()=>{
+test('Day 5 cumulative Worker preserves QA authority, governed AI, and the signed Day 4 cumulative runtime',()=>{
   assert.equal(wrangler.name,'galvivault-p0-day1-qa');
   assert.equal(wrangler.main,'worker/day5-entry.js');
   assert.equal(wrangler.vars.ENVIRONMENT,'qa');
   assert.equal(wrangler.vars.MIN_SCHEMA_VERSION,'0005');
+  assert.equal(wrangler.vars.AI_ENABLED,'true');
   assert.equal(wrangler.d1_databases[0].binding,'DB');
   assert.equal(wrangler.d1_databases[0].database_name,'galvivault-0-5-qa');
   assert.equal(wrangler.d1_databases[0].database_id,'cdf9042b-ab09-498a-ac66-010b6cce47d4');
