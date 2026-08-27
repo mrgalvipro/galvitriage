@@ -28,6 +28,7 @@ concurrency:
 env:
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  SIGNED_DAY5_ACTIVE_CARE_SHA: 70c8cef3211d60afbeec5679f101031d773cc5cb
 
 jobs:
   day8:
@@ -57,8 +58,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
-          git merge-base --is-ancestor eb8630c112ac5557bd374e5f5e1db05e4435bad5 "$GITHUB_SHA"
-          git diff --exit-code eb8630c112ac5557bd374e5f5e1db05e4435bad5 -- \
+          git merge-base --is-ancestor "$SIGNED_DAY5_ACTIVE_CARE_SHA" "$GITHUB_SHA"
+          git diff --exit-code "$SIGNED_DAY5_ACTIVE_CARE_SHA" "$GITHUB_SHA" -- \
             index.html worker/worker.js worker/production-entry.js \
             worker/day7d-engine.js worker/day7d-runtime.js \
             day7c-browser-observability.js day7d-browser-customer-intelligence.js \
