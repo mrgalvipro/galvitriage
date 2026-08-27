@@ -4,9 +4,11 @@ import { readFileSync } from 'node:fs';
 
 const read=(path)=>readFileSync(new URL(`../${path}`,import.meta.url),'utf8');
 const migration=read('migrations/day1/0005_day5_governed_care.sql');
+const activeMigration=read('migrations/day1/0006_day5_active_care_loop.sql');
 const entry=read('worker/day5-entry.js');
 const routes=read('worker/routes/care.js');
 const service=read('worker/domain/care-service.js');
+const activeService=read('worker/domain/day5-active-care-service.js');
 const repository=read('worker/repositories/care-repository.js');
 const timeline=read('worker/domain/day5-timeline-service.js');
 const wrangler=JSON.parse(read('wrangler.day5.json'));
@@ -73,20 +75,23 @@ test('Day 5 cumulative Worker preserves QA authority, governed AI/clarification 
   assert.equal(wrangler.name,'galvivault-p0-day1-qa');
   assert.equal(wrangler.main,'worker/day5-entry.js');
   assert.equal(wrangler.vars.ENVIRONMENT,'qa');
-  assert.equal(wrangler.vars.MIN_SCHEMA_VERSION,'0005');
+  assert.equal(wrangler.vars.MIN_SCHEMA_VERSION,'0006');
   assert.equal(wrangler.vars.AI_ENABLED,'true');
   assert.equal(wrangler.vars.OPENAI_MODEL_QA,'gpt-4.1-mini');
   assert.equal(wrangler.vars.DAY3_CUSTOMER_SESSION_BRIDGE,'true');
   assert.equal(wrangler.vars.DAY3_CUSTOMER_EVIDENCE_RUNTIME,'collision_safe_v2');
   assert.equal(wrangler.vars.DAY4_GALVICHART_PROJECTION,'v1');
   assert.equal(wrangler.vars.DAY4_GALVICHART_CUSTOMER_PROJECTION,'v2');
+  assert.equal(wrangler.vars.DAY5_ACTIVE_CARE_SCHEMA,'v1');
   assert.ok(wrangler.vars.GALVICLINIC_BOOKING_URL.includes('calendly.com'));
   assert.equal(wrangler.d1_databases[0].binding,'DB');
   assert.equal(wrangler.d1_databases[0].database_name,'galvivault-0-5-qa');
   assert.equal(wrangler.d1_databases[0].database_id,'cdf9042b-ab09-498a-ac66-010b6cce47d4');
-  assert.ok(entry.includes("migration_id='0005'"));
+  assert.ok(entry.includes("migration_id='0006'"));
   assert.ok(entry.includes("import day4Worker from './day4-session-identity-entry.js'"));
   assert.equal(entry.includes("import day4Worker from './day4-entry.js'"),false);
+  assert.ok(has(activeMigration,['gv1_finding_decisions','gv1_galvirx','gv1_galviaudit_orders','gv1_referrals','gv1_checkins','gv1_reassessments']));
+  assert.ok(has(activeService,['getClinicBrief','recordFindingDecision','addGalviRx','orderGalviAudit','createReferral','submitCheckin','reassessCare']));
 });
 
 test('Production and GalviCare baseline files remain outside the Day 5 implementation target',()=>{
