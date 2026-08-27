@@ -30,7 +30,21 @@ async function readiness(env,ctx){
   const indexRow=await env.DB.prepare(`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='index' AND name IN (${placeholders})`).bind(...indexNames).first();
   const triggerRow=await first(env.DB,`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='trigger' AND name IN ('trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete')`);
   const ready=Boolean(migration&&activeCareMigration&&Object.values(tables).every(v=>v===1)&&Number(indexRow?.count)===indexNames.length&&Number(triggerRow?.count)===2);
-  return success(ctx,{service:'galvicare-1-0-day5',ready,current_schema_version:'D5A2',required_schema_version:'D5A2',migration:migration||null,active_care_migration:activeCareMigration||null,care_tables:tables,contracted_index_count:Number(indexRow?.count||0),expected_index_count:indexNames.length,append_only_trigger_count:Number(triggerRow?.count||0),inherited_runtime:'galvicare_1_0_day4',active_care_contract:'v1',treatment_contract:'evidence_bound_v1',business_physician_governance:'v1',active_care_projection:'v1',care_result_evidence:'v1',governed_treatment_revision:'v1',customer_treatment_acknowledgement:'v1',customer_checkin_session_bound:'v1'},ready?200:503,ready?'ok':'unavailable');
+  return success(ctx,{service:'galvicare-1-0-day5',ready,current_schema_version:'D5A2',required_schema_version:'D5A2',migration:migration||null,active_care_migration:activeCareMigration||null,care_tables:tables,contracted_index_count:Number(indexRow?.count||0),expected_index_count:indexNames.length,append_only_trigger_count:Number(triggerRow?.count||0),inherited_runtime:'galvicare_1_0_day4',active_care_contract:'v1',treatment_contract:'evidence_bound_v1',business_physician_governance:'v1',active_care_projection:'v1',care_result_evidence:'v1',governed_treatment_revision:'v1',customer_treatment_acknowledgement:'v1',customer_checkin_session_bound:'v1',inherited_customer_cors:'v1'},ready?200:503,ready?'ok':'unavailable');
+}
+
+function preserveDay5Cors(response,ctx){
+  if(!response)return response;
+  const cors=headers(ctx),out=new Headers(response.headers);
+  for(const name of ['Access-Control-Allow-Origin','Access-Control-Allow-Headers','Access-Control-Allow-Methods','Vary']){
+    const value=cors.get(name);if(value)out.set(name,value);
+  }
+  out.set('X-Galvi-Day5-Inherited-Cors','v1');
+  return new Response(response.body,{status:response.status,statusText:response.statusText,headers:out});
+}
+
+async function inheritedResponse(request,env,executionContext,ctx){
+  return preserveDay5Cors(await day4Worker.fetch(request,env,executionContext),ctx);
 }
 
 async function authorizedCustomerChart(request,env,executionContext){
@@ -83,12 +97,12 @@ const worker={
         return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,identity_source:'authenticated_galvichart'});
       }
       if(request.method==='POST'&&path==='/api/v1/day4/chart'){
-        const upstream=await day4Worker.fetch(request,env,executionContext);
+        const upstream=await inheritedResponse(request,env,executionContext,ctx);
         return augmentCustomerChartResponse(upstream,env);
       }
       const response=await handleCareRoute(request,env,ctx,path);
       if(response) return response;
-      return day4Worker.fetch(request,env,executionContext);
+      return inheritedResponse(request,env,executionContext,ctx);
     }catch(error){
       console.error('GalviCare 1.0 Day 5 error',error?.code||'GV_INTERNAL',error?.message||'unexpected');
       return failure(ctx,error);
