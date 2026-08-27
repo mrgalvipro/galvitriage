@@ -6,6 +6,7 @@ const migration=read('migrations/day1/0006_day5_active_care_loop.sql');
 const treatmentMigration=read('migrations/day1/0007_day5_treatment_contract.sql');
 const ledger=read('migrations/day1/0590_day5_active_care_ledger_reconcile.sql');
 const routes=read('worker/routes/care.js');
+const common=read('worker/day5-common.js');
 const service=read('worker/domain/day5-active-care-service.js');
 const treatment=read('worker/domain/day5-treatment-service.js');
 const projection=read('worker/domain/day5-projection-service.js');
@@ -80,4 +81,13 @@ test('AC-15 Treatment Plan revision preserves the full governed Day 5 contract',
   assert.ok(entry.includes('reviseGovernedTreatmentPlan'));
   assert.ok(entry.includes("const governedRevision=path.match(/^\\/api\\/v1\\/treatment-plans\\/([^/]+)\\/revisions$/)"));
   assert.ok(entry.includes("governed_treatment_revision:'v1'"));
+});
+
+test('AC-16 H19 customer acknowledgement is separate from physician authorship, session-bound and idempotent',()=>{
+  assert.ok(has(service,['acknowledgeTreatmentPlan','CUSTOMER_ACK_ROLES',"event_type='customer_acknowledged'",'day5:treatment-acknowledgement','authorship_changed:false','gv1_treatment_events']));
+  const ack=service.slice(service.indexOf('export async function acknowledgeTreatmentPlan'),service.indexOf('export async function submitCheckin'));
+  assert.equal(ack.includes('UPDATE gv1_treatment_plans'),false);
+  assert.ok(has(entry,['authorizedCustomerChart',"CUSTOMER_SESSION_HEADER","/api/v1/day4/chart","role:'customer'","identity_source:'authenticated_galvichart'","/day5\\/customer\\/treatment-plans\\/([^/]+)\\/acknowledgement$/","path==='/api/v1/day5/customer/checkins'"]));
+  assert.ok(has(common,['CUSTOMER_SESSION_HEADER','X-Galvi-Day3-Session','Access-Control-Allow-Headers']));
+  assert.ok(has(projection,["event_type='customer_acknowledged'",'acknowledgements','customer_acknowledgement_projection']));
 });
