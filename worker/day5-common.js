@@ -15,8 +15,11 @@ export function headers(ctx) {
   if (ctx.origin && ctx.allowedOrigins.includes(ctx.origin)) {
     const allowed = String(result.get('Access-Control-Allow-Headers') || '')
       .split(',').map((value) => value.trim()).filter(Boolean);
-    if (!allowed.some((value) => value.toLowerCase() === CUSTOMER_SESSION_HEADER.toLowerCase())) allowed.push(CUSTOMER_SESSION_HEADER);
+    for (const required of ['Cache-Control', CUSTOMER_SESSION_HEADER]) {
+      if (!allowed.some((value) => value.toLowerCase() === required.toLowerCase())) allowed.push(required);
+    }
     result.set('Access-Control-Allow-Headers', allowed.join(', '));
+    result.set('Vary', 'Origin, Access-Control-Request-Headers');
   }
   return result;
 }
