@@ -13,12 +13,15 @@ on:
       - day4-galvichart-browser.js
       - day4-customer-experience-hardening.js
       - day4-single-current-governed-product.js
+      - day5-customer-active-care.js
       - qa-frontend-worker.js
       - wrangler.qa-frontend.jsonc
       - scripts/day7b-build-qa-frontend.mjs
       - scripts/day4-build-qa-frontend.mjs
+      - scripts/day5-build-qa-frontend.mjs
       - tests/day1-prefounder-customer.test.mjs
       - tests/day4-galvicare-1-0.test.mjs
+      - tests/day5-customer-active-care.test.mjs
       - .github/workflows/deploy-qa-frontend.yml
 
 permissions:
@@ -43,15 +46,17 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Verify inherited customer contracts and Day 4 browser contract
+      - name: Verify inherited customer contracts and Day 5 H19 browser contract
         run: |
           node --test tests/day1-prefounder-customer.test.mjs
           node --test tests/day4-galvicare-1-0.test.mjs
+          node --test tests/day5-customer-active-care.test.mjs
 
       - name: Generate cumulative isolated QA frontend
         run: |
           node scripts/day7b-build-qa-frontend.mjs
           node scripts/day4-build-qa-frontend.mjs
+          node scripts/day5-build-qa-frontend.mjs
 
       - name: QA isolation and cumulative GalviCare gate
         shell: bash
@@ -69,6 +74,10 @@ jobs:
           grep -Fq 'GalviCare Day 4 follow-up draft resilience v1' dist-qa/index.html
           grep -Fq 'GalviCare Day 4 customer-safe governed interpretation v1' dist-qa/index.html
           grep -Fq 'GalviCare Day 4 single-current governed product projection v1' dist-qa/index.html
+          grep -Fq 'GalviCare Day 5 customer Treatment Plan acknowledgement v1' dist-qa/index.html
+          grep -Fq 'Acknowledge Treatment Plan' dist-qa/index.html
+          grep -Fq 'Submit scheduled check-in' dist-qa/index.html
+          grep -Fq '/api/v1/day5/customer/checkins' dist-qa/index.html
           grep -Fq 'Current view — updated using your latest answers.' dist-qa/index.html
           grep -Fq 'What GalviCare understands right now' dist-qa/index.html
           grep -Fq 'View GalviChart™' dist-qa/index.html
@@ -82,7 +91,8 @@ jobs:
           grep -Fq 'GalviClinic' dist-qa/index.html
           grep -Fq 'History' dist-qa/index.html
           ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
-          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY' day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js
+          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY' day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-customer-active-care.js
+          ! grep -Eq 'bmr_id[[:space:]]*:' day5-customer-active-care.js
 
       - name: Deploy existing dedicated QA frontend Worker
         run: npx --yes wrangler@4 deploy --config wrangler.qa-frontend.jsonc
@@ -96,8 +106,8 @@ jobs:
           set -euo pipefail
           BASE='https://galvicare-0-5-qa.mrgalvipro.workers.dev'
           for attempt in $(seq 1 30); do
-            curl -fsS "$BASE/health?day4=$GITHUB_SHA-$attempt" -o qa-health.json || true
-            curl -fsS "$BASE/?day4=$GITHUB_SHA-$attempt" -o qa-runtime.html || true
+            curl -fsS "$BASE/health?day5=$GITHUB_SHA-$attempt" -o qa-health.json || true
+            curl -fsS "$BASE/?day5=$GITHUB_SHA-$attempt" -o qa-runtime.html || true
             if grep -Fq '"environment":"qa"' qa-health.json 2>/dev/null \
               && grep -Fq '"stripe_mode":"test"' qa-health.json 2>/dev/null \
               && grep -Fq 'GALVICARE QA / TEST ENVIRONMENT' qa-runtime.html 2>/dev/null \
@@ -106,38 +116,50 @@ jobs:
               && grep -Fq 'GalviCare Day 4 follow-up draft resilience v1' qa-runtime.html 2>/dev/null \
               && grep -Fq 'GalviCare Day 4 customer-safe governed interpretation v1' qa-runtime.html 2>/dev/null \
               && grep -Fq 'GalviCare Day 4 single-current governed product projection v1' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'GalviCare Day 5 customer Treatment Plan acknowledgement v1' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'Acknowledge Treatment Plan' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'Submit scheduled check-in' qa-runtime.html 2>/dev/null \
+              && grep -Fq '/api/v1/day5/customer/checkins' qa-runtime.html 2>/dev/null \
               && grep -Fq 'Current view — updated using your latest answers.' qa-runtime.html 2>/dev/null \
               && grep -Fq 'What GalviCare understands right now' qa-runtime.html 2>/dev/null \
               && grep -Fq 'View GalviChart™' qa-runtime.html 2>/dev/null \
               && grep -Fq '/api/v1/day4/chart' qa-runtime.html 2>/dev/null \
               && ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' qa-runtime.html 2>/dev/null; then
-              echo "PASS: cumulative Day 4 QA frontend converged on attempt $attempt."
+              echo "PASS: cumulative Day 5 QA frontend converged on attempt $attempt."
               exit 0
             fi
             sleep 3
           done
-          echo 'FAIL: Day 4 QA frontend did not converge'; exit 1
+          echo 'FAIL: Day 5 QA frontend did not converge'; exit 1
 
-      - name: Verify Day 4 backend readiness from browser deployment
+      - name: Verify Day 5 backend readiness from browser deployment
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS 'https://galvivault-p0-day1-qa.mrgalvipro.workers.dev/api/v1/day4/readiness' -o day4-ready.json
-          grep -q '"ready":true' day4-ready.json
-          grep -q '"chart_shadow_database":false' day4-ready.json
+          BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev'
+          for attempt in $(seq 1 30); do
+            if curl -fsS "$BASE/api/v1/day5/readiness?browser=$GITHUB_SHA-$attempt" -o day5-ready.json \
+              && grep -q '"ready":true' day5-ready.json \
+              && grep -q '"customer_treatment_acknowledgement":"v1"' day5-ready.json \
+              && grep -q '"customer_checkin_session_bound":"v1"' day5-ready.json; then
+              echo "PASS: Day 5 backend is ready for customer H19 on attempt $attempt."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo 'FAIL: Day 5 backend H19 capability did not converge.'; exit 1
 
       - name: QA browser E2E readiness summary
         run: |
-          echo '## GalviCare 1.0 Day 4 QA Browser' >> "$GITHUB_STEP_SUMMARY"
+          echo '## GalviCare 1.0 Day 5 QA Browser' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA frontend Worker: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Stripe: TEST only' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 3 clarification/governed-AI bridge: PRESERVED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 4 GalviChart adapter: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Shot/Sight/Path follow-up draft resilience: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Single current governed Sight/Path projection after follow-up: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Customer-safe governed GalviChart interpretation: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- GalviChart backend readiness: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 4 GalviChart/secure return: PRESERVED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 5 Treatment Plan acknowledgement: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 5 scheduled customer check-in: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Customer BMR authority remains server-resolved: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- No browser-to-OpenAI/D1 authority: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR DAY 4 HUMAN E2E H12-H22 after H01-H11 regression confirmation.**' >> "$GITHUB_STEP_SUMMARY"
+          echo '**READY FOR DAY 5 HUMAN E2E H19 after upstream H01-H18 confirmation.**' >> "$GITHUB_STEP_SUMMARY"
