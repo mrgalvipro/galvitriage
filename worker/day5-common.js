@@ -1,13 +1,25 @@
 import * as day4 from './day4-common.js';
 
 export const {
-  GVError, clean, now, newId, canonicalize, hash, context, headers,
+  GVError, clean, now, newId, canonicalize, hash, context,
   jsonBody, idempotencyKey, actor, requireOperator, requireId, requireText,
   optionalText, confidence, enumValue
 } = day4;
 
 export const API_VERSION = 'v1';
 export const REQUIRED_SCHEMA = '0005';
+export const CUSTOMER_SESSION_HEADER = 'X-Galvi-Day3-Session';
+
+export function headers(ctx) {
+  const result = day4.headers(ctx);
+  if (ctx.origin && ctx.allowedOrigins.includes(ctx.origin)) {
+    const allowed = String(result.get('Access-Control-Allow-Headers') || '')
+      .split(',').map((value) => value.trim()).filter(Boolean);
+    if (!allowed.some((value) => value.toLowerCase() === CUSTOMER_SESSION_HEADER.toLowerCase())) allowed.push(CUSTOMER_SESSION_HEADER);
+    result.set('Access-Control-Allow-Headers', allowed.join(', '));
+  }
+  return result;
+}
 
 export function success(ctx, data, status = 200, state = 'ok', meta = {}) {
   return new Response(JSON.stringify({
@@ -17,7 +29,7 @@ export function success(ctx, data, status = 200, state = 'ok', meta = {}) {
     correlation_id: ctx.correlation,
     data,
     meta: { api_version: API_VERSION, schema_version: REQUIRED_SCHEMA, ...meta }
-  }), { status, headers: day4.headers(ctx) });
+  }), { status, headers: headers(ctx) });
 }
 
 export function failure(ctx, error) {
@@ -37,7 +49,7 @@ export function failure(ctx, error) {
     correlation_id: ctx.correlation,
     error: { code: safe.code, message: safe.message, retryable: Boolean(safe.retryable), ...(safe.details ? { details: safe.details } : {}) },
     meta: { api_version: API_VERSION, schema_version: REQUIRED_SCHEMA }
-  }), { status: safe.status, headers: day4.headers(ctx) });
+  }), { status: safe.status, headers: headers(ctx) });
 }
 
 export function requireRuntime(env, ctx) {
