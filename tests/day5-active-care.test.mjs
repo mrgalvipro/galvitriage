@@ -64,10 +64,12 @@ test('AC-12 GalviAudit and referral returned results become immutable governed B
   assert.equal(results.includes('DELETE FROM'),false);
 });
 
-test('AC-13 customer Chart active-care projection is read-only and customer-safe',()=>{
-  assert.ok(has(projection,['augmentCustomerChartResponse','active_care','customer_visible=1',"consent_status='consented'",'active_care_ai_called_on_read:false']));
+test('AC-13 customer Chart active-care projection is read-only, canonical-schema-bound, remote-D1-safe and customer-safe',()=>{
+  assert.ok(has(projection,['augmentCustomerChartResponse','active_care','customer_visible=1',"consent_status='consented'",'active_care_ai_called_on_read:false','outcome_value_json','measured_at','sequential, single-table and parameterized']));
   assert.ok(entry.includes("path==='/api/v1/day4/chart'"));
   const augment=projection.slice(projection.indexOf('export async function augmentCustomerChartResponse'));
+  assert.equal(augment.includes('Promise.all'),false);
+  assert.equal(augment.includes('value_text,value_number,observed_at'),false);
   assert.equal(augment.includes('INSERT INTO'),false);assert.equal(augment.includes('UPDATE '),false);assert.equal(augment.includes('DELETE FROM'),false);
 });
 
@@ -77,7 +79,7 @@ test('AC-14 Day 5 timeline includes treatment decisions, Rx, diagnostics, referr
 });
 
 test('AC-15 Treatment Plan revision preserves the full governed Day 5 contract',()=>{
-  assert.ok(has(treatment,['reviseGovernedTreatmentPlan','Only the current governed Treatment Plan version may be revised.','A newer Treatment Plan version already exists.','Clinic brief is stale; refresh before revising treatment.','day5:governed-treatment:revise','supersedes_treatment_plan_id','source_versions','brief_fingerprint']));
+  assert.ok(has(treatment,['reviseGovernedTreatmentPlan','Only the current governed Treatment Plan version may be revised.','A newer Treatment Plan version already exists. Refresh before revising.','Clinic brief is stale; refresh before revising treatment.','day5:governed-treatment:revise','supersedes_treatment_plan_id','source_versions','brief_fingerprint']));
   assert.ok(entry.includes('reviseGovernedTreatmentPlan'));
   assert.ok(entry.includes("const governedRevision=path.match(/^\\/api\\/v1\\/treatment-plans\\/([^/]+)\\/revisions$/)"));
   assert.ok(entry.includes("governed_treatment_revision:'v1'"));
