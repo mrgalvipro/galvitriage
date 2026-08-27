@@ -50,7 +50,7 @@ test('AC-08 monitoring stays linked to canonical plan/BHR',()=>{
 });
 
 test('AC-09 Treatment Plan requires physician authority, fresh brief, source versions, evidence lineage, monitoring and idempotency',()=>{
-  assert.ok(has(treatment,['Business Physician treatment authority is required.','brief_fingerprint','GV_STALE_SOURCE','source_versions.score','source_versions.shot','source_versions.sight','source_versions.path','accepted/clinician-confirmed findings','target_metrics','milestones','monitoring_plan.cadence','escalation_triggers','day5:governed-treatment','GV_IDEMPOTENCY_REUSE_MISMATCH']));
+  assert.ok(has(treatment,['Business Physician treatment authority is required.','brief_fingerprint','GV_STALE_SOURCE','requiredSourceVersions',"['score','shot','sight','path']",'accepted/clinician-confirmed findings','target_metrics','milestones','monitoring_plan.cadence','escalation_triggers','day5:governed-treatment','GV_IDEMPOTENCY_REUSE_MISMATCH']));
   assert.ok(has(treatmentMigration,['clinical_priority','source_versions_json','target_metrics_json','milestones_json','monitoring_plan_json','escalation_triggers_json','brief_fingerprint']));
   assert.ok(entry.includes("path==='/api/v1/treatment-plans'"));assert.ok(entry.includes('createGovernedTreatmentPlan'));
 });
