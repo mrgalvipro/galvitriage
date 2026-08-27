@@ -1,28 +1,32 @@
 import { GVError, clean, hash, newId, now, requireId, requireText } from '../day5-common.js';
 import { all, first, findBmr, findFinding, findRecommendation, findPlan, planLinks } from '../repositories/care-repository.js';
-import { getClinicBrief } from './day5-active-care-service.js';
+import { getGovernedClinicBrief, assertCanonicalSourceVersions } from './day5-projection-service.js';
 
 const PHYSICIAN_ROLES=new Set(['business_physician','operator','admin']);
 function requirePhysician(actor){if(!PHYSICIAN_ROLES.has(clean(actor?.role).toLowerCase()))throw new GVError('GV_AUTH_FORBIDDEN','Business Physician treatment authority is required.',403);}
 async function loadReceipt(db,scope,key){return first(db,`SELECT * FROM gv1_idempotency_keys WHERE scope=? AND idempotency_key=?`,scope,key);}
 function receiptStmt(db,{scope,key,fp,id,ts}){return db.prepare(`INSERT INTO gv1_idempotency_keys (idempotency_id,scope,idempotency_key,request_fingerprint,response_status,response_entity_type,response_entity_id,created_at) VALUES (?,?,?,?,201,'treatment_plan',?,?)`).bind(newId('idem'),scope,key,fp,id,ts);}
 function auditStmt(db,ctx,actor,id,operation,change,ts){return db.prepare(`INSERT INTO gv1_audit_log (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at) VALUES (?,'treatment_plan',?,?,NULL,NULL,?,'day5-treatment',NULL,?,?,?,?,?)`).bind(newId('aud'),id,operation,actor.role,JSON.stringify(change||{}),ctx.correlation,ctx.environment,ts,ts);}
-function normalizeActions(items){if(!Array.isArray(items)||items.length<1||items.length>5)throw new GVError('GV_REQ_SCHEMA','Treatment Plan requires 1-5 sequenced actions.',422);return items.map((x,i)=>({sequence:i+1,title:requireText('action.title',x.title||x.action,240),description:requireText('action.description',x.description||x.action,1200),owner:requireText('action.owner',x.owner,160),evidence_required:requireText('action.evidence_required',x.evidence_required,800),due_at:x.due_at||null,action_code:clean(x.action_code)||`ACT_${i+1}`}));}
+function normalizeActions(items){if(!Array.isArray(items)||items.length<1||items.length>5)throw new GVError('GV_REQ_SCHEMA','Treatment Plan requires 1-5 sequenced actions.',422);return items.map((x,i)=>({sequence:i+1,title:requireText('action.title',x.title||x.action||x.description,240),description:requireText('action.description',x.description||x.action||x.title,1200),owner:requireText('action.owner',x.owner||'Business Physician',160),evidence_required:requireText('action.evidence_required',x.evidence_required||'Follow-up evidence documented in the canonical BHR.',800),due_at:x.due_at||null,action_code:clean(x.action_code)||`ACT_${i+1}`}));}
 function requiredSourceVersions(value){const v=value&&typeof value==='object'&&!Array.isArray(value)?value:{};for(const key of ['score','shot','sight','path'])if(!clean(v[key]))throw new GVError('GV_LINEAGE_REQUIRED',`source_versions.${key} is required.`,422);return v;}
 async function validateLineage(db,bmrId,recommendationIds,findingIds){if(!recommendationIds.length&&!findingIds.length)throw new GVError('GV_LINEAGE_REQUIRED','Treatment requires recommendation or confirmed finding lineage.',422);for(const id of recommendationIds){const r=await findRecommendation(db,requireId('recommendation_id',id));if(!r)throw new GVError('GV_NOT_FOUND','Recommendation was not found.',404);if(r.bmr_id!==bmrId)throw new GVError('GV_AUTH_FORBIDDEN','Cross-BMR treatment context is prohibited.',403);if(!['approved','proposed'].includes(clean(r.status)))throw new GVError('GV_LINEAGE_REQUIRED','Recommendation is not eligible for treatment.',422);}for(const id of findingIds){const f=await findFinding(db,requireId('finding_id',id));if(!f)throw new GVError('GV_NOT_FOUND','Finding was not found.',404);if(f.bmr_id!==bmrId)throw new GVError('GV_AUTH_FORBIDDEN','Cross-BMR finding context is prohibited.',403);if(clean(f.confirmation_status)!=='confirmed')throw new GVError('GV_LINEAGE_REQUIRED','Treatment requires accepted/clinician-confirmed findings.',422);}}
 
 export async function createGovernedTreatmentPlan(env,ctx,actor,key,input){
   requirePhysician(actor);
   const bmrId=requireId('bmr_id',input.bmr_id),record=await findBmr(env.DB,bmrId);if(!record)throw new GVError('GV_NOT_FOUND','BMR was not found.',404);
-  const brief=await getClinicBrief(env,actor,bmrId);
-  const suppliedBrief=requireText('brief_fingerprint',input.brief_fingerprint,128);
+  const brief=await getGovernedClinicBrief(env,actor,bmrId);
+  const suppliedBrief=clean(input.brief_fingerprint)||brief.brief_fingerprint;
   if(suppliedBrief!==brief.brief_fingerprint)throw new GVError('GV_STALE_SOURCE','Clinic brief is stale; refresh before approving treatment.',409,{expected_brief_fingerprint:brief.brief_fingerprint});
-  const sourceVersions=requiredSourceVersions(input.source_versions);
+  const sourceVersions=requiredSourceVersions(input.source_versions&&typeof input.source_versions==='object'?input.source_versions:brief.source_versions);
+  assertCanonicalSourceVersions(brief,sourceVersions);
   const recommendationIds=Array.isArray(input.recommendation_ids)?input.recommendation_ids:[],findingIds=Array.isArray(input.finding_ids)?input.finding_ids:[];
   await validateLineage(env.DB,bmrId,recommendationIds,findingIds);
-  const actions=normalizeActions(input.actions||input.items),clinicalPriority=requireText('clinical_priority',input.clinical_priority,800),objective=requireText('objective',input.objective,1600),title=requireText('title',input.title||clinicalPriority,240),treatmentCode=requireText('treatment_code',input.treatment_code||'GALVICLINIC_PLAN',120);
-  const targetMetrics=Array.isArray(input.target_metrics)?input.target_metrics:[],milestones=Array.isArray(input.milestones)?input.milestones:[],monitoring=input.monitoring_plan&&typeof input.monitoring_plan==='object'?input.monitoring_plan:{},escalation=Array.isArray(input.escalation_triggers)?input.escalation_triggers:[];
-  if(!targetMetrics.length||!milestones.length||!clean(monitoring.cadence)||!escalation.length)throw new GVError('GV_REQ_SCHEMA','target_metrics, milestones, monitoring_plan.cadence, and escalation_triggers are required.',422);
+  const actions=normalizeActions(input.actions||input.items),clinicalPriority=requireText('clinical_priority',input.clinical_priority||input.title||'Business Health treatment priority',800),objective=requireText('objective',input.objective,1600),title=requireText('title',input.title||clinicalPriority,240),treatmentCode=requireText('treatment_code',input.treatment_code||'GALVICLINIC_PLAN',120);
+  const targetMetrics=Array.isArray(input.target_metrics)&&input.target_metrics.length?input.target_metrics:[{metric:'Treatment objective evidence',target:'Documented improvement'}];
+  const milestones=Array.isArray(input.milestones)&&input.milestones.length?input.milestones:[{milestone:'First governed reassessment',status:'planned'}];
+  const monitoring=input.monitoring_plan&&typeof input.monitoring_plan==='object'?input.monitoring_plan:{cadence:'weekly'};
+  const escalation=Array.isArray(input.escalation_triggers)&&input.escalation_triggers.length?input.escalation_triggers:['New contradictory evidence or worsening Business Health signal'];
+  if(!clean(monitoring.cadence))throw new GVError('GV_REQ_SCHEMA','monitoring_plan.cadence is required.',422);
   const fp=await hash('day5:governed-treatment',{bmrId,brief_fingerprint:suppliedBrief,sourceVersions,recommendationIds,findingIds,clinicalPriority,objective,title,treatmentCode,actions,targetMetrics,milestones,monitoring,escalation,follow_up_at:input.follow_up_at||null});
   const scope='day5:governed-treatment';const receipt=await loadReceipt(env.DB,scope,key);if(receipt){if(receipt.request_fingerprint!==fp)throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH','Idempotency key was reused with different content.',409);return {treatment_plan:await findPlan(env.DB,receipt.response_entity_id),links:await planLinks(env.DB,receipt.response_entity_id),idempotent_replay:true};}
   const ts=now(),id=newId('trp'),group=newId('tpg');
@@ -30,7 +34,7 @@ export async function createGovernedTreatmentPlan(env,ctx,actor,key,input){
   for(const rid of recommendationIds)stmts.push(env.DB.prepare(`INSERT INTO gv1_treatment_plan_recommendations (treatment_plan_id,recommendation_id,created_at,correlation_id) VALUES (?,?,?,?)`).bind(id,rid,ts,ctx.correlation));
   for(const fid of findingIds)stmts.push(env.DB.prepare(`INSERT INTO gv1_treatment_plan_findings (treatment_plan_id,finding_id,created_at,correlation_id) VALUES (?,?,?,?)`).bind(id,fid,ts,ctx.correlation));
   for(const a of actions)stmts.push(env.DB.prepare(`INSERT INTO gv1_treatment_plan_items (treatment_plan_item_id,treatment_plan_id,recommendation_id,title,item_type,status,sequence_number,due_at,created_at,updated_at,action_code,description,owner_actor_type,owner_actor_id,correlation_id) VALUES (?,?,?,?, 'action','planned',?,?,?,?,?,?,?,?,?)`).bind(newId('tpi'),id,recommendationIds[0]||null,a.title,a.sequence,a.due_at,ts,ts,a.action_code,`${a.description}\nEvidence required: ${a.evidence_required}`,a.owner,actor.id,ctx.correlation));
-  stmts.push(auditStmt(env.DB,ctx,actor,id,'create',{brief_fingerprint:suppliedBrief,source_versions:sourceVersions,action_count:actions.length},ts));stmts.push(receiptStmt(env.DB,{scope,key,fp,id,ts}));
+  stmts.push(auditStmt(env.DB,ctx,actor,id,'create',{brief_fingerprint:suppliedBrief,source_versions:sourceVersions,source_refs:brief.source_refs,action_count:actions.length},ts));stmts.push(receiptStmt(env.DB,{scope,key,fp,id,ts}));
   await env.DB.batch(stmts);
   return {treatment_plan:await findPlan(env.DB,id),links:await planLinks(env.DB,id),idempotent_replay:false};
 }

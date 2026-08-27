@@ -5,7 +5,18 @@ import { handleOperatorAuth } from './routes/operator-auth.js';
 import { handleOperatorWorkspace } from './routes/operator-workspace.js';
 
 const authPath=(path)=>path.startsWith('/api/v1/operator/auth/');
-const protectedPath=(path)=> path.startsWith('/api/v1/operator/') ||
+const activeCarePath=(path)=>
+  /^\/api\/v1\/business-medical-records\/[^/]+\/clinic-brief$/.test(path) ||
+  path==='/api/v1/finding-decisions' || path==='/api/v1/galvirx' ||
+  path==='/api/v1/galviaudit-orders' || /^\/api\/v1\/galviaudit-orders\/[^/]+\/result$/.test(path) ||
+  path==='/api/v1/referrals' || /^\/api\/v1\/referrals\/[^/]+\/(status|outcome)$/.test(path) ||
+  path==='/api/v1/checkins' || path==='/api/v1/milestones' || path==='/api/v1/reassessments' ||
+  path==='/api/v1/treatment-plans' || /^\/api\/v1\/treatment-plans\/[^/]+\/revisions$/.test(path);
+const physicianOnly=(path)=>
+  path==='/api/v1/finding-decisions' || path==='/api/v1/galvirx' || path==='/api/v1/galviaudit-orders' ||
+  path==='/api/v1/referrals' || path==='/api/v1/reassessments' || path==='/api/v1/treatment-plans' ||
+  /^\/api\/v1\/treatment-plans\/[^/]+\/revisions$/.test(path);
+const protectedPath=(path)=> path.startsWith('/api/v1/operator/') || activeCarePath(path) ||
   /^\/api\/v1\/business-medical-records\/[^/]+\/(timeline|reasoning|care|transitions|evidence)/.test(path) ||
   path==='/api/v1/evidence' || path.startsWith('/api/v1/evidence/') ||
   path==='/api/v1/governance/confirmations' || path.startsWith('/api/v1/findings/') ||
@@ -13,6 +24,14 @@ const protectedPath=(path)=> path.startsWith('/api/v1/operator/') ||
   path==='/api/v1/treatment-plans' || path.startsWith('/api/v1/treatment-plans/') ||
   path==='/api/v1/outcomes' || path==='/api/v1/feedback';
 const isApi=(path)=>path.startsWith('/api/')||path==='/health'||path==='/ready';
+
+function asDay5CareHeaders(request,identity){
+  const h=new Headers(request.headers);
+  h.delete('X-Galvi-Role');h.delete('X-Galvi-Actor-Id');h.delete('X-Galvi-Email');
+  h.set('X-Galvi-Role',identity.role==='business_physician'?'business_physician':'galviclinician');
+  h.set('X-Galvi-Actor-Id',identity.operator_id);
+  return new Request(request,{headers:h});
+}
 
 async function preflightTreatmentPlanFk(request,env){
   if(request.method!=='POST') return;
@@ -58,9 +77,10 @@ const worker={async fetch(request,env,executionContext){
     }
     if(!protectedPath(path)) return day5Worker.fetch(request,env,executionContext);
     const identity=await requireClinicianIdentity(request,env);
-    if(identity.role!=='business_physician'&&(path==='/api/v1/governance/confirmations'||/\/transitions$/.test(path)))
+    if(identity.role!=='business_physician'&&(path==='/api/v1/governance/confirmations'||/\/transitions$/.test(path)||physicianOnly(path)))
       throw new GVError('GV_AUTH_FORBIDDEN','Business Physician authorization is required.',403);
     if(path==='/api/v1/treatment-plans') await preflightTreatmentPlanFk(request,env);
+    if(activeCarePath(path)) return day5Worker.fetch(asDay5CareHeaders(request,identity),env,executionContext);
     const secured=asLegacyOperatorHeaders(request,identity);
     const response=await handleOperatorWorkspace(secured,env,ctx,path,identity);
     return response||day5Worker.fetch(secured,env,executionContext);
