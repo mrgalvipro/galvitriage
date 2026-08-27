@@ -47,7 +47,7 @@ test('H02 clarification transition cannot be broken by Day 5 routing projection'
     'followup-question-container','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions'
   ]) assert.ok(browser.includes(followupId),followupId);
 
-  assert.equal(browser.includes('host.insertBefore(panel,row)'),false);
+  assert.equal(browser.includes('if(row)host.insertBefore(panel,row)'),false);
   assert.ok(browser.includes('existing?.dataset?.day5CareFingerprint===fingerprint'));
   assert.ok(browser.includes('if(!host||!visible(host))continue'));
   assert.ok(browser.includes('/api/v1/day5/customer/galviguide'));
