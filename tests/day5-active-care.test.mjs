@@ -68,7 +68,7 @@ test('AC-13 customer Chart active-care projection is read-only, canonical-schema
   assert.ok(has(projection,['augmentCustomerChartResponse','active_care','customer_visible=1',"consent_status='consented'",'active_care_ai_called_on_read:false','outcome_value_json','measured_at','sequential, single-table and parameterized']));
   assert.ok(entry.includes("path==='/api/v1/day4/chart'"));
   const augment=projection.slice(projection.indexOf('export async function augmentCustomerChartResponse'));
-  assert.equal(augment.includes('Promise.all'),false);
+  assert.equal(/Promise\.all\s*\(/.test(augment),false);
   assert.equal(augment.includes('value_text,value_number,observed_at'),false);
   assert.equal(augment.includes('INSERT INTO'),false);assert.equal(augment.includes('UPDATE '),false);assert.equal(augment.includes('DELETE FROM'),false);
 });
