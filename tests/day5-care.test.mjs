@@ -6,6 +6,7 @@ const read=(path)=>readFileSync(new URL(`../${path}`,import.meta.url),'utf8');
 const migration=read('migrations/day1/0005_day5_governed_care.sql');
 const activeMigration=read('migrations/day1/0006_day5_active_care_loop.sql');
 const treatmentMigration=read('migrations/day1/0007_day5_treatment_contract.sql');
+const ledger=read('migrations/day1/0590_day5_active_care_ledger_reconcile.sql');
 const entry=read('worker/day5-entry.js');
 const routes=read('worker/routes/care.js');
 const service=read('worker/domain/care-service.js');
@@ -77,7 +78,7 @@ test('Day 5 cumulative Worker preserves QA authority, governed AI/clarification 
   assert.equal(wrangler.name,'galvivault-p0-day1-qa');
   assert.equal(wrangler.main,'worker/day5-entry.js');
   assert.equal(wrangler.vars.ENVIRONMENT,'qa');
-  assert.equal(wrangler.vars.MIN_SCHEMA_VERSION,'0007');
+  assert.equal(wrangler.vars.MIN_SCHEMA_VERSION,'D5A2');
   assert.equal(wrangler.vars.AI_ENABLED,'true');
   assert.equal(wrangler.vars.OPENAI_MODEL_QA,'gpt-4.1-mini');
   assert.equal(wrangler.vars.DAY3_CUSTOMER_SESSION_BRIDGE,'true');
@@ -90,11 +91,13 @@ test('Day 5 cumulative Worker preserves QA authority, governed AI/clarification 
   assert.equal(wrangler.d1_databases[0].binding,'DB');
   assert.equal(wrangler.d1_databases[0].database_name,'galvivault-0-5-qa');
   assert.equal(wrangler.d1_databases[0].database_id,'cdf9042b-ab09-498a-ac66-010b6cce47d4');
-  assert.ok(entry.includes("migration_id='0007'"));
+  assert.ok(entry.includes("name='day5_treatment_contract_v1'"));
+  assert.ok(entry.includes("required_schema_version:'D5A2'"));
   assert.ok(entry.includes("import day4Worker from './day4-session-identity-entry.js'"));
   assert.equal(entry.includes("import day4Worker from './day4-entry.js'"),false);
   assert.ok(has(activeMigration,['gv1_finding_decisions','gv1_galvirx','gv1_galviaudit_orders','gv1_referrals','gv1_checkins','gv1_reassessments']));
   assert.ok(has(treatmentMigration,['clinical_priority','source_versions_json','brief_fingerprint']));
+  assert.ok(has(ledger,["'D5A1'","'D5A2'"]));
   assert.ok(has(activeService,['getClinicBrief','recordFindingDecision','addGalviRx','orderGalviAudit','createReferral','submitCheckin','reassessCare']));
 });
 
