@@ -69,12 +69,18 @@ test('CR-012 care and timeline use bounded typed remote-D1-safe reads',()=>{
   assert.equal(timeline.includes('UNION ALL'),false);
 });
 
-test('Day 5 cumulative Worker preserves QA authority, governed AI, and the signed Day 4 cumulative runtime',()=>{
+test('Day 5 cumulative Worker preserves QA authority, governed AI/clarification config, booking continuity, and signed Day 4 runtime',()=>{
   assert.equal(wrangler.name,'galvivault-p0-day1-qa');
   assert.equal(wrangler.main,'worker/day5-entry.js');
   assert.equal(wrangler.vars.ENVIRONMENT,'qa');
   assert.equal(wrangler.vars.MIN_SCHEMA_VERSION,'0005');
   assert.equal(wrangler.vars.AI_ENABLED,'true');
+  assert.equal(wrangler.vars.OPENAI_MODEL_QA,'gpt-4.1-mini');
+  assert.equal(wrangler.vars.DAY3_CUSTOMER_SESSION_BRIDGE,'true');
+  assert.equal(wrangler.vars.DAY3_CUSTOMER_EVIDENCE_RUNTIME,'collision_safe_v2');
+  assert.equal(wrangler.vars.DAY4_GALVICHART_PROJECTION,'v1');
+  assert.equal(wrangler.vars.DAY4_GALVICHART_CUSTOMER_PROJECTION,'v2');
+  assert.ok(wrangler.vars.GALVICLINIC_BOOKING_URL.includes('calendly.com'));
   assert.equal(wrangler.d1_databases[0].binding,'DB');
   assert.equal(wrangler.d1_databases[0].database_name,'galvivault-0-5-qa');
   assert.equal(wrangler.d1_databases[0].database_id,'cdf9042b-ab09-498a-ac66-010b6cce47d4');
