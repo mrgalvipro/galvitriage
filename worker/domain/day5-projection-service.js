@@ -43,19 +43,20 @@ export async function augmentCustomerChartResponse(response,env){
   let payload;try{payload=await response.clone().json()}catch{return response}
   const data=payload?.data,bmrId=clean(data?.bmr_id);
   if(payload?.success!==true||payload?.status!=='ok'||data?.activated!==true||!bmrId||!env?.DB)return response;
-  const [plans,rx,audits,referrals,checkins,milestones,outcomes,reassessments]=await Promise.all([
+  const [plans,rx,audits,referrals,acknowledgements,checkins,milestones,outcomes,reassessments]=await Promise.all([
     all(env.DB,`SELECT treatment_plan_id,name,status,version_no,objective,clinical_priority,target_metrics_json,milestones_json,monitoring_plan_json,escalation_triggers_json,follow_up_at,created_at,updated_at FROM gv1_treatment_plans WHERE bmr_id=? AND status NOT IN ('archived','cancelled','superseded') ORDER BY version_no DESC,created_at DESC LIMIT 10`,bmrId),
     all(env.DB,`SELECT rx_id,treatment_plan_id,action_id,intervention_code,resource_type,resource_ref,instructions,owner,expected_evidence,cadence,guardrails,status,version_no,created_at,updated_at FROM gv1_galvirx WHERE bmr_id=? AND customer_visible=1 AND status NOT IN ('archived','cancelled') ORDER BY created_at DESC LIMIT 20`,bmrId),
     all(env.DB,`SELECT audit_order_id,treatment_plan_id,domain,assigned_service,status,result_evidence_id,created_at,updated_at FROM gv1_galviaudit_orders WHERE bmr_id=? ORDER BY created_at DESC LIMIT 20`,bmrId),
     all(env.DB,`SELECT referral_id,treatment_plan_id,category,provider_name,provider_verification_status,service_mode,geography,consent_status,status,outcome_summary,created_at,updated_at FROM gv1_referrals WHERE bmr_id=? AND consent_status='consented' ORDER BY created_at DESC LIMIT 20`,bmrId),
+    all(env.DB,`SELECT treatment_event_id,treatment_plan_id,event_type,occurred_at,created_at FROM gv1_treatment_events WHERE bmr_id=? AND actor_type='customer' AND event_type='customer_acknowledged' ORDER BY occurred_at DESC,created_at DESC LIMIT 20`,bmrId),
     all(env.DB,`SELECT checkin_id,treatment_plan_id,due_context,adherence_state,created_at FROM gv1_checkins WHERE bmr_id=? ORDER BY created_at DESC LIMIT 20`,bmrId),
     all(env.DB,`SELECT milestone_id,treatment_plan_id,milestone_code,status,observed_value,created_at FROM gv1_milestones WHERE bmr_id=? ORDER BY created_at DESC LIMIT 20`,bmrId),
     all(env.DB,`SELECT outcome_id,treatment_plan_id,outcome_code,outcome_type,value_text,value_number,status,measured_at,created_at FROM gv1_outcomes WHERE bmr_id=? AND status NOT IN ('rejected','archived','superseded') ORDER BY measured_at DESC,created_at DESC LIMIT 20`,bmrId),
     all(env.DB,`SELECT reassessment_id,treatment_plan_id,decision,created_at FROM gv1_reassessments WHERE bmr_id=? ORDER BY created_at DESC LIMIT 20`,bmrId)
   ]);
   const safePlans=plans.map(row=>({treatment_plan_id:row.treatment_plan_id,name:row.name,status:row.status,version_no:row.version_no,objective:row.objective,clinical_priority:row.clinical_priority,target_metrics:json(row.target_metrics_json,[]),milestones:json(row.milestones_json,[]),monitoring_plan:json(row.monitoring_plan_json,{}),escalation_triggers:json(row.escalation_triggers_json,[]),follow_up_at:row.follow_up_at,created_at:row.created_at,updated_at:row.updated_at}));
-  data.sections={...(data.sections||{}),active_care:{source:'accepted_business_physician_care',progressively_complete:true,treatment_plans:safePlans,galvirx:rx,galviaudit:audits,referrals,checkins,milestones,outcomes,reassessments}};
-  payload.meta={...(payload.meta||{}),day5_active_care_projection:'v1',active_care_ai_called_on_read:false};
+  data.sections={...(data.sections||{}),active_care:{source:'accepted_business_physician_care',progressively_complete:true,treatment_plans:safePlans,galvirx:rx,galviaudit:audits,referrals,acknowledgements,checkins,milestones,outcomes,reassessments}};
+  payload.meta={...(payload.meta||{}),day5_active_care_projection:'v1',active_care_ai_called_on_read:false,customer_acknowledgement_projection:'v1'};
   const headers=new Headers(response.headers);headers.set('Content-Type','application/json; charset=utf-8');headers.set('Cache-Control','no-store');headers.set('X-Galvi-Day5-Active-Care-Projection','v1');
   return new Response(JSON.stringify(payload),{status:response.status,headers});
 }
