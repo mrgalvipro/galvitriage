@@ -6,6 +6,9 @@ import { acknowledgeTreatmentPlan, submitCheckin } from './domain/day5-active-ca
 import { createGovernedTreatmentPlan, reviseGovernedTreatmentPlan } from './domain/day5-treatment-service.js';
 import { augmentCustomerChartResponse } from './domain/day5-projection-service.js';
 
+const GUIDE_ALLOWED_INTENTS=new Set(['explain_route','navigate','reminder','request_evidence','clinic_prep']);
+const GUIDE_BOUNDARY_MESSAGE='GalviGuide may explain approved outputs, navigate the care path, request evidence, prepare GalviClinic, remind, and facilitate routine check-ins, but may not change GalviScore or Acuity, diagnose, approve treatment, override Business Physician judgment, or provide licensed advice.';
+
 async function readiness(env,ctx){
   const migration=await first(env.DB,`SELECT migration_id,name,environment,checksum,applied_at FROM gv1_schema_migrations WHERE name='day5_treatment_contract_v1' ORDER BY applied_at DESC LIMIT 1`);
   const activeCareMigration=await first(env.DB,`SELECT migration_id,name,environment,checksum,applied_at FROM gv1_schema_migrations WHERE name='day5_active_care_loop_v1' ORDER BY applied_at DESC LIMIT 1`);
@@ -30,7 +33,7 @@ async function readiness(env,ctx){
   const indexRow=await env.DB.prepare(`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='index' AND name IN (${placeholders})`).bind(...indexNames).first();
   const triggerRow=await first(env.DB,`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='trigger' AND name IN ('trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete')`);
   const ready=Boolean(migration&&activeCareMigration&&Object.values(tables).every(v=>v===1)&&Number(indexRow?.count)===indexNames.length&&Number(triggerRow?.count)===2);
-  return success(ctx,{service:'galvicare-1-0-day5',ready,current_schema_version:'D5A2',required_schema_version:'D5A2',migration:migration||null,active_care_migration:activeCareMigration||null,care_tables:tables,contracted_index_count:Number(indexRow?.count||0),expected_index_count:indexNames.length,append_only_trigger_count:Number(triggerRow?.count||0),inherited_runtime:'galvicare_1_0_day4',active_care_contract:'v1',treatment_contract:'evidence_bound_v1',business_physician_governance:'v1',active_care_projection:'v1',care_result_evidence:'v1',governed_treatment_revision:'v1',customer_treatment_acknowledgement:'v1',customer_checkin_session_bound:'v1',inherited_customer_cors:'v1'},ready?200:503,ready?'ok':'unavailable');
+  return success(ctx,{service:'galvicare-1-0-day5',ready,current_schema_version:'D5A2',required_schema_version:'D5A2',migration:migration||null,active_care_migration:activeCareMigration||null,care_tables:tables,contracted_index_count:Number(indexRow?.count||0),expected_index_count:indexNames.length,append_only_trigger_count:Number(triggerRow?.count||0),inherited_runtime:'galvicare_1_0_day4',active_care_contract:'v1',treatment_contract:'evidence_bound_v1',business_physician_governance:'v1',active_care_projection:'v1',care_result_evidence:'v1',governed_treatment_revision:'v1',customer_treatment_acknowledgement:'v1',customer_checkin_session_bound:'v1',customer_care_routing:'v1',galviguide_customer_navigation:'bounded_read_only_v1',acuity_projection:'canonical_day2_score_v1',inherited_customer_cors:'v1'},ready?200:503,ready?'ok':'unavailable');
 }
 
 function preserveDay5Cors(response,ctx){
@@ -67,6 +70,114 @@ async function authorizedCustomerChart(request,env,executionContext){
   return {bmr_id:String(data.bmr_id),principal_id:String(data.principal_id),context_id:String(data.context_id||''),session_id:sessionId};
 }
 
+function parseStored(value){
+  if(!value)return{};
+  if(typeof value==='object')return value;
+  try{return JSON.parse(value)}catch{return{}}
+}
+
+async function customerCareContext(request,env){
+  const sessionId=String(request.headers.get(CUSTOMER_SESSION_HEADER)||'').trim();
+  if(!sessionId)throw new GVError('GV_AUTH_REQUIRED','An authenticated GalviCare customer session is required.',401);
+
+  const legacy=await first(env.DB,`SELECT f.email,v.venture_name
+    FROM ventures v
+    JOIN founders f ON f.founder_id=v.founder_id
+    WHERE v.session_id=?
+    ORDER BY v.updated_at DESC,v.created_at DESC
+    LIMIT 1`,sessionId)
+    ||await first(env.DB,`SELECT f.email,'' AS venture_name
+      FROM founders f WHERE f.session_id=? ORDER BY f.updated_at DESC LIMIT 1`,sessionId);
+  if(!legacy?.email)throw new GVError('GV_DAY5_SESSION_IDENTITY_MISSING','GalviCare session identity is unavailable.',401);
+
+  const founder=await first(env.DB,`SELECT founder_id,email,status FROM gv1_founders WHERE lower(email)=lower(?) LIMIT 1`,legacy.email);
+  if(!founder?.founder_id)throw new GVError('GV_DAY5_CANONICAL_IDENTITY_MISSING','Canonical GalviVault identity has not been established for this GalviCare session.',409);
+
+  let canonical=null;
+  const ventureName=String(legacy.venture_name||'').trim();
+  if(ventureName){
+    canonical=await first(env.DB,`SELECT c.context_id,c.founder_id,c.venture_id,c.bmr_id,c.record_mode,c.status,v.venture_name
+      FROM gv1_principal_contexts c
+      JOIN gv1_ventures v ON v.venture_id=c.venture_id
+      WHERE c.founder_id=? AND c.status='active' AND lower(trim(v.venture_name))=lower(trim(?))
+      ORDER BY c.updated_at DESC,c.created_at DESC LIMIT 1`,founder.founder_id,ventureName);
+  }else{
+    canonical=await first(env.DB,`SELECT context_id,founder_id,venture_id,bmr_id,record_mode,status,'' AS venture_name
+      FROM gv1_principal_contexts
+      WHERE founder_id=? AND status='active' AND venture_id IS NULL
+      ORDER BY updated_at DESC,created_at DESC LIMIT 1`,founder.founder_id);
+  }
+  if(!canonical?.context_id)throw new GVError('GV_DAY5_CANONICAL_CONTEXT_MISSING','The authenticated session could not be matched to its canonical GalviVault care context.',409);
+
+  const consent=await first(env.DB,`SELECT status FROM gv1_consent_events
+    WHERE founder_id=? AND purpose='care_processing'
+    ORDER BY recorded_at DESC,consent_id DESC LIMIT 1`,founder.founder_id);
+  if(consent?.status!=='granted')throw new GVError('GV_CONSENT_REQUIRED','Active care-processing consent is required for GalviCare routing.',403);
+
+  const score=await first(env.DB,`SELECT result_id,payload_json,record_version,rules_version,protocol_version,created_at
+    FROM gv1_day2_intake_results
+    WHERE context_id=? AND result_type='score'
+    ORDER BY record_version DESC,created_at DESC LIMIT 1`,canonical.context_id);
+  if(!score?.payload_json)throw new GVError('GV_DAY5_CARE_ROUTE_NOT_READY','Canonical GalviScore/Acuity is not ready yet. Complete the existing Score clarification flow and retry.',409,undefined,true);
+
+  return {session_id:sessionId,founder,context:canonical,score_row:score,score:parseStored(score.payload_json)};
+}
+
+function careRoute(score={}){
+  const acuityScore=Number(score.acuity_score);
+  const acuityBand=String(score.acuity_band||'').trim().toLowerCase();
+  const disposition=String(score.disposition||'').trim().toLowerCase();
+  const clinicalConfidence=Number(score.clinical_confidence);
+  const overallScore=Number(score.overall_score??score.score??score.galviscore_score);
+  const referral=acuityBand==='red'||disposition==='urgent_active_specialty_referral';
+  const clinic=referral||acuityBand==='orange'||disposition==='active_care_recommended';
+  const passive=acuityBand==='yellow'||disposition==='passive_intervention';
+  const supportLevel=referral?'qualified_referral':clinic?'galviclinic':passive?'galviguide':'self_guided';
+  const recommendedAction=referral?'qualified_referral':clinic?'book_galviclinic':passive?'use_galviguide':'continue_path';
+  const reminder=referral
+    ?'Use the governed specialty/referral pathway; GalviGuide cannot provide the licensed conclusion.'
+    :clinic
+      ?'Continue the governed GalviPath and book GalviClinic for Business Physician review.'
+      :passive
+        ?'Continue the governed GalviPath and use GalviGuide for explanation, evidence requests, reminders, and routine navigation without forcing active care.'
+        :'Continue the governed GalviPath and monitor the evidence; GalviGuide remains available for bounded navigation.';
+  return {
+    overall_score:Number.isFinite(overallScore)?overallScore:null,
+    acuity_score:Number.isFinite(acuityScore)?acuityScore:null,
+    acuity_band:acuityBand||null,
+    clinical_confidence:Number.isFinite(clinicalConfidence)?clinicalConfidence:null,
+    disposition:disposition||null,
+    support_level:supportLevel,
+    recommended_action:recommendedAction,
+    clinic_recommended:clinic,
+    referral_required:referral,
+    guide_available:true,
+    guide_message:GUIDE_BOUNDARY_MESSAGE,
+    reminder
+  };
+}
+
+async function customerGalviGuide(request,env){
+  const input=await jsonBody(request);
+  const intent=String(input?.intent||'explain_route').trim().toLowerCase();
+  if(!GUIDE_ALLOWED_INTENTS.has(intent)){
+    throw new GVError('GV_GUIDE_BOUNDARY',GUIDE_BOUNDARY_MESSAGE,403,{intent,next_action:'human_review'});
+  }
+  const care=await customerCareContext(request,env);
+  return {
+    ...careRoute(care.score),
+    intent,
+    read_only:true,
+    canonical_source:'gv1_day2_intake_results',
+    source_result_id:care.score_row.result_id,
+    source_record_version:Number(care.score_row.record_version||1),
+    rules_version:care.score_row.rules_version||care.score.rules_version||null,
+    protocol_version:care.score_row.protocol_version||care.score.protocol_version||null,
+    score_recomputed_in_browser:false,
+    acuity_recomputed_in_browser:false
+  };
+}
+
 const worker={
   async fetch(request,env,executionContext){
     const ctx=context(request,env);
@@ -76,6 +187,10 @@ const worker={
       const url=new URL(request.url); const path=url.pathname.replace(/\/+$/,'')||'/';
       if(request.method==='OPTIONS'&&path.startsWith('/api/v1/')) return new Response(null,{status:204,headers:headers(ctx)});
       if(request.method==='GET'&&(path==='/api/v1/day5/readiness'||path==='/api/v1/day5/schema-version')) return readiness(env,ctx);
+      if(request.method==='POST'&&path==='/api/v1/day5/customer/galviguide'){
+        const data=await customerGalviGuide(request,env);
+        return success(ctx,data,200,'ok',{identity_source:'authenticated_session_canonical_context',read_only:true,galviguide_boundary:'v1'});
+      }
       if(request.method==='POST'&&path==='/api/v1/treatment-plans'){
         const input=await jsonBody(request),data=await createGovernedTreatmentPlan(env,ctx,actor(request),idempotencyKey(request),input);
         return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});

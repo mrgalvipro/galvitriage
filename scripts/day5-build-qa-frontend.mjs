@@ -1,18 +1,57 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 const OUT='dist-qa/index.html';
-const SOURCE='day5-customer-active-care.js';
-const SIGNATURE='GalviCare Day 5 customer Treatment Plan acknowledgement v1';
+const ADAPTERS=[
+  {
+    source:'day5-customer-care-routing.js',
+    signature:'GalviCare Day 5 customer care routing + GalviGuide v1',
+    required:[
+      '/api/v1/day5/customer/galviguide','X-Galvi-Day3-Session','GalviScore + Business Health Acuity',
+      'Acuity','Open GalviGuide','Prepare with GalviGuide','GV_DAY5_CARE_ROUTE_NOT_READY',
+      'testBoundary'
+    ]
+  },
+  {
+    source:'day5-customer-active-care.js',
+    signature:'GalviCare Day 5 customer Treatment Plan acknowledgement v1',
+    required:[
+      '/api/v1/day5/customer/treatment-plans/','/acknowledgement','/api/v1/day5/customer/checkins',
+      'X-Galvi-Day3-Session','authorship','Idempotency-Key','GalviChartDay4.read'
+    ]
+  }
+];
+
 let html=readFileSync(OUT,'utf8');
-const adapter=readFileSync(SOURCE,'utf8');
-for(const required of [SIGNATURE,'/api/v1/day5/customer/treatment-plans/','/acknowledgement','/api/v1/day5/customer/checkins','X-Galvi-Day3-Session','authorship','Idempotency-Key','GalviChartDay4.read']) if(!adapter.includes(required)) throw new Error(`Day 5 customer active-care contract missing: ${required}`);
-if(/api\.openai\.com|OPENAI_API_KEY|bmr_id\s*:/.test(adapter)) throw new Error('Day 5 browser must not contain OpenAI access or submit BMR authority.');
-while(html.includes(SIGNATURE)){
-  const index=html.indexOf(SIGNATURE),start=html.lastIndexOf('<script>',index),end=html.indexOf('</script>',index);
-  if(start<0||end<0)throw new Error('Existing Day 5 adapter is not bounded by a script tag.');
-  html=html.slice(0,start)+html.slice(end+9);
+
+function stripExisting(signature){
+  while(html.includes(signature)){
+    const index=html.indexOf(signature),start=html.lastIndexOf('<script>',index),end=html.indexOf('</script>',index);
+    if(start<0||end<0)throw new Error(`Existing Day 5 adapter ${signature} is not bounded by a script tag.`);
+    html=html.slice(0,start)+html.slice(end+9);
+  }
 }
-html=html.replace('</body>',`<script>\n${adapter}\n</script>\n</body>`);
-if((html.split(SIGNATURE).length-1)!==1)throw new Error('Generated QA frontend must contain exactly one Day 5 customer active-care adapter.');
-for(const required of ['Acknowledge Treatment Plan','Submit scheduled check-in','Acknowledgement is separate from Treatment Plan authorship.','/api/v1/day5/customer/checkins']) if(!html.includes(required)) throw new Error(`Generated QA frontend missing Day 5 H19 contract: ${required}`);
+
+for(const config of ADAPTERS){
+  const adapter=readFileSync(config.source,'utf8');
+  for(const required of [config.signature,...config.required]){
+    if(!adapter.includes(required))throw new Error(`Day 5 customer contract missing from ${config.source}: ${required}`);
+  }
+  if(/api\.openai\.com|OPENAI_API_KEY|bmr_id\s*:/.test(adapter)){
+    throw new Error(`Day 5 browser adapter ${config.source} must not contain OpenAI access or submit BMR authority.`);
+  }
+  stripExisting(config.signature);
+  html=html.replace('</body>',`<script>\n${adapter}\n</script>\n</body>`);
+}
+
+for(const config of ADAPTERS){
+  if((html.split(config.signature).length-1)!==1)throw new Error(`Generated QA frontend must contain exactly one ${config.signature} adapter.`);
+}
+for(const required of [
+  'GalviScore + Business Health Acuity','Yellow — passive care / needs attention','Orange — active care recommended',
+  'Open GalviGuide','Prepare with GalviGuide','The existing “What you should watch?” box is GalviScore guidance',
+  'Acknowledge Treatment Plan','Submit scheduled check-in','Acknowledgement is separate from Treatment Plan authorship.',
+  '/api/v1/day5/customer/galviguide','/api/v1/day5/customer/checkins'
+]){
+  if(!html.includes(required))throw new Error(`Generated QA frontend missing Day 5 customer critical-path contract: ${required}`);
+}
 writeFileSync(OUT,html,'utf8');
-console.log('PASS — cumulative QA frontend contains Day 5 customer Treatment Plan acknowledgement + scheduled check-in without browser BMR authority.');
+console.log('PASS — cumulative QA frontend contains server-owned Acuity/GalviGuide routing plus Treatment Plan acknowledgement/check-in without browser BMR/OpenAI authority.');
