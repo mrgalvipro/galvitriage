@@ -1,4 +1,4 @@
-import day4Worker from './day4-entry.js';
+import day4Worker from './day4-session-identity-entry.js';
 import { GVError, context, failure, headers, requireRuntime, success } from './day5-common.js';
 import { first } from './repositories/care-repository.js';
 import { handleCareRoute } from './routes/care.js';
@@ -19,7 +19,7 @@ async function readiness(env,ctx){
   const indexRow=await first(env.DB,`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='index' AND name IN ('idx_recommendations_bmr','idx_treatment_plans_bmr','idx_treatment_events_plan','idx_outcomes_bmr','idx_feedback_target','idx_adapter_status')`);
   const triggerRow=await first(env.DB,`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='trigger' AND name IN ('trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete')`);
   const ready=Boolean(migration&&Object.values(tables).every(v=>v===1)&&Number(indexRow?.count)===6&&Number(triggerRow?.count)===2);
-  return success(ctx,{service:'galvivault-p0-day5',ready,current_schema_version:migration?.migration_id||null,required_schema_version:'0005',migration:migration||null,care_tables:tables,contracted_index_count:Number(indexRow?.count||0),append_only_trigger_count:Number(triggerRow?.count||0)},ready?200:503,ready?'ok':'unavailable');
+  return success(ctx,{service:'galvicare-1-0-day5',ready,current_schema_version:migration?.migration_id||null,required_schema_version:'0005',migration:migration||null,care_tables:tables,contracted_index_count:Number(indexRow?.count||0),append_only_trigger_count:Number(triggerRow?.count||0),inherited_runtime:'galvicare_1_0_day4'},ready?200:503,ready?'ok':'unavailable');
 }
 
 const worker={
@@ -35,7 +35,7 @@ const worker={
       if(response) return response;
       return day4Worker.fetch(request,env,executionContext);
     }catch(error){
-      console.error('GalviVault Day 5 error',error?.code||'GV_INTERNAL',error?.message||'unexpected');
+      console.error('GalviCare 1.0 Day 5 error',error?.code||'GV_INTERNAL',error?.message||'unexpected');
       return failure(ctx,error);
     }
   }

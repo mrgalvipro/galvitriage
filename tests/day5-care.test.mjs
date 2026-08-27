@@ -69,7 +69,7 @@ test('CR-012 care and timeline use bounded typed remote-D1-safe reads',()=>{
   assert.equal(timeline.includes('UNION ALL'),false);
 });
 
-test('Day 5 cumulative Worker preserves isolated QA authority',()=>{
+test('Day 5 cumulative Worker preserves isolated QA authority and inherits the signed Day 4 cumulative runtime',()=>{
   assert.equal(wrangler.name,'galvivault-p0-day1-qa');
   assert.equal(wrangler.main,'worker/day5-entry.js');
   assert.equal(wrangler.vars.ENVIRONMENT,'qa');
@@ -78,10 +78,11 @@ test('Day 5 cumulative Worker preserves isolated QA authority',()=>{
   assert.equal(wrangler.d1_databases[0].database_name,'galvivault-0-5-qa');
   assert.equal(wrangler.d1_databases[0].database_id,'cdf9042b-ab09-498a-ac66-010b6cce47d4');
   assert.ok(entry.includes("migration_id='0005'"));
-  assert.ok(entry.includes("import day4Worker from './day4-entry.js'"));
+  assert.ok(entry.includes("import day4Worker from './day4-session-identity-entry.js'"));
+  assert.equal(entry.includes("import day4Worker from './day4-entry.js'"),false);
 });
 
-test('Production and GalviCare entry/config are not Day 5 implementation targets',()=>{
+test('Production and GalviCare baseline files remain outside the Day 5 implementation target',()=>{
   const packageJson=read('package.json');
   assert.equal(service.includes('worker/production-entry.js'),false);
   assert.equal(routes.includes('wrangler.production.jsonc'),false);
