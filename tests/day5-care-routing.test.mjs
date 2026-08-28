@@ -29,7 +29,7 @@ test('H07 prohibited score diagnosis treatment and licensed-advice authority fai
 });
 
 test('H02 clarification transition remains protected and browser invokes AI only through Worker GalviGuide',()=>{
-  for(const required of ['FOLLOWUP_PANELS','followupActive','resultReady','routeFingerprint','insertPanelSafely','stageHosts','galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup','galvisight-result-panel','galvisight-handoff','galvipath-result-panel','galvipath-result',"row.insertAdjacentElement('beforebegin',panel)",'if(followupActive()){cached=null;return null}',"observer.observe(document.body,{subtree:true,childList:true,attributes:true",'node.getClientRects().length>0','data-day5-guide-send',"requestGuide(detail,'care_conversation',message)",'testBoundary'])assert.ok(browser.includes(required),required);
+  for(const required of ['FOLLOWUP_PANELS','followupActive','resultReady','routeFingerprint','insertPanelSafely','stageHosts','galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup','galvisight-result-panel','galvisight-handoff','galvipath-result-panel','galvipath-result',"row.insertAdjacentElement('beforebegin',panel)",'if(followupActive()){cached=null;return null}',"observer.observe(document.body,{subtree:true,childList:true,attributes:true",'getClientRects().length>0','data-day5-guide-send',"requestGuide(detail,'care_conversation',message)",'testBoundary'])assert.ok(browser.includes(required),required);
   assert.ok(browser.includes('GalviCare Day 5 customer care routing + GalviGuide v1'));
   assert.ok(browser.includes('/api/v1/day5/customer/galviguide'));
   assert.ok(browser.includes("api('explain_route')"));
