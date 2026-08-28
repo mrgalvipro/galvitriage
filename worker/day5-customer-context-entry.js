@@ -7,20 +7,20 @@ import { acknowledgeTreatmentPlan, submitCheckin } from './domain/day5-active-ca
 /*
  * Day 5 H19 customer continuity boundary.
  *
- * Proven Human-E2E defect:
- * - the clinician active-care record is scoped to the current GalviCare session's
- *   venture/BHR;
- * - inherited Day 4 customer Chart resolution may otherwise select the founder's
- *   latest active context when the same founder has more than one active venture/context;
- * - the Chart can therefore render correctly but project a different BHR, leaving the
- *   physician-authored Treatment Plan absent from customer Active Care.
+ * The current GalviCare session is authoritative for customer active care. Resolve
+ * exactly the same canonical chain used by the Day 3 customer bridge:
+ * legacy session -> founder email -> canonical founder -> founder/venture role ->
+ * canonical venture -> canonical BMR -> active principal context.
  *
- * This wrapper makes the current server-owned session -> venture -> canonical context
- * mapping authoritative for Day 5 customer Chart, acknowledgement and check-in paths.
- * Browser-supplied BHR identity remains prohibited and Day 4 entitlement/consent checks
- * still run against the resolved context before any Day 5 customer write.
+ * Do not pick a context merely because it is the founder's latest active context and
+ * do not match arbitrary same-name ventures directly from principal_contexts. Both
+ * patterns can render a valid Chart for the wrong BMR and make a physician-authored
+ * Treatment Plan disappear from H19 while still returning HTTP 200.
+ *
+ * Browser-supplied BMR identity remains prohibited. Day 4 entitlement/consent checks
+ * still run before projection or any customer acknowledgement/check-in write.
  */
-export const DAY5_CUSTOMER_CONTEXT_RESOLUTION='session_venture_context_v1';
+export const DAY5_CUSTOMER_CONTEXT_RESOLUTION='session_venture_bmr_context_v2';
 const text=value=>String(value??'').trim();
 
 async function resolveCustomerRecord(request,env){
@@ -47,23 +47,34 @@ async function resolveCustomerRecord(request,env){
   if(!founder?.founder_id)throw new GVError('GV_DAY5_CANONICAL_IDENTITY_MISSING','Canonical GalviVault identity has not been established for this GalviCare session.',409);
 
   const ventureName=text(legacy.venture_name);
-  const canonical=ventureName
-    ?await first(env.DB,`SELECT c.context_id,c.founder_id,c.venture_id,c.bmr_id,c.record_mode,c.status,v.venture_name
-      FROM gv1_principal_contexts c
-      JOIN gv1_ventures v ON v.venture_id=c.venture_id
-      WHERE c.founder_id=?
-        AND c.status='active'
-        AND lower(trim(v.venture_name))=lower(trim(?))
-      ORDER BY c.updated_at DESC,c.created_at DESC
-      LIMIT 1`,founder.founder_id,ventureName)
-    :await first(env.DB,`SELECT context_id,founder_id,venture_id,bmr_id,record_mode,status,'' AS venture_name
-      FROM gv1_principal_contexts
-      WHERE founder_id=? AND status='active' AND venture_id IS NULL
-      ORDER BY updated_at DESC,created_at DESC
-      LIMIT 1`,founder.founder_id);
+  if(!ventureName)throw new GVError('GV_DAY5_CANONICAL_VENTURE_MISSING','The authenticated GalviCare session is not bound to an operating venture.',409);
 
-  if(!canonical?.context_id||!canonical?.bmr_id)throw new GVError('GV_DAY5_CANONICAL_CONTEXT_MISSING','The authenticated GalviCare session could not be matched to its canonical venture/BHR context.',409);
-  return {session_id:sessionId,founder,context:canonical};
+  const venture=await first(env.DB,`SELECT v.venture_id,v.venture_name,v.status,v.updated_at
+    FROM gv1_founder_venture_roles r
+    JOIN gv1_ventures v ON v.venture_id=r.venture_id
+    WHERE r.founder_id=?
+      AND r.status='active'
+      AND v.status='active'
+      AND lower(trim(v.venture_name))=lower(trim(?))
+    ORDER BY r.is_primary DESC,v.updated_at DESC,v.created_at DESC
+    LIMIT 1`,founder.founder_id,ventureName);
+  if(!venture?.venture_id)throw new GVError('GV_DAY5_CANONICAL_VENTURE_MISSING','Canonical GalviVault venture identity is unavailable for this GalviCare session.',409);
+
+  const record=await first(env.DB,`SELECT bmr_id,venture_id,status,record_version,current_session_id,updated_at
+    FROM gv1_business_medical_records
+    WHERE venture_id=? AND status IN ('open','active')
+    ORDER BY CASE WHEN current_session_id=? THEN 0 ELSE 1 END,updated_at DESC,created_at DESC
+    LIMIT 1`,venture.venture_id,sessionId);
+  if(!record?.bmr_id)throw new GVError('GV_DAY5_CANONICAL_BMR_MISSING','Canonical Business Health Record is unavailable for this GalviCare session venture.',409);
+
+  const canonical=await first(env.DB,`SELECT context_id,founder_id,venture_id,bmr_id,record_mode,status,updated_at
+    FROM gv1_principal_contexts
+    WHERE founder_id=? AND venture_id=? AND bmr_id=? AND status='active'
+    ORDER BY updated_at DESC,created_at DESC
+    LIMIT 1`,founder.founder_id,venture.venture_id,record.bmr_id);
+  if(!canonical?.context_id)throw new GVError('GV_DAY5_CANONICAL_CONTEXT_MISSING','The authenticated GalviCare session could not be matched to its canonical venture/BHR context.',409);
+
+  return {session_id:sessionId,founder,venture,record,context:canonical};
 }
 
 async function scopedChartRequest(request,env){
@@ -72,7 +83,7 @@ async function scopedChartRequest(request,env){
   try{const parsed=await request.clone().json();if(parsed&&typeof parsed==='object'&&!Array.isArray(parsed))body=parsed;}catch{}
   const requested=text(body?.context_id);
   if(requested&&requested!==canonical.context.context_id){
-    throw new GVError('GV_AUTH_FORBIDDEN','Requested GalviChart context does not match the authenticated GalviCare session venture.',403,{write_performed:false});
+    throw new GVError('GV_AUTH_FORBIDDEN','Requested GalviChart context does not match the authenticated GalviCare session venture/BHR.',403,{write_performed:false});
   }
   const headers=new Headers(request.headers);headers.set('Content-Type','application/json');
   return {canonical,request:new Request(request.url,{method:'POST',headers,body:JSON.stringify({...body,context_id:canonical.context.context_id})})};
@@ -100,7 +111,7 @@ async function authorizedCustomerChart(request,env,executionContext){
     &&data?.activated===true
     &&text(data?.principal_id)===text(canonical.founder.founder_id)
     &&text(data?.context_id)===text(canonical.context.context_id)
-    &&text(data?.bmr_id)===text(canonical.context.bmr_id);
+    &&text(data?.bmr_id)===text(canonical.record.bmr_id);
   if(!sameRecord)throw new GVError(response.status===401?'GV_AUTH_REQUIRED':'GV_AUTH_FORBIDDEN','Customer active care could not verify the same authenticated GalviChart/BHR.',response.status===401?401:403,{write_performed:false});
   return {session_id:canonical.session_id,principal_id:data.principal_id,context_id:data.context_id,bmr_id:data.bmr_id};
 }
