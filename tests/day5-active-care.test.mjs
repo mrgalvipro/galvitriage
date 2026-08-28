@@ -8,6 +8,7 @@ const ledger=read('migrations/day1/0590_day5_active_care_ledger_reconcile.sql');
 const routes=read('worker/routes/care.js');
 const common=read('worker/day5-common.js');
 const service=read('worker/domain/day5-active-care-service.js');
+const artifactReview=read('worker/domain/day5-artifact-review-service.js');
 const treatment=read('worker/domain/day5-treatment-service.js');
 const projection=read('worker/domain/day5-projection-service.js');
 const results=read('worker/domain/day5-care-result-service.js');
@@ -33,6 +34,16 @@ test('AC-02 clinic brief is read-only same-BHR projection with no OpenAI call',(
 test('AC-03 Business Physician governs finding/Rx/Audit/referral/reassessment',()=>{assert.ok(has(service,['Business Physician treatment authority is required.','recordFindingDecision','addGalviRx','orderGalviAudit','createReferral','reassessCare']));});
 
 test('AC-04 finding decisions preserve source artifact and append decision version',()=>{assert.ok(has(service,['gv1_finding_decisions','source_finding_version','version_no','confirmation_status']));assert.equal(service.includes('DELETE FROM gv1_findings'),false);});
+
+test('AC-04A accepted governed GalviShot AI remains review-only until explicit physician decision materializes canonical finding',()=>{
+  assert.ok(has(artifactReview,['acceptedArtifactReviewCandidates','review_candidate:true','canonical:false',"confirmation_status:'needs_review'","source_type:'openai_governed'",'materializeAcceptedFindingCandidate','INSERT OR IGNORE INTO gv1_findings']));
+  const readOnly=artifactReview.slice(artifactReview.indexOf('export async function acceptedArtifactReviewCandidates'),artifactReview.indexOf('export async function materializeAcceptedFindingCandidate'));
+  assert.equal(/INSERT|UPDATE|DELETE/i.test(readOnly),false);
+  assert.ok(routes.includes('materializeAcceptedFindingCandidate'));
+  const decision=routes.slice(routes.indexOf("path==='/api/v1/finding-decisions'"),routes.indexOf("path==='/api/v1/galvirx'"));
+  assert.ok(decision.includes('materializeAcceptedFindingCandidate'));
+  assert.ok(decision.includes('recordFindingDecision'));
+});
 
 test('AC-05 material active-care writes are idempotent',()=>{for(const scope of ['day5:finding-decision','day5:galvirx','day5:galviaudit','day5:referral','day5:checkin','day5:milestone','day5:reassessment']) assert.ok(service.includes(scope),scope);assert.ok(service.includes('GV_IDEMPOTENCY_REUSE_MISMATCH'));});
 
