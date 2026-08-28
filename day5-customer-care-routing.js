@@ -4,17 +4,17 @@
  * It does not recompute Score/Acuity, does not call OpenAI, does not submit BMR
  * authority, and does not alter the Day 3/Day7D clarification or governed-AI routes.
  *
- * H02/H06 runtime remediation:
+ * H02-H08 runtime remediation:
  * - Never query/render care routing while a Score/Shot/Sight/Path clarification is active.
- * - Discard any route response that races with a clarification transition so stale
- *   pre-answer Score/Acuity cannot be projected after the customer submits evidence.
- * - Resolve the actual current Sight/Path result-panel variants used by governed AI so
- *   Acuity follows the customer through Score -> Shot -> Sight -> Path.
+ * - Discard any route response that races with a clarification transition.
+ * - Resolve every connected result host, then render only the actually visible one; do
+ *   not let a hidden governed-AI compatibility host mask the visible customer surface.
+ * - Project the same server-owned care route into the activated GalviChart.
  * - Render idempotently and insert relative to the actual button-row parent.
  */
 (()=>{
   'use strict';
-  const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v1';
+  const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v2';
   const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev';
   const SESSION_HEADER='X-Galvi-Day3-Session';
   const FOLLOWUP_IDS=['followup-question-container','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions'];
@@ -49,62 +49,39 @@
     const sid=session();if(!sid)throw new Error('Your authenticated GalviCare session is required.');
     const response=await fetch(`${BASE}/api/v1/day5/customer/galviguide`,{
       method:'POST',cache:'no-store',
-      headers:{
-        'Accept':'application/json','Content-Type':'application/json','Cache-Control':'no-cache',
-        [SESSION_HEADER]:sid,'X-Correlation-Id':`day5-guide-${crypto.randomUUID()}`
-      },
+      headers:{'Accept':'application/json','Content-Type':'application/json','Cache-Control':'no-cache',[SESSION_HEADER]:sid,'X-Correlation-Id':`day5-guide-${crypto.randomUUID()}`},
       body:JSON.stringify({intent})
     });
     let payload={};try{payload=await response.json()}catch{}
-    if(!response.ok||payload?.success===false){
-      const error=new Error(payload?.error?.message||`GalviGuide request failed (${response.status}).`);
-      error.code=payload?.error?.code||'GV_GUIDE_FAILED';error.status=response.status;error.payload=payload;throw error;
-    }
+    if(!response.ok||payload?.success===false){const error=new Error(payload?.error?.message||`GalviGuide request failed (${response.status}).`);error.code=payload?.error?.code||'GV_GUIDE_FAILED';error.status=response.status;error.payload=payload;throw error;}
     return payload?.data||{};
   }
 
-  const bandLabel=(band)=>({
-    green:'Green — routine',
-    yellow:'Yellow — passive care / needs attention',
-    orange:'Orange — active care recommended',
-    red:'Red — urgent / specialty escalation'
-  })[text(band).toLowerCase()]||text(band)||'Unavailable';
-
-  const careLabel=(route)=>({
-    passive_monitoring:'Passive monitoring',
-    passive_intervention:'Passive intervention',
-    active_care_recommended:'Active care recommended',
-    urgent_active_specialty_referral:'Urgent active / specialty referral'
-  })[text(route)]||text(route).replaceAll('_',' ')||'Care route unavailable';
-
-  const supportLabel=(value)=>({
-    self_guided:'Self-guided + GalviGuide available',
-    galviguide:'GalviGuide',
-    galviclinic:'GalviClinic / Business Physician',
-    qualified_referral:'Qualified referral / specialty care'
-  })[text(value)]||text(value).replaceAll('_',' ')||'—';
+  const bandLabel=(band)=>({green:'Green — routine',yellow:'Yellow — passive care / needs attention',orange:'Orange — active care recommended',red:'Red — urgent / specialty escalation'})[text(band).toLowerCase()]||text(band)||'Unavailable';
+  const careLabel=(route)=>({passive_monitoring:'Passive monitoring',passive_intervention:'Passive intervention',active_care_recommended:'Active care recommended',urgent_active_specialty_referral:'Urgent active / specialty referral'})[text(route)]||text(route).replaceAll('_',' ')||'Care route unavailable';
+  const supportLabel=(value)=>({self_guided:'Self-guided + GalviGuide available',galviguide:'GalviGuide',galviclinic:'GalviClinic / Business Physician',qualified_referral:'Qualified referral / specialty care'})[text(value)]||text(value).replaceAll('_',' ')||'—';
 
   function isPathHost(hostId){return hostId==='galvipath-result'||hostId==='galvipath-result-panel';}
+  function isChartHost(hostId){return hostId==='galvichart-day4';}
   function actionCopy(route,hostId){
     if(route.referral_required)return 'Continue the governed GalviPath and specialty/referral route. GalviGuide remains bounded and cannot provide the licensed conclusion.';
-    if(route.clinic_recommended)return isPathHost(hostId)
-      ?'Your Acuity supports active care. Use the existing Book GalviClinic action for Business Physician review.'
+    if(route.clinic_recommended)return isPathHost(hostId)||isChartHost(hostId)
+      ?'Your Acuity supports active care. Continue to GalviClinic for Business Physician review.'
       :'Continue through the existing Shot → Sight → Path sequence; GalviClinic becomes the active-care destination after GalviPath.';
-    if(text(route.acuity_band).toLowerCase()==='yellow')return isPathHost(hostId)
+    if(text(route.acuity_band).toLowerCase()==='yellow')return isPathHost(hostId)||isChartHost(hostId)
       ?'This is a passive-care route. Use GalviGuide for navigation/reminders and continue monitoring without forcing GalviClinic.'
       :'Continue through the existing Shot → Sight → Path sequence. The current route remains passive; GalviGuide can explain and navigate without forcing active care.';
     return 'Continue the governed customer journey and monitor the evidence. GalviGuide can explain the route without changing the score or treatment.';
   }
 
   function markup(route,hostId){
-    const band=text(route.acuity_band).toLowerCase();
-    const detailId=`day5-guide-detail-${hostId}`;
+    const band=text(route.acuity_band).toLowerCase(),detailId=`day5-guide-detail-${hostId}`;
     return `<section class="day5-care-route" data-day5-care-routing="${esc(hostId)}">
       <p class="eyebrow">GALVICARE 1.0 | CARE ROUTING</p>
       <h3>GalviScore + Business Health Acuity</h3>
       <p><strong>GalviScore:</strong> ${route.overall_score==null?'—':esc(route.overall_score)}/100</p>
       <p><span class="day5-acuity-badge day5-acuity-${esc(band||'green')}">Acuity ${route.acuity_score==null?'—':esc(route.acuity_score)}/100 · ${esc(bandLabel(band))}</span></p>
-      <p class="day5-route-muted"><strong>Important:</strong> GalviScore measures current Business Health. Acuity measures how urgently care should escalate. The existing “What you should watch?” box is GalviScore guidance; this Care Routing panel is the GalviGuide/GalviPath routing layer.</p>
+      <p class="day5-route-muted"><strong>Important:</strong> GalviScore measures current Business Health. Acuity measures how urgently care should escalate. This route is server-owned and is not recomputed by the browser.</p>
       <div class="day5-route-grid">
         <div class="day5-route-cell"><strong>Disposition</strong><br>${esc(careLabel(route.disposition))}</div>
         <div class="day5-route-cell"><strong>Recommended support</strong><br>${esc(supportLabel(route.support_level))}</div>
@@ -121,121 +98,49 @@
     </section>`;
   }
 
-  function bind(panel){
-    panel?.querySelector('[data-day5-guide-open]')?.addEventListener('click',event=>{
-      const detail=byId(event.currentTarget.dataset.day5GuideOpen);
-      detail?.classList.toggle('hidden');
-    });
-  }
-
-  function visible(node){
-    if(!node||!node.isConnected)return false;const style=getComputedStyle(node);
-    return !node.classList.contains('hidden')&&style.display!=='none'&&style.visibility!=='hidden';
-  }
-
-  function followupActive(){
-    return FOLLOWUP_IDS.some(id=>{
-      const host=byId(id);
-      if(!visible(host))return false;
-      return Boolean(host.querySelector('textarea,[data-question-id],[data-question-code]'));
-    });
-  }
-
+  function bind(panel){panel?.querySelector('[data-day5-guide-open]')?.addEventListener('click',event=>{byId(event.currentTarget.dataset.day5GuideOpen)?.classList.toggle('hidden');});}
+  function visible(node){if(!node||!node.isConnected)return false;const style=getComputedStyle(node);return !node.classList.contains('hidden')&&style.display!=='none'&&style.visibility!=='hidden';}
+  function followupActive(){return FOLLOWUP_IDS.some(id=>{const host=byId(id);return visible(host)&&Boolean(host.querySelector('textarea,[data-question-id],[data-question-code]'));});}
   function stageHosts(){
-    return [
-      byId('galviscore-result'),
-      byId('galvishot-result'),
-      byId('galvisight-result-panel')||byId('galvisight-handoff'),
-      byId('galvipath-result-panel')||byId('galvipath-result')
-    ].filter((host,index,array)=>host&&array.indexOf(host)===index);
+    const ids=['galviscore-result','galvishot-result','galvisight-result-panel','galvisight-handoff','galvipath-result-panel','galvipath-result','galvichart-day4'];
+    return ids.map(byId).filter((host,index,array)=>host?.isConnected&&array.indexOf(host)===index);
   }
-
   function resultReady(){return !followupActive()&&stageHosts().some(visible);}
-
-  function routeFingerprint(route){
-    return JSON.stringify([
-      text(route?.source_result_id),Number(route?.source_record_version||0),
-      route?.overall_score??null,route?.acuity_score??null,text(route?.acuity_band),
-      route?.clinical_confidence??null,text(route?.disposition),text(route?.support_level),
-      Boolean(route?.clinic_recommended),Boolean(route?.referral_required)
-    ]);
-  }
-
+  function routeFingerprint(route){return JSON.stringify([text(route?.source_result_id),Number(route?.source_record_version||0),route?.overall_score??null,route?.acuity_score??null,text(route?.acuity_band),route?.clinical_confidence??null,text(route?.disposition),text(route?.support_level),Boolean(route?.clinic_recommended),Boolean(route?.referral_required)]);}
   function insertPanelSafely(host,panel){
     if(!host?.isConnected||!panel)return false;
-    const row=host.querySelector('.button-row');
-    if(row?.isConnected&&host.contains(row)){
-      try{row.insertAdjacentElement('beforebegin',panel);return true}
-      catch(error){if(error?.name!=='NotFoundError')throw error}
+    if(isChartHost(host.id)){
+      const grid=host.querySelector('.gchart-grid');if(grid?.isConnected){grid.insertAdjacentElement('beforebegin',panel);return true;}
     }
-    if(host.isConnected){host.appendChild(panel);return true}
-    return false;
+    const row=host.querySelector('.button-row');
+    if(row?.isConnected&&host.contains(row)){try{row.insertAdjacentElement('beforebegin',panel);return true}catch(error){if(error?.name!=='NotFoundError')throw error}}
+    if(host.isConnected){host.appendChild(panel);return true}return false;
   }
-
   function render(route){
-    if(followupActive())return;
-    installStyle();
-    const fingerprint=routeFingerprint(route);
+    if(followupActive())return;installStyle();const fingerprint=routeFingerprint(route);
     for(const host of stageHosts()){
       if(!visible(host))continue;
-      const id=host.id;
-      const existing=host.querySelector(`[data-day5-care-routing="${id}"]`);
-      if(existing?.dataset?.day5CareFingerprint===fingerprint)continue;
-      if(existing)existing.remove();
-      const holder=document.createElement('div');holder.innerHTML=markup(route,id);
-      const panel=holder.firstElementChild;if(!panel)continue;
-      panel.dataset.day5CareFingerprint=fingerprint;
-      if(!insertPanelSafely(host,panel))continue;
-      bind(panel);
+      const id=host.id,existing=host.querySelector(`[data-day5-care-routing="${id}"]`);
+      if(existing?.dataset?.day5CareFingerprint===fingerprint)continue;if(existing)existing.remove();
+      const holder=document.createElement('div');holder.innerHTML=markup(route,id);const panel=holder.firstElementChild;if(!panel)continue;
+      panel.dataset.day5CareFingerprint=fingerprint;if(!insertPanelSafely(host,panel))continue;bind(panel);
     }
   }
 
-  function scheduleRetry(){
-    if(retryTimer||retryCount>=8)return;
-    retryCount++;
-    retryTimer=setTimeout(()=>{retryTimer=null;refresh(true).catch(()=>{})},1500);
-  }
-
+  function scheduleRetry(){if(retryTimer||retryCount>=8)return;retryCount++;retryTimer=setTimeout(()=>{retryTimer=null;refresh(true).catch(()=>{})},1500);}
   async function refresh(force=false){
-    if(followupActive()){cached=null;return null}
-    if(inFlight)return inFlight;
-    if(cached&&!force){render(cached);return cached}
-    inFlight=(async()=>{
-      const route=await api('explain_route');
-      if(followupActive()){cached=null;return null}
-      cached=route;retryCount=0;render(route);return route;
-    })();
-    try{return await inFlight}
-    catch(error){
-      if(error?.code==='GV_DAY5_CARE_ROUTE_NOT_READY'||error?.status===409)scheduleRetry();
-      else console.warn(SIGNATURE,error?.code||'',error?.message||error);
-      throw error;
-    }finally{inFlight=null}
+    if(followupActive()){cached=null;return null}if(inFlight)return inFlight;if(cached&&!force){render(cached);return cached}
+    inFlight=(async()=>{const route=await api('explain_route');if(followupActive()){cached=null;return null}cached=route;retryCount=0;render(route);return route;})();
+    try{return await inFlight}catch(error){if(error?.code==='GV_DAY5_CARE_ROUTE_NOT_READY'||error?.status===409)scheduleRetry();else console.warn(SIGNATURE,error?.code||'',error?.message||error);throw error}finally{inFlight=null}
   }
-
   function install(){
     installStyle();
-    const observer=new MutationObserver(()=>{
-      if(followupActive()){cached=null;return}
-      if(resultReady())queueMicrotask(()=>refresh(false).catch(()=>{}));
-    });
+    const observer=new MutationObserver(()=>{if(followupActive()){cached=null;return}if(resultReady())queueMicrotask(()=>refresh(false).catch(()=>{}));});
     observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});
-    for(const event of ['pageshow','hashchange','popstate','focus'])window.addEventListener(event,()=>{
-      if(resultReady())refresh(true).catch(()=>{});
-    });
+    for(const event of ['pageshow','hashchange','popstate','focus'])window.addEventListener(event,()=>{if(resultReady())refresh(true).catch(()=>{});});
     if(resultReady())refresh(false).catch(()=>{});
-    window.GalviCareDay5Routing=Object.freeze({
-      refresh,
-      getRoute:()=>refresh(true),
-      explain:()=>api('explain_route'),
-      reminder:()=>api('reminder'),
-      requestEvidence:()=>api('request_evidence'),
-      clinicPrep:()=>api('clinic_prep'),
-      testBoundary:()=>api('change_score'),
-      signature:SIGNATURE
-    });
+    window.GalviCareDay5Routing=Object.freeze({refresh,getRoute:()=>refresh(true),explain:()=>api('explain_route'),reminder:()=>api('reminder'),requestEvidence:()=>api('request_evidence'),clinicPrep:()=>api('clinic_prep'),testBoundary:()=>api('change_score'),signature:SIGNATURE});
     console.info(SIGNATURE,'active');
   }
-
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
