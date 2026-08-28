@@ -13,6 +13,7 @@ on:
       - day4-galvichart-browser.js
       - day4-customer-experience-hardening.js
       - day4-single-current-governed-product.js
+      - day5-score-metadata.js
       - day5-customer-care-routing.js
       - day5-customer-active-care.js
       - qa-frontend-worker.js
@@ -81,6 +82,9 @@ jobs:
           grep -Fq 'GalviCare Day 4 follow-up draft resilience v1' dist-qa/index.html
           grep -Fq 'GalviCare Day 4 customer-safe governed interpretation v1' dist-qa/index.html
           grep -Fq 'GalviCare Day 4 single-current governed product projection v1' dist-qa/index.html
+          grep -Fq 'GalviCare Day 5 canonical GalviScore metadata v1' dist-qa/index.html
+          grep -Fq '/api/v1/day5/customer/score-metadata' dist-qa/index.html
+          grep -Fq 'day5-score-acuity-summary' dist-qa/index.html
           grep -Fq 'GalviCare Day 5 customer care routing + GalviGuide v1' dist-qa/index.html
           grep -Fq 'GalviScore + Business Health Acuity' dist-qa/index.html
           grep -Fq 'Yellow — passive care / needs attention' dist-qa/index.html
@@ -104,7 +108,8 @@ jobs:
           grep -Fq 'GalviClinic' dist-qa/index.html
           grep -Fq 'History' dist-qa/index.html
           ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
-          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY' day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-customer-care-routing.js day5-customer-active-care.js
+          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY' day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-score-metadata.js day5-customer-care-routing.js day5-customer-active-care.js
+          ! grep -Eq 'bmr_id[[:space:]]*:' day5-score-metadata.js
           ! grep -Eq 'bmr_id[[:space:]]*:' day5-customer-care-routing.js
           ! grep -Eq 'bmr_id[[:space:]]*:' day5-customer-active-care.js
 
@@ -132,6 +137,9 @@ jobs:
               && grep -Fq 'GalviCare Day 4 single-current governed product projection v1' qa-runtime.html 2>/dev/null \
               && grep -Fq 'save_galviscore_followup' qa-runtime.html 2>/dev/null \
               && grep -Fq 'save_galvishot_followup' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'GalviCare Day 5 canonical GalviScore metadata v1' qa-runtime.html 2>/dev/null \
+              && grep -Fq '/api/v1/day5/customer/score-metadata' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'day5-score-acuity-summary' qa-runtime.html 2>/dev/null \
               && grep -Fq 'GalviCare Day 5 customer care routing + GalviGuide v1' qa-runtime.html 2>/dev/null \
               && grep -Fq 'GalviScore + Business Health Acuity' qa-runtime.html 2>/dev/null \
               && grep -Fq 'Yellow — passive care / needs attention' qa-runtime.html 2>/dev/null \
@@ -181,6 +189,7 @@ jobs:
           echo '- Existing QA frontend Worker: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Stripe: TEST only' >> "$GITHUB_STEP_SUMMARY"
           echo '- GalviScore clarification + targeted GalviShot questions: PRESERVED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviScore Classification/Lowest Category/Acuity projection: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 3 governed-AI customer reasoning: PRESERVED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day7D clarification/replay regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 4 GalviChart/secure return: PRESERVED' >> "$GITHUB_STEP_SUMMARY"
