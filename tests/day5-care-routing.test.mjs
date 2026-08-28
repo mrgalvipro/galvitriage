@@ -22,6 +22,13 @@ test('H06 GalviGuide uses server-side governed Responses API with strict schema 
   assert.ok(guide.includes('source_artifact_ids'));
 });
 
+test('H06 generated answer is unmistakably surfaced separately from route text and next actions',()=>{
+  for(const required of ['GalviCare Day 5 customer care routing + GalviGuide v2','data-day5-guide-answer','data-day5-guide-answer-label','data-day5-guide-answer-source','GalviGuide AI Guidance — generated from your approved care state','This box is the AI-generated answer. Provider: OpenAI','data-day5-guide-actions-label','The GalviGuide AI Guidance box above is the generated answer from your approved care state.']) assert.ok(browser.includes(required),required);
+  assert.ok(browser.includes("answer.dataset.aiGenerated=used?'true':'false'"));
+  assert.ok(browser.includes('provider_response_id'));
+  assert.ok(browser.includes('ai_metadata'));
+});
+
 test('H07 prohibited score diagnosis treatment and licensed-advice authority fails closed without write',()=>{
   for(const required of ['GUIDE_PROHIBITED_REQUEST','GV_GUIDE_BOUNDARY','may not change GalviScore or Acuity, diagnose, approve treatment','write_performed:false','Business Physician judgment'])assert.ok(core.includes(required),required);
   const guide=section(core,'async function customerGalviGuide','const worker=');
@@ -30,7 +37,7 @@ test('H07 prohibited score diagnosis treatment and licensed-advice authority fai
 
 test('H02 clarification transition remains protected and browser invokes AI only through Worker GalviGuide',()=>{
   for(const required of ['FOLLOWUP_PANELS','followupActive','resultReady','routeFingerprint','insertPanelSafely','stageHosts','galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup','galvisight-result-panel','galvisight-handoff','galvipath-result-panel','galvipath-result',"row.insertAdjacentElement('beforebegin',panel)",'if(followupActive()){cached=null;return null}',"observer.observe(document.body,{subtree:true,childList:true,attributes:true",'getClientRects().length>0','data-day5-guide-send',"requestGuide(detail,'care_conversation',message)",'testBoundary'])assert.ok(browser.includes(required),required);
-  assert.ok(browser.includes('GalviCare Day 5 customer care routing + GalviGuide v1'));
+  assert.ok(browser.includes('GalviCare Day 5 customer care routing + GalviGuide v2'));
   assert.ok(browser.includes('/api/v1/day5/customer/galviguide'));
   assert.ok(browser.includes("api('explain_route')"));
   assert.equal(/api\.openai\.com|OPENAI_API_KEY|bmr_id\s*:/.test(browser),false);
