@@ -4,21 +4,19 @@
  * It does not recompute Score/Acuity, does not call OpenAI, does not submit BMR
  * authority, and does not alter the Day 3/Day7D clarification or governed-AI routes.
  *
- * H02 runtime remediation:
+ * H02/H06 runtime remediation:
  * - Never query/render care routing while a Score/Shot/Sight/Path clarification is active.
  * - Discard any route response that races with a clarification transition so stale
  *   pre-answer Score/Acuity cannot be projected after the customer submits evidence.
- * - Render idempotently and insert relative to the actual button-row parent; never call
- *   host.insertBefore(panel,row) when row may be a nested descendant.
- * - The MutationObserver may observe this adapter's own DOM, but an unchanged route
- *   fingerprint is a no-op, preventing self-triggered render loops/freezes.
+ * - Resolve the actual current Sight/Path result-panel variants used by governed AI so
+ *   Acuity follows the customer through Score -> Shot -> Sight -> Path.
+ * - Render idempotently and insert relative to the actual button-row parent.
  */
 (()=>{
   'use strict';
   const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v1';
   const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev';
   const SESSION_HEADER='X-Galvi-Day3-Session';
-  const STAGES=['galviscore-result','galvishot-result','galvisight-handoff','galvipath-result'];
   const FOLLOWUP_IDS=['followup-question-container','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions'];
   const text=(value)=>String(value??'').trim();
   const byId=(id)=>document.getElementById(id);
@@ -86,12 +84,13 @@
     qualified_referral:'Qualified referral / specialty care'
   })[text(value)]||text(value).replaceAll('_',' ')||'—';
 
+  function isPathHost(hostId){return hostId==='galvipath-result'||hostId==='galvipath-result-panel';}
   function actionCopy(route,hostId){
     if(route.referral_required)return 'Continue the governed GalviPath and specialty/referral route. GalviGuide remains bounded and cannot provide the licensed conclusion.';
-    if(route.clinic_recommended)return hostId==='galvipath-result'
+    if(route.clinic_recommended)return isPathHost(hostId)
       ?'Your Acuity supports active care. Use the existing Book GalviClinic action for Business Physician review.'
       :'Continue through the existing Shot → Sight → Path sequence; GalviClinic becomes the active-care destination after GalviPath.';
-    if(text(route.acuity_band).toLowerCase()==='yellow')return hostId==='galvipath-result'
+    if(text(route.acuity_band).toLowerCase()==='yellow')return isPathHost(hostId)
       ?'This is a passive-care route. Use GalviGuide for navigation/reminders and continue monitoring without forcing GalviClinic.'
       :'Continue through the existing Shot → Sight → Path sequence. The current route remains passive; GalviGuide can explain and navigate without forcing active care.';
     return 'Continue the governed customer journey and monitor the evidence. GalviGuide can explain the route without changing the score or treatment.';
@@ -142,9 +141,16 @@
     });
   }
 
-  function resultReady(){
-    return !followupActive()&&STAGES.some(id=>visible(byId(id)));
+  function stageHosts(){
+    return [
+      byId('galviscore-result'),
+      byId('galvishot-result'),
+      byId('galvisight-result-panel')||byId('galvisight-handoff'),
+      byId('galvipath-result-panel')||byId('galvipath-result')
+    ].filter((host,index,array)=>host&&array.indexOf(host)===index);
   }
+
+  function resultReady(){return !followupActive()&&stageHosts().some(visible);}
 
   function routeFingerprint(route){
     return JSON.stringify([
@@ -159,12 +165,8 @@
     if(!host?.isConnected||!panel)return false;
     const row=host.querySelector('.button-row');
     if(row?.isConnected&&host.contains(row)){
-      try{
-        row.insertAdjacentElement('beforebegin',panel);
-        return true;
-      }catch(error){
-        if(error?.name!=='NotFoundError')throw error;
-      }
+      try{row.insertAdjacentElement('beforebegin',panel);return true}
+      catch(error){if(error?.name!=='NotFoundError')throw error}
     }
     if(host.isConnected){host.appendChild(panel);return true}
     return false;
@@ -174,8 +176,9 @@
     if(followupActive())return;
     installStyle();
     const fingerprint=routeFingerprint(route);
-    for(const id of STAGES){
-      const host=byId(id);if(!host||!visible(host))continue;
+    for(const host of stageHosts()){
+      if(!visible(host))continue;
+      const id=host.id;
       const existing=host.querySelector(`[data-day5-care-routing="${id}"]`);
       if(existing?.dataset?.day5CareFingerprint===fingerprint)continue;
       if(existing)existing.remove();

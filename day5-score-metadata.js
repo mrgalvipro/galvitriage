@@ -2,6 +2,12 @@
  * Renderer only: Classification, Lowest Category and Acuity are supplied by the
  * cumulative Day 5 Worker after the inherited clarification persists. The browser
  * never recomputes GalviScore or Acuity.
+ *
+ * H02/H06 runtime remediation:
+ * - rendering is fingerprinted/idempotent so this adapter cannot trigger its own
+ *   MutationObserver forever;
+ * - blank metadata fields render an explicit unavailable state rather than a silent blank;
+ * - canonical refresh remains blocked while the inherited Score clarification is active.
  */
 (()=>{
   'use strict';
@@ -13,13 +19,14 @@
   const session=()=>typeof window.getStoredSessionId==='function'
     ?text(window.getStoredSessionId())
     :text(localStorage.getItem('galvicare_session_id')||localStorage.getItem('galvishot_session_id'));
-  let inFlight=null,cached=null,retry=null,retryCount=0;
+  let inFlight=null,cached=null,retry=null,retryCount=0,lastFingerprint='';
 
   function visible(node){if(!node||!node.isConnected)return false;const style=getComputedStyle(node);return !node.classList.contains('hidden')&&style.display!=='none'&&style.visibility!=='hidden';}
   function clarificationActive(){const host=byId('followup-question-container');return visible(host)&&Boolean(host.querySelector('textarea,[data-question-id],[data-question-code]'));}
   function scoreVisible(){return visible(byId('galviscore-result'))&&!clarificationActive();}
   function label(value){return text(value).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());}
   function acuityLabel(band){return ({green:'Green — routine',yellow:'Yellow — passive care / needs attention',orange:'Orange — active care recommended',red:'Red — urgent / specialty escalation'})[text(band).toLowerCase()]||label(band)||'Unavailable';}
+  function fingerprint(data){return JSON.stringify([text(data?.classification),text(data?.lowest_category),data?.acuity_score??null,text(data?.acuity_band),data?.clinical_confidence??null,text(data?.score_result_id),Number(data?.score_record_version||0)]);}
 
   async function api(){
     const sid=session();if(!sid)throw new Error('Authenticated GalviCare session is required.');
@@ -29,17 +36,35 @@
     return payload?.data||{};
   }
 
+  function ensureAcuityNode(lowest){
+    let acuity=byId('day5-score-acuity-summary');
+    if(acuity)return acuity;
+    acuity=document.createElement('p');acuity.id='day5-score-acuity-summary';acuity.dataset.day5ScoreMetadata='canonical';
+    const anchor=lowest?.closest('p')||byId('galviscore-category-bars');
+    if(anchor?.parentNode)anchor.insertAdjacentElement('afterend',acuity);
+    return acuity;
+  }
+
   function render(data){
-    if(!scoreVisible())return;
+    if(!scoreVisible())return false;
+    const fp=fingerprint(data);
     const classification=byId('galviscore-classification');
     const lowest=byId('galviscore-lowest-category');
-    if(classification&&text(data?.classification))classification.textContent=text(data.classification);
-    if(lowest&&text(data?.lowest_category))lowest.textContent=label(data.lowest_category);
-    let acuity=byId('day5-score-acuity-summary');
-    if(!acuity){acuity=document.createElement('p');acuity.id='day5-score-acuity-summary';acuity.dataset.day5ScoreMetadata='canonical';const anchor=lowest?.closest('p')||byId('galviscore-category-bars');if(anchor?.parentNode)anchor.insertAdjacentElement('afterend',acuity);}
+    const classificationValue=text(data?.classification)||'Unavailable';
+    const lowestValue=text(data?.lowest_category)?label(data.lowest_category):'Unavailable';
+    const acuity=ensureAcuityNode(lowest);
     const score=data?.acuity_score==null?'—':text(data.acuity_score);
-    acuity.innerHTML=`Acuity: <strong>${score}/100 · ${acuityLabel(data?.acuity_band)}</strong>`;
-    acuity.title='Acuity is server-owned care urgency and is distinct from the GalviScore Business Health score.';
+    const acuityHtml=`Acuity: <strong>${score}/100 · ${acuityLabel(data?.acuity_band)}</strong>`;
+    if(fp===lastFingerprint
+      && (!classification||text(classification.textContent)===classificationValue)
+      && (!lowest||text(lowest.textContent)===lowestValue)
+      && (!acuity||acuity.innerHTML===acuityHtml)) return false;
+    if(classification&&text(classification.textContent)!==classificationValue)classification.textContent=classificationValue;
+    if(lowest&&text(lowest.textContent)!==lowestValue)lowest.textContent=lowestValue;
+    if(acuity&&acuity.innerHTML!==acuityHtml)acuity.innerHTML=acuityHtml;
+    if(acuity)acuity.title='Acuity is server-owned care urgency and is distinct from the GalviScore Business Health score.';
+    lastFingerprint=fp;
+    return true;
   }
 
   function schedule(){if(retry||retryCount>=6)return;retryCount++;retry=setTimeout(()=>{retry=null;refresh(true).catch(()=>{})},1200);}
