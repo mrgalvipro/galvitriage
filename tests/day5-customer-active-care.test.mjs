@@ -34,10 +34,10 @@ test('H02/H06 hidden completed clarification DOM cannot suppress canonical Score
   ]) assert.ok(metadata.includes(required),`metadata: ${required}`);
   for(const required of [
     "FOLLOWUP_PANELS=['galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup']",
-    'for(let current=node;current&&current.nodeType===1;current=current.parentElement)',
-    "current.classList?.contains('hidden')",
-    'node.getClientRects().length>0',
-    "error?.status===404||error?.status===409"
+    'for(let c=n;c&&c.nodeType===1;c=c.parentElement)',
+    "c.classList?.contains('hidden')",
+    'n.getClientRects().length>0',
+    "e?.code==='GV_DAY5_CARE_ROUTE_NOT_READY'||e?.status===404||e?.status===409"
   ]) assert.ok(routing.includes(required),`routing: ${required}`);
   assert.equal(routing.includes("FOLLOWUP_IDS=['followup-question-container'"),false);
 });
