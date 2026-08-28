@@ -15,17 +15,23 @@ export async function handleOperatorWorkspace(request,env,ctx,path,identity){
     if(q.length<3||q.length>180) throw new GVError('GV_REQ_SCHEMA','query must be 3-180 characters.',422);
     const like=`%${q}%`, cursor=clean(u.searchParams.get('cursor'));
     const rows=await all(env.DB,`
-      SELECT f.founder_id,f.first_name,f.last_name,f.email,v.venture_id,v.venture_name,
-             b.bmr_id,b.status AS bmr_status,b.record_version,b.updated_at
+      SELECT DISTINCT f.founder_id,f.first_name,f.last_name,f.email,v.venture_id,v.venture_name,
+             b.bmr_id,b.status AS bmr_status,b.record_version,b.current_session_id,b.updated_at
       FROM gv1_founders f
       JOIN gv1_founder_venture_roles r ON r.founder_id=f.founder_id AND r.status='active'
       JOIN gv1_ventures v ON v.venture_id=r.venture_id
       JOIN gv1_business_medical_records b ON b.venture_id=v.venture_id
-      WHERE (lower(coalesce(f.normalized_email,f.email,'')) LIKE ? OR lower(coalesce(f.first_name,'')||' '||coalesce(f.last_name,'')) LIKE ? OR lower(v.venture_name) LIKE ?)
+      LEFT JOIN gv1_assessment_sessions s ON s.bmr_id=b.bmr_id
+      WHERE (lower(coalesce(f.normalized_email,f.email,'')) LIKE ?
+          OR lower(coalesce(f.first_name,'')||' '||coalesce(f.last_name,'')) LIKE ?
+          OR lower(v.venture_name) LIKE ?
+          OR lower(b.bmr_id) LIKE ?
+          OR lower(coalesce(b.current_session_id,'')) LIKE ?
+          OR lower(coalesce(s.session_id,'')) LIKE ?)
         AND (?='' OR b.bmr_id>?)
-      ORDER BY b.bmr_id LIMIT ?`,like,like,like,cursor,cursor,limit+1);
+      ORDER BY b.bmr_id LIMIT ?`,like,like,like,like,like,like,cursor,cursor,limit+1);
     const more=rows.length>limit, items=rows.slice(0,limit);
-    return success(ctx,{items,next_cursor:more?items.at(-1)?.bmr_id:null,limit});
+    return success(ctx,{items,next_cursor:more?items.at(-1)?.bmr_id:null,limit,query_scope:'customer_founder_venture_bmr_or_session'});
   }
   if(request.method==='POST'&&path==='/api/v1/operator/day9/historical-import/plan'){
     const body=await request.json();
