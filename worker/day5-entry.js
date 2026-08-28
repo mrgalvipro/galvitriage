@@ -81,7 +81,7 @@ async function internalDay2(env,path,{method='GET',key,body}={}){
 async function convergeBootstrapBaseline(request,env,input,bootstrap){
   if(!env?.DB||bootstrap?.success!==true||!bootstrap?.data?.context_id)return null;
   const sessionId=text(request.headers.get(CUSTOMER_HEADER)||input?.legacy_session_id);if(!sessionId)return null;
-  const legacyRow=await first(env.DB,`SELECT result_json FROM product_results WHERE session_id=? AND product='GalviScore' ORDER BY created_at DESC LIMIT 1`,sessionId);
+  const legacyRow=await first(env.DB,`SELECT result_json FROM product_results WHERE session_id=? AND product='GalviScore' ORDER BY generated_at DESC LIMIT 1`,sessionId);
   const legacy=parseJson(legacyRow?.result_json,{});
   const expectedOverall=Number(bootstrap?.data?.canonical_score??legacy?.galviscore_score??legacy?.score);
   const confidenceValue=Number(bootstrap?.data?.clinical_confidence??legacy?.galviscore_confidence??legacy?.clinical_confidence);
@@ -130,7 +130,7 @@ async function scoreMetadata(request,env){
   const sessionId=text(request.headers.get(CUSTOMER_HEADER));if(!sessionId)return json(request,{success:false,status:'unauthenticated',error:{code:'GV_AUTH_REQUIRED',message:'An authenticated GalviCare session is required.'}},401);
   const context=await customerCanonicalContext(env.DB,sessionId);if(!context?.context_id)return json(request,{success:false,status:'not_found',error:{code:'GV_DAY5_CANONICAL_CONTEXT_MISSING',message:'Canonical GalviCare context is unavailable.'}},404);
   const canonical=await first(env.DB,`SELECT result_id,payload_json,record_version,created_at FROM gv1_day2_intake_results WHERE context_id=? AND result_type='score' ORDER BY record_version DESC,created_at DESC LIMIT 1`,context.context_id);
-  const legacy=await first(env.DB,`SELECT result_json FROM product_results WHERE session_id=? AND product='GalviScore' ORDER BY created_at DESC LIMIT 1`,sessionId);
+  const legacy=await first(env.DB,`SELECT result_json FROM product_results WHERE session_id=? AND product='GalviScore' ORDER BY generated_at DESC LIMIT 1`,sessionId);
   const cp=parseJson(canonical?.payload_json,{}),lp=parseJson(legacy?.result_json,{}),legacyOverall=Number(lp?.galviscore_score??lp?.score),overall=Number(Number.isFinite(legacyOverall)?legacyOverall:cp?.overall_score),dimensions=lp?.category_scores||lp?.dimension_scores||cp?.dimension_scores||{};
   const canonicalOverall=Number(cp?.overall_score),sourceMatches=!Number.isFinite(legacyOverall)||!Number.isFinite(canonicalOverall)||Math.abs(legacyOverall-canonicalOverall)<=1;
   return json(request,{success:true,status:'ok',environment:text(env?.ENVIRONMENT)||'qa',data:{overall_score:Number.isFinite(overall)?overall:null,classification:text(lp?.galviscore_classification||lp?.classification)||classification(overall),lowest_category:text(lp?.galviscore_lowest_category||lp?.lowest_category)||lowestCategory(dimensions),acuity_score:cp?.acuity_score??null,acuity_band:text(cp?.acuity_band)||null,clinical_confidence:lp?.galviscore_confidence??lp?.clinical_confidence??cp?.clinical_confidence??null,score_result_id:canonical?.result_id||null,score_record_version:Number(canonical?.record_version||0),canonical_source:'gv1_day2_intake_results',source_converged:sourceMatches},meta:{read_only:true,score_recomputed_in_browser:false,acuity_recomputed_in_browser:false,provider_evidence_window_max:MAX_PROVIDER_EVIDENCE_ITEMS}});
