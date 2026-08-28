@@ -1,3 +1,4 @@
+// Day 5 H9 recovery re-gate after inherited deployment-ownership assertion correction.
 import test from 'node:test'; import assert from 'node:assert/strict'; import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 test('Day 8 files exist and public GalviCare remains separate',()=>{for(const p of ['worker/day8-entry.js','worker/auth/operator-identity.js','worker/routes/operator-auth.js','worker/routes/operator-workspace.js','clinician-portal/index.html','clinician-portal/app.js','clinician-portal/styles.css','wrangler.day8.json','migrations/day8/0006_operator_device_auth.sql','migrations/day8/0007_second_galviclinician_invitation.sql'])assert.ok(fs.existsSync(p));assert.ok(!read('worker/day8-entry.js').includes("'./worker.js'"));});

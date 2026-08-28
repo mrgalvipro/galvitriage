@@ -10,13 +10,14 @@ const day1 = JSON.parse(readFileSync(new URL('../wrangler.json', import.meta.url
 const day2 = JSON.parse(readFileSync(new URL('../wrangler.day2.json', import.meta.url), 'utf8'));
 const day3 = JSON.parse(readFileSync(new URL('../wrangler.day3.json', import.meta.url), 'utf8'));
 
-test('D3-A01 Days 1-3 advance one GalviVault QA Worker authority while preserving GalviCare and Production separation', () => {
+test('D3-A01 cumulative Days 1-3 authority is preserved while the legacy Day 2 redeploy target remains isolated from the cumulative QA Worker', () => {
   assert.equal(day1.name, 'galvivault-p0-day1-qa');
   assert.equal(day1.main, 'worker/day1.js');
   assert.equal(day1.vars.MIN_SCHEMA_VERSION, '0001');
-  assert.equal(day2.name, 'galvivault-p0-day1-qa');
+  assert.equal(day2.name, 'galvivault-p0-day2-qa-legacy');
   assert.equal(day2.main, 'worker/day2.js');
   assert.equal(day2.vars.MIN_SCHEMA_VERSION, '0002');
+  assert.notEqual(day2.name, day3.name, 'legacy Day 2 workflow must not overwrite the cumulative Day 3+ QA Worker');
   assert.equal(day3.name, 'galvivault-p0-day1-qa');
   assert.equal(day3.main, 'worker/day3-entry.js');
   assert.equal(day3.vars.ENVIRONMENT, 'qa');
