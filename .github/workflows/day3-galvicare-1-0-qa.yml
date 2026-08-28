@@ -1,63 +1,43 @@
-name: GalviStudio GalviCare 1.0 Day 3 QA Critical Path
+name: GalviStudio GalviCare 1.0 Day 3 Regression Validator
 
+# Day 5+ cumulative QA runtime ownership:
+# - The existing galvivault-p0-day1-qa Worker is deployed by the cumulative Day 5
+#   governed-care workflow.
+# - This legacy Day 3 workflow is retained only as an on-demand regression validator.
+# - It must never automatically replace the cumulative Day 4/Day 5 runtime.
 on:
   workflow_dispatch:
-  push:
-    branches: [qa-revamped-galvicare-0-5]
-    paths:
-      - worker/day3-galvicare-1-0.js
-      - migrations/day1/0103_galvicare_1_0_day3_governed_ai.sql
-      - tests/day3-galvicare-1-0.test.mjs
-      - wrangler.galvicare-day3.json
-      - .github/workflows/day3-galvicare-1-0-qa.yml
 
 permissions:
   contents: read
 
 concurrency:
-  group: galvicare-1-0-day3-qa
+  group: galvicare-day3-regression-validator
   cancel-in-progress: true
 
-env:
-  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-  SIGNED_DAY2_SHA: ac514d37c37421e471656c08685b3785d83fd5b6
-  QA_WORKER_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
-
 jobs:
-  day3-critical-path:
+  day3-regression:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 20
     steps:
-      - name: Checkout exact existing QA ref candidate
+      - name: Checkout requested QA candidate
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
-      - name: T01-T02 branch, ancestry, scope guard
+      - name: Prove approved QA ref and no work/main deployment lane
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REPOSITORY}" = "mrgalvipro/galvitriage"
-          test "${GITHUB_REF_NAME}" = "qa-revamped-galvicare-0-5"
-          test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
+          test "$GITHUB_REPOSITORY" = "mrgalvipro/galvitriage"
+          test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
           test "$(git branch --show-current)" != "work"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
-          git merge-base --is-ancestor "${SIGNED_DAY2_SHA}" "${GITHUB_SHA}"
-          echo "PASS: existing QA ref is authoritative; signed Day 2 is an ancestor; no new/work branch used."
+          echo 'PASS: Day 3 validator is read/test-only; cumulative Day 5 owns QA deployment.'
 
-      - name: Production and secret source guard
-        shell: bash
-        run: |
-          set -euo pipefail
-          git diff --name-only "${GITHUB_SHA}^..${GITHUB_SHA}" | tee /tmp/day3-changed.txt
-          allowed='^(worker/day3-galvicare-1-0\.js|migrations/day1/0103_galvicare_1_0_day3_governed_ai\.sql|tests/day3-galvicare-1-0\.test\.mjs|wrangler\.galvicare-day3\.json|\.github/workflows/day3-galvicare-1-0-qa\.yml)$'
-          if grep -Ev "$allowed" /tmp/day3-changed.txt; then echo 'FAIL: non-critical-path file in candidate'; exit 1; fi
-          if git grep -nE 'sk-[A-Za-z0-9_-]{20,}' -- ':!docs/**' ':!release-evidence/**'; then echo 'FAIL: possible API key committed'; exit 1; fi
-          if grep -RniE 'api\.openai\.com|OPENAI_API_KEY' --include='*.html' --include='*browser*.js' .; then echo 'FAIL: browser-to-OpenAI reference'; exit 1; fi
-
-      - name: Setup Node
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
           node-version: '22'
@@ -65,160 +45,33 @@ jobs:
       - name: Install repository dependencies
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: T03-T25 local Day 3 governed AI gate
+      - name: Verify canonical Day 3 entrypoint contract
+        shell: bash
         run: |
+          set -euo pipefail
+          node -e "const w=require('./wrangler.galvicare-day3.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day3-unified-customer-api.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.AI_ENABLED!=='true') process.exit(1)"
           node --check worker/day3-galvicare-1-0.js
-          node --check tests/day3-galvicare-1-0.test.mjs
+          node --check worker/day3-unified-customer-api.js
+
+      - name: Day 3 governed-AI and clarification regression
+        run: |
           node --test tests/day3-galvicare-1-0.test.mjs
+          node --test tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs
+          node --test tests/day4-galvicare-1-0.test.mjs
 
-      - name: T26-T27 inherited deterministic regression
-        run: |
-          node --test tests/day1-foundation.test.mjs tests/day1-galvicare-1-0.test.mjs tests/day1-human-e2e-surface.test.mjs tests/day1-prefounder-customer.test.mjs
-          node --test tests/day2-worker.test.mjs tests/galvivault-day2-identity-continuity.test.mjs tests/day2-galvicare-1-0.test.mjs
-          npm run stabilization:gate
-          npm run test:day8
-          npm run test:day9
-
-      - name: Verify QA OpenAI secret exists without exposing value
+      - name: Confirm validator cannot deploy or mutate D1
         shell: bash
         run: |
           set -euo pipefail
-          npx --yes wrangler@4 secret list --config wrangler.galvicare-day3.json > /tmp/day3-secrets.json
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const p=JSON.parse(fs.readFileSync('/tmp/day3-secrets.json','utf8'));
-          if(!Array.isArray(p) || !p.some(x=>x?.name==='OPENAI_API_KEY')) throw new Error('P0 BLOCKER: OPENAI_API_KEY is not configured as a secret on the existing QA Worker.');
-          console.log('PASS: QA Worker has OPENAI_API_KEY secret; value not exposed.');
-          NODE
+          if grep -nE 'wrangler(@[^ ]+)?[[:space:]]+(deploy|d1 execute|versions deploy)|CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID' .github/workflows/day3-galvicare-1-0-qa.yml | grep -v 'grep -nE'; then
+            echo 'FAIL: legacy Day 3 validator contains deploy/D1 mutation capability.' >&2
+            exit 1
+          fi
+          echo 'PASS: no automatic deployment, D1 mutation, rollback, or Worker replacement exists in the legacy Day 3 validator.'
 
-      - name: Verify inherited QA schema then apply additive 0103 only
-        shell: bash
+      - name: Validation summary
         run: |
-          set -euo pipefail
-          npx --yes wrangler@4 d1 execute galvivault-0-5-qa --remote --config wrangler.galvicare-day3.json --json --command="SELECT migration_id,environment FROM gv1_schema_migrations WHERE migration_id IN ('0100','0101','0102') ORDER BY migration_id" > /tmp/day3-schema-before.json
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const p=JSON.parse(fs.readFileSync('/tmp/day3-schema-before.json','utf8')); const rows=[];
-          const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){if(v.migration_id)rows.push(v);Object.values(v).forEach(walk)}};walk(p);
-          for(const id of ['0100','0101','0102']) if(!rows.some(x=>x.migration_id===id&&x.environment==='qa')) throw new Error(`Missing inherited QA migration ${id}`);
-          NODE
-          npx --yes wrangler@4 d1 execute galvivault-0-5-qa --remote --config wrangler.galvicare-day3.json --file=migrations/day1/0103_galvicare_1_0_day3_governed_ai.sql
-
-      - name: Build exact-SHA runtime config
-        run: |
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import path from 'node:path';
-          const c=JSON.parse(fs.readFileSync('wrangler.galvicare-day3.json','utf8'));
-          c.main=path.resolve(c.main);
-          c.vars={...(c.vars||{}),COMMIT_SHA:process.env.GITHUB_SHA,AI_ENABLED:'true'};
-          fs.writeFileSync('/tmp/wrangler.day3.runtime.json',JSON.stringify(c,null,2));
-          NODE
-
-      - name: Deploy exact candidate to existing QA Worker
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx --yes wrangler@4 deploy --config /tmp/wrangler.day3.runtime.json 2>&1 | tee /tmp/day3-deploy.log
-
-      - name: H01 exact runtime convergence
-        shell: bash
-        run: |
-          set -euo pipefail
-          for n in $(seq 1 50); do
-            if curl -fsS "${QA_WORKER_URL}/health?sha=${GITHUB_SHA}&n=${n}" > /tmp/day3-health.json && node --input-type=module <<'NODE'
-          import fs from 'node:fs'; const p=JSON.parse(fs.readFileSync('/tmp/day3-health.json','utf8'));
-          const c=p?.data?.capabilities||{};
-          if(p?.success!==true||p?.environment!=='qa'||p?.data?.release_version!=='galvicare_1_0_day3'||p?.data?.galvicare_schema_version!=='0103'||p?.data?.commit_sha!==process.env.GITHUB_SHA||c.ai_enabled!==true||c.provider_configured!==true||c.deterministic_fallback!==true)process.exit(1);
-          NODE
-            then cat /tmp/day3-health.json; exit 0; fi
-            sleep 3
-          done
-          echo 'FAIL: exact Day 3 runtime/provider state did not converge'; exit 1
-
-      - name: H02-H17 deployed founder + governed AI path
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import assert from 'node:assert/strict';
-          const base=process.env.QA_WORKER_URL, run=`h${process.env.GITHUB_RUN_ID}_${process.env.GITHUB_RUN_ATTEMPT}`, suffix=`day3_${run}`, actor=`principal:${suffix}`;
-          async function q(path,{method='GET',key,body,who=actor}={}){const h={Origin:'https://galvipro.com','X-Correlation-Id':`corr-${run}-${Date.now()}`,'X-Galvi-Day1-Actor':who};if(key)h['Idempotency-Key']=key;if(body!==undefined)h['Content-Type']='application/json';const r=await fetch(base+path,{method,headers:h,...(body!==undefined?{body:JSON.stringify(body)}:{})});let p={};try{p=await r.json()}catch{};return{r,p}}
-          const ctx=await q('/api/v1/principal-contexts',{method:'POST',key:`ctx-${run}`,body:{email:`day1.${suffix}@example.invalid`,lifecycle_state:'founder',record_mode:'principal_plus_venture',care_protocol:'founder_smb',payer_type:'self',venture_name:`Day3 ${run}`}});assert.equal(ctx.r.status,201);const c=ctx.p.data.context.context_id,f=ctx.p.data.principal.founder_id,b=ctx.p.data.context.bmr_id;
-          assert.ok(b);
-          assert.equal((await q('/api/v1/consents',{method:'POST',key:`cns-${run}`,body:{founder_id:f,bmr_id:b,purpose:'care_processing',policy_version:'day3_qa_v1',status:'granted'}})).r.status,201);
-          const acuity={severity:1,urgency:1,continuity:1,reversibility:1,complexity:1}, confidence={required_data_completeness:95,evidence_quality:90,answer_consistency:95,corroboration:90,context_completeness:95};
-          const tri=await q('/api/v1/day2/triage',{method:'POST',key:`tri-${run}`,body:{context_id:c,acuity,confidence,answers:{note:'Strong product retention but inconsistent distribution and weak revenue evidence.'}}});assert.equal(tri.r.status,201);
-          const dims={revenue:42,customer:65,product:82,leadership:70,technology:72,distribution:38,problem:80,business_model:68};assert.equal((await q('/api/v1/day2/vitals',{method:'POST',key:`vit-${run}`,body:{context_id:c,dimensions:dims,confidence}})).r.status,201);assert.equal((await q('/api/v1/day2/score',{method:'POST',key:`score-${run}`,body:{context_id:c}})).r.status,201);
-          const shot=await q('/api/v1/day3/shot',{method:'POST',body:{context_id:c,current_stage:'GalviShot'}});assert.ok([200,201].includes(shot.r.status));
-          const shotDiag={generation_source:shot.p?.data?.generation_source,reason:shot.p?.data?.content?.reason,ai_status:shot.p?.meta?.ai_status,provider_error_code:shot.p?.meta?.provider_error_code,generation_id:shot.p?.data?.generation_id};console.log('DAY3_SHOT_DIAGNOSTIC '+JSON.stringify(shotDiag));
-          assert.ok(['openai_governed','stored'].includes(shot.p.data.generation_source),`Expected governed provider result; got ${JSON.stringify(shotDiag)}`);assert.ok(shot.p.data.supporting_evidence_ids.length>0);
-          const replay=await q('/api/v1/day3/shot',{method:'POST',body:{context_id:c,current_stage:'GalviShot'}});assert.equal(replay.r.status,200);assert.equal(replay.p.data.generation_source,'stored');assert.equal(replay.p.data.artifact_id,shot.p.data.artifact_id);
-          const sight=await q('/api/v1/day3/sight',{method:'POST',body:{context_id:c,current_stage:'GalviSight'}});assert.ok([200,201].includes(sight.r.status));const sightContent=sight.p?.data?.content||{},sightSource=sight.p?.data?.generation_source;assert.ok((['openai_governed','stored'].includes(sightSource)&&typeof sightContent.summary==='string'&&sightContent.summary.trim().length>0)||(sightSource==='rules'&&sightContent.fallback===true&&sightContent.deterministic&&typeof sightContent.deterministic==='object'),`Expected schema-valid governed GalviSight synthesis or explicit deterministic fallback; got ${JSON.stringify({generation_source:sightSource,content:sightContent})}`);
-          const path=await q('/api/v1/day3/path',{method:'POST',body:{context_id:c,current_stage:'GalviPath'}});assert.ok([200,201].includes(path.r.status));assert.ok(path.p.data.content.objective);assert.equal(/treatment (is )?confirmed/i.test(JSON.stringify(path.p.data.content)),false);
-          const lowSuffix=`low_${run}`, lowActor=`principal:${lowSuffix}`;const lowCtx=await q('/api/v1/principal-contexts',{method:'POST',key:`lowctx-${run}`,who:lowActor,body:{email:`day1.${lowSuffix}@example.invalid`,lifecycle_state:'pre_founder',record_mode:'principal_only',care_protocol:'athlete_career_ownership',payer_type:'self'}});assert.equal(lowCtx.r.status,201);assert.equal(lowCtx.p.data.context.bmr_id,null);const lc=lowCtx.p.data.context.context_id,lf=lowCtx.p.data.principal.founder_id;await q('/api/v1/consents',{method:'POST',key:`lowcns-${run}`,who:lowActor,body:{founder_id:lf,purpose:'care_processing',policy_version:'day3_qa_v1',status:'granted'}});const lowConf={required_data_completeness:30,evidence_quality:25,answer_consistency:40,corroboration:20,context_completeness:35};await q('/api/v1/day2/triage',{method:'POST',key:`lowtri-${run}`,who:lowActor,body:{context_id:lc,acuity,confidence:lowConf}});const rd={clarity:70,runway:60,time:60,capability:65,network:55,domain_knowledge:70,opportunity_evidence:55,decision_confidence:60,leadership_readiness:65,operating_willingness:75};await q('/api/v1/day2/vitals',{method:'POST',key:`lowvit-${run}`,who:lowActor,body:{context_id:lc,dimensions:rd,confidence:lowConf}});await q('/api/v1/day2/score',{method:'POST',key:`lowscore-${run}`,who:lowActor,body:{context_id:lc}});const lowAi=await q('/api/v1/day3/shot',{method:'POST',who:lowActor,body:{context_id:lc,current_stage:'GalviShot'}});assert.equal(lowAi.p.status,'needs_evidence');assert.equal(lowAi.p.data.bmr_id,null);
-          const other=`other_${run}`, otherActor=`principal:${other}`;const oc=await q('/api/v1/principal-contexts',{method:'POST',key:`octx-${run}`,who:otherActor,body:{email:`day1.${other}@example.invalid`,lifecycle_state:'founder',record_mode:'principal_plus_venture',care_protocol:'founder_smb',payer_type:'self',venture_name:`Other ${run}`}});const of=oc.p.data.principal.founder_id,ob=oc.p.data.context.bmr_id,oid=oc.p.data.context.context_id;await q('/api/v1/consents',{method:'POST',key:`ocns-${run}`,who:otherActor,body:{founder_id:of,bmr_id:ob,purpose:'care_processing',policy_version:'day3_qa_v1',status:'granted'}});const ot=await q('/api/v1/day2/triage',{method:'POST',key:`otri-${run}`,who:otherActor,body:{context_id:oid,acuity,confidence}});const foreign=ot.p.data.supporting_evidence_ids[0];const cross=await q('/api/v1/day3/shot',{method:'POST',body:{context_id:c,current_stage:'GalviShot',evidence_ids:[foreign]}});assert.equal(cross.r.status,403);
-          const reg=await q('/api/v1/day2/triage',{method:'POST',key:`reg-${run}`,body:{context_id:c,acuity,confidence,red_flags:['regulated_professional_dependency']}});assert.equal(reg.p.data.override_route,'referral_required');const regAi=await q('/api/v1/day3/shot',{method:'POST',body:{context_id:c,current_stage:'GalviShot'}});assert.equal(regAi.p.status,'referral_required');
-          console.log(JSON.stringify({run,context_id:c,bmr_id:b,shot_artifact_id:shot.p.data.artifact_id},null,2));
-          NODE
-
-      - name: H18-H21 post-change regressions and D1-1-D1-14
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --test tests/day2-galvicare-1-0.test.mjs
-          npm run test:day8
-          SQL="SELECT COUNT(*) AS bad_scope FROM gv1_day3_ai_generations g JOIN gv1_principal_contexts c ON c.context_id=g.context_id WHERE g.founder_id<>c.founder_id OR COALESCE(g.bmr_id,'')<>COALESCE(c.bmr_id,''); SELECT COUNT(*) AS bad_evidence FROM gv1_day3_generation_evidence ge JOIN gv1_day3_ai_generations g ON g.generation_id=ge.generation_id LEFT JOIN gv1_principal_evidence_items p ON ge.evidence_kind='principal' AND p.evidence_id=ge.evidence_id LEFT JOIN gv1_evidence_items b ON ge.evidence_kind='bmr' AND b.evidence_id=ge.evidence_id WHERE (ge.evidence_kind='principal' AND (p.evidence_id IS NULL OR p.founder_id<>g.founder_id)) OR (ge.evidence_kind='bmr' AND (b.evidence_id IS NULL OR b.bmr_id<>g.bmr_id)); SELECT COUNT(*) AS bad_projection FROM gv1_day3_ai_generations WHERE validation_status<>'accepted' AND customer_projection<>0; SELECT COUNT(*) AS day2_mutated FROM gv1_day2_intake_results WHERE generation_source<>'rules'; SELECT COUNT(*) AS duplicate_artifact FROM (SELECT request_fingerprint FROM gv1_day3_governed_artifacts GROUP BY request_fingerprint HAVING COUNT(*)>1); SELECT COUNT(*) AS prefounder_bmr FROM gv1_day3_ai_generations g JOIN gv1_principal_contexts c ON c.context_id=g.context_id WHERE c.record_mode='principal_only' AND g.bmr_id IS NOT NULL; SELECT COUNT(*) AS leaked_secret FROM gv1_day3_ai_generations WHERE COALESCE(proposal_json,'') LIKE '%OPENAI_API_KEY%' OR COALESCE(validation_errors_json,'') LIKE '%Bearer %'; SELECT COUNT(*) AS schema_0103 FROM gv1_schema_migrations WHERE migration_id='0103' AND environment='qa';"
-          npx --yes wrangler@4 d1 execute galvivault-0-5-qa --remote --config wrangler.galvicare-day3.json --json --command="$SQL" > /tmp/day3-d1.json
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';const p=JSON.parse(fs.readFileSync('/tmp/day3-d1.json','utf8'));const rows=[];const walk=v=>{if(Array.isArray(v))v.forEach(walk);else if(v&&typeof v==='object'){rows.push(v);Object.values(v).forEach(walk)}};walk(p);for(const k of ['bad_scope','bad_evidence','bad_projection','day2_mutated','duplicate_artifact','prefounder_bmr','leaked_secret']){const v=rows.find(x=>Object.hasOwn(x,k))?.[k];if(Number(v)!==0)throw new Error(`${k}=${v}`)}const s=rows.find(x=>Object.hasOwn(x,'schema_0103'))?.schema_0103;if(Number(s)!==1)throw new Error(`schema_0103=${s}`);console.log('PASS: D1 integrity subset proves D1-1 through D1-14 critical invariants clean.');
-          NODE
-
-      - name: H22 provider-disable and Day 2 rollback rehearsal
-        shell: bash
-        run: |
-          set -euo pipefail
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          import path from 'node:path';
-          const d3=JSON.parse(fs.readFileSync('wrangler.galvicare-day3.json','utf8'));d3.main=path.resolve(d3.main);d3.vars={...(d3.vars||{}),COMMIT_SHA:process.env.GITHUB_SHA,AI_ENABLED:'false'};fs.writeFileSync('/tmp/wrangler.day3.disabled.json',JSON.stringify(d3,null,2));const d2=JSON.parse(fs.readFileSync('wrangler.galvicare-day2.json','utf8'));d2.main=path.resolve(d2.main);d2.vars={...(d2.vars||{}),COMMIT_SHA:process.env.SIGNED_DAY2_SHA};fs.writeFileSync('/tmp/wrangler.day2.rollback.json',JSON.stringify(d2,null,2));
-          NODE
-          npx --yes wrangler@4 deploy --config /tmp/wrangler.day3.disabled.json >/tmp/day3-disable.log 2>&1
-          sleep 5
-          curl -fsS "${QA_WORKER_URL}/health?disable=1" > /tmp/day3-disabled-health.json
-          node --input-type=module -e "import fs from 'node:fs';const p=JSON.parse(fs.readFileSync('/tmp/day3-disabled-health.json','utf8'));if(p?.data?.capabilities?.ai_enabled!==false||p?.data?.capabilities?.deterministic_fallback!==true)process.exit(1)"
-          npx --yes wrangler@4 deploy --config /tmp/wrangler.day2.rollback.json >/tmp/day3-day2-rollback.log 2>&1
-          sleep 5
-          curl -fsS "${QA_WORKER_URL}/health?rollback=1" > /tmp/day3-day2-health.json
-          node --input-type=module -e "import fs from 'node:fs';const p=JSON.parse(fs.readFileSync('/tmp/day3-day2-health.json','utf8'));if(p?.data?.release_version!=='galvicare_1_0_day2'||p?.data?.capabilities?.ai_enabled!==false)process.exit(1)"
-          npx --yes wrangler@4 deploy --config /tmp/wrangler.day3.runtime.json >/tmp/day3-restore.log 2>&1
-          sleep 5
-          curl -fsS "${QA_WORKER_URL}/health?restore=1" > /tmp/day3-final-health.json
-          node --input-type=module -e "import fs from 'node:fs';const p=JSON.parse(fs.readFileSync('/tmp/day3-final-health.json','utf8'));if(p?.data?.release_version!=='galvicare_1_0_day3'||p?.data?.commit_sha!==process.env.GITHUB_SHA||p?.data?.capabilities?.ai_enabled!==true)process.exit(1)"
-
-      - name: Final Day 3 gate summary
-        run: |
-          echo 'DAY 3 AUTOMATED + DEPLOYED E2E GATE PASS' | tee /tmp/day3-final.txt
-          echo "candidate_sha=${GITHUB_SHA}" | tee -a /tmp/day3-final.txt
-          echo 'branch=qa-revamped-galvicare-0-5' | tee -a /tmp/day3-final.txt
-          echo 'new_branch_created=NO' | tee -a /tmp/day3-final.txt
-          echo 'main_touched=NO' | tee -a /tmp/day3-final.txt
-          echo 'production_touched=NO' | tee -a /tmp/day3-final.txt
-          echo 'manual_repair=NO' | tee -a /tmp/day3-final.txt
-          cat /tmp/day3-final.txt >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload evidence
-        uses: actions/upload-artifact@v4
-        with:
-          name: galvicare-1-0-day3-${{ github.sha }}
-          path: |
-            /tmp/day3-changed.txt
-            /tmp/day3-secrets.json
-            /tmp/day3-schema-before.json
-            /tmp/day3-deploy.log
-            /tmp/day3-health.json
-            /tmp/day3-d1.json
-            /tmp/day3-disabled-health.json
-            /tmp/day3-day2-health.json
-            /tmp/day3-final-health.json
-            /tmp/day3-final.txt
+          echo 'DAY 3 REGRESSION VALIDATOR PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- QA deployment owner: cumulative Day 5 workflow' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Legacy Day 3 automatic deployer: retired' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Clarification/governed-AI regression: validated' >> "$GITHUB_STEP_SUMMARY"
