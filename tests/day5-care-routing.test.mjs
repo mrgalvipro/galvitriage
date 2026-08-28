@@ -14,8 +14,8 @@ test('H02/H06/H08 canonical route remains server owned and inherited clarificati
   assert.equal(/\bINSERT\b|\bUPDATE\b|\bDELETE\b/i.test(resolver),false);
 });
 
-test('H06 GalviGuide uses server-side governed Responses API with strict schema and deterministic fallback',()=>{
-  for(const required of ['GUIDE_AI_INTENTS','supportive_explanation','care_conversation','clinic_prep','https://api.openai.com/v1/responses','OPENAI_API_KEY','OPENAI_MODEL_QA','store:false','AbortController','GUIDE_SCHEMA','GUIDE_UNSAFE_OUTPUT','guideFallback','governedGuideNarration',"galviguide_customer_navigation:'governed_ai_bounded_v1'","galviguide_provider:'server_side_openai_responses_v1'","guide_version:'governed_ai_narration_v1'"])assert.ok(core.includes(required),required);
+test('H06 GalviGuide uses server-side governed Responses API with strict schema and deterministic fallback while navigation remains bounded read-only',()=>{
+  for(const required of ['GUIDE_AI_INTENTS','supportive_explanation','care_conversation','clinic_prep','https://api.openai.com/v1/responses','OPENAI_API_KEY','OPENAI_MODEL_QA','store:false','AbortController','GUIDE_SCHEMA','GUIDE_UNSAFE_OUTPUT','guideFallback','governedGuideNarration',"galviguide_customer_navigation:'bounded_read_only_v1'","galviguide_provider:'server_side_openai_responses_v1'","guide_version:'governed_ai_narration_v1'"])assert.ok(core.includes(required),required);
   const guide=section(core,'async function customerGalviGuide','const worker=');
   assert.equal(/\bINSERT\b|\bUPDATE\b|\bDELETE\b/i.test(guide),false);
   assert.ok(guide.includes('canonical_source'));
@@ -30,6 +30,7 @@ test('H07 prohibited score diagnosis treatment and licensed-advice authority fai
 
 test('H02 clarification transition remains protected and browser invokes AI only through Worker GalviGuide',()=>{
   for(const required of ['FOLLOWUP_PANELS','followupActive','resultReady','routeFingerprint','insertPanelSafely','stageHosts','galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup','galvisight-result-panel','galvisight-handoff','galvipath-result-panel','galvipath-result',"row.insertAdjacentElement('beforebegin',panel)",'if(followupActive()){cached=null;return null}',"observer.observe(document.body,{subtree:true,childList:true,attributes:true",'node.getClientRects().length>0','data-day5-guide-send',"requestGuide(detail,'care_conversation',message)",'testBoundary'])assert.ok(browser.includes(required),required);
+  assert.ok(browser.includes('GalviCare Day 5 customer care routing + GalviGuide v1'));
   assert.ok(browser.includes('/api/v1/day5/customer/galviguide'));
   assert.ok(browser.includes("api('explain_route')"));
   assert.equal(/api\.openai\.com|OPENAI_API_KEY|bmr_id\s*:/.test(browser),false);
