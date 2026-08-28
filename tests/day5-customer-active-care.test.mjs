@@ -53,5 +53,5 @@ test('H19 browser acknowledges physician-authored plan and submits one idempoten
   assert.equal(/api\.openai\.com|OPENAI_API_KEY/.test(browser),false);
   assert.equal(/bmr_id\s*:/.test(browser),false);
   assert.ok(build.includes('GalviCare Day 5 customer Treatment Plan acknowledgement v1'));
-  assert.ok(build.includes('without browser BMR/OpenAI authority'));
+  assert.ok(build.includes('without browser score/Acuity/BMR/OpenAI authority'));
 });
