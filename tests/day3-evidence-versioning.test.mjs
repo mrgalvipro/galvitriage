@@ -10,18 +10,19 @@ const day1 = JSON.parse(readFileSync(new URL('../wrangler.json', import.meta.url
 const day2 = JSON.parse(readFileSync(new URL('../wrangler.day2.json', import.meta.url), 'utf8'));
 const day3 = JSON.parse(readFileSync(new URL('../wrangler.day3.json', import.meta.url), 'utf8'));
 
-test('D3-A01 cumulative Days 1-3 authority is preserved while the legacy Day 2 redeploy target remains isolated from the cumulative QA Worker', () => {
+test('D3-A01 cumulative Day 3 logic remains available while legacy Day 2/Day 3 deploy targets cannot overwrite the cumulative Day 5 QA Worker', () => {
   assert.equal(day1.name, 'galvivault-p0-day1-qa');
   assert.equal(day1.main, 'worker/day1.js');
   assert.equal(day1.vars.MIN_SCHEMA_VERSION, '0001');
   assert.equal(day2.name, 'galvivault-p0-day2-qa-legacy');
   assert.equal(day2.main, 'worker/day2.js');
   assert.equal(day2.vars.MIN_SCHEMA_VERSION, '0002');
-  assert.notEqual(day2.name, day3.name, 'legacy Day 2 workflow must not overwrite the cumulative Day 3+ QA Worker');
-  assert.equal(day3.name, 'galvivault-p0-day1-qa');
+  assert.equal(day3.name, 'galvivault-p0-day3-qa-legacy');
   assert.equal(day3.main, 'worker/day3-entry.js');
   assert.equal(day3.vars.ENVIRONMENT, 'qa');
   assert.equal(day3.vars.MIN_SCHEMA_VERSION, '0003');
+  assert.notEqual(day2.name, day1.name, 'legacy Day 2 workflow must not overwrite the cumulative QA Worker');
+  assert.notEqual(day3.name, day1.name, 'legacy Day 3 workflow must not overwrite the cumulative QA Worker');
   for (const config of [day1, day2, day3]) {
     const binding = config.d1_databases.find((item) => item.binding === 'DB');
     assert.equal(binding.database_name, 'galvivault-0-5-qa');
@@ -56,8 +57,6 @@ test('EV-001/002 typed evidence contract is explicit and exactly-one validation 
 
 test('EV-004 acceptance and immutable correction paths are separated', () => {
   assert.ok(source.includes("SET status='accepted'"));
-  // The cumulative Day 3 entry owns PATCH/PUT immutability interception so accepted
-  // evidence is rejected before normal evidence commands reach worker/day3.js.
   assert.ok(entry.includes('GV_EVIDENCE_IMMUTABLE'));
   assert.ok(entry.includes('immutableMutation'));
   assert.ok(source.includes("relationship_type='corrects'") || source.includes("'corrects'"));
