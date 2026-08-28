@@ -4,22 +4,20 @@
  * It does not recompute Score/Acuity, does not call OpenAI, does not submit BMR
  * authority, and does not alter the Day 3/Day7D clarification or governed-AI routes.
  *
- * H02-H08 runtime remediation:
- * - Never query/render care routing while a Score/Shot/Sight/Path clarification is active.
+ * Runtime remediation:
+ * - Never query/render care routing while a visible Score/Shot/Sight/Path clarification is active.
+ * - Hidden/stale question DOM does not suppress the completed result surface.
  * - Discard any route response that races with a clarification transition.
- * - Resolve every connected result host, then render only the actually visible one; do
- *   not let a hidden governed-AI compatibility host mask the visible customer surface.
+ * - Resolve every connected result host, then render only the actually visible one.
  * - Project the same server-owned care route into the activated GalviChart.
  * - Render idempotently and insert relative to the actual button-row parent.
  */
 (()=>{
   'use strict';
-  /* Stable v1 signature is intentionally preserved because the cumulative frontend
-   * composer uses it to replace, rather than duplicate, the already-injected adapter. */
   const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v1';
   const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev';
   const SESSION_HEADER='X-Galvi-Day3-Session';
-  const FOLLOWUP_IDS=['followup-question-container','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions'];
+  const FOLLOWUP_PANELS=['galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup'];
   const text=(value)=>String(value??'').trim();
   const byId=(id)=>document.getElementById(id);
   const esc=(value)=>String(value??'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -101,8 +99,16 @@
   }
 
   function bind(panel){panel?.querySelector('[data-day5-guide-open]')?.addEventListener('click',event=>{byId(event.currentTarget.dataset.day5GuideOpen)?.classList.toggle('hidden');});}
-  function visible(node){if(!node||!node.isConnected)return false;const style=getComputedStyle(node);return !node.classList.contains('hidden')&&style.display!=='none'&&style.visibility!=='hidden';}
-  function followupActive(){return FOLLOWUP_IDS.some(id=>{const host=byId(id);return visible(host)&&Boolean(host.querySelector('textarea,[data-question-id],[data-question-code]'));});}
+  function visible(node){
+    if(!node||!node.isConnected)return false;
+    for(let current=node;current&&current.nodeType===1;current=current.parentElement){
+      if(current.hidden||current.classList?.contains('hidden'))return false;
+      const style=getComputedStyle(current);
+      if(style.display==='none'||style.visibility==='hidden')return false;
+    }
+    return node.getClientRects().length>0;
+  }
+  function followupActive(){return FOLLOWUP_PANELS.some(id=>{const panel=byId(id);return visible(panel)&&Boolean(panel.querySelector('textarea,[data-question-id],[data-question-code]'));});}
   function stageHosts(){
     const ids=['galviscore-result','galvishot-result','galvisight-result-panel','galvisight-handoff','galvipath-result-panel','galvipath-result','galvichart-day4'];
     return ids.map(byId).filter((host,index,array)=>host?.isConnected&&array.indexOf(host)===index);
@@ -131,7 +137,7 @@
   async function refresh(force=false){
     if(followupActive()){cached=null;return null}if(inFlight)return inFlight;if(cached&&!force){render(cached);return cached}
     inFlight=(async()=>{const route=await api('explain_route');if(followupActive()){cached=null;return null}cached=route;retryCount=0;render(route);return route;})();
-    try{return await inFlight}catch(error){if(error?.code==='GV_DAY5_CARE_ROUTE_NOT_READY'||error?.status===409)scheduleRetry();else console.warn(SIGNATURE,error?.code||'',error?.message||error);throw error}finally{inFlight=null}
+    try{return await inFlight}catch(error){if(error?.code==='GV_DAY5_CARE_ROUTE_NOT_READY'||error?.status===404||error?.status===409)scheduleRetry();else console.warn(SIGNATURE,error?.code||'',error?.message||error);throw error}finally{inFlight=null}
   }
   function install(){
     installStyle();

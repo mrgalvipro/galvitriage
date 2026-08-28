@@ -25,6 +25,23 @@ test('H06-H08 browser shows canonical Acuity/GalviGuide routing without replacin
   assert.ok(build.includes('server-owned Acuity/GalviGuide routing'));
 });
 
+test('H02/H06 hidden completed clarification DOM cannot suppress canonical Score metadata or care routing',()=>{
+  for(const required of [
+    "byId('galviscore-followup')",
+    'for(let current=node;current&&current.nodeType===1;current=current.parentElement)',
+    "current.classList?.contains('hidden')",
+    'node.getClientRects().length>0'
+  ]) assert.ok(metadata.includes(required),`metadata: ${required}`);
+  for(const required of [
+    "FOLLOWUP_PANELS=['galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup']",
+    'for(let current=node;current&&current.nodeType===1;current=current.parentElement)',
+    "current.classList?.contains('hidden')",
+    'node.getClientRects().length>0',
+    "error?.status===404||error?.status===409"
+  ]) assert.ok(routing.includes(required),`routing: ${required}`);
+  assert.equal(routing.includes("FOLLOWUP_IDS=['followup-question-container'"),false);
+});
+
 test('H02/H06 Score metadata projection is canonical, clarification-safe and DOM-idempotent',()=>{
   for(const required of [
     'GalviCare Day 5 canonical GalviScore metadata v1','/api/v1/day5/customer/score-metadata',

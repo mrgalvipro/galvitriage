@@ -7,7 +7,9 @@
  * - rendering is fingerprinted/idempotent so this adapter cannot trigger its own
  *   MutationObserver forever;
  * - blank metadata fields render an explicit unavailable state rather than a silent blank;
- * - canonical refresh remains blocked while the inherited Score clarification is active.
+ * - canonical refresh remains blocked only while the inherited Score clarification
+ *   panel is actually visible. A stale textarea retained inside a hidden follow-up
+ *   panel must never suppress Acuity/Classification after clarification completes.
  */
 (()=>{
   'use strict';
@@ -21,8 +23,19 @@
     :text(localStorage.getItem('galvicare_session_id')||localStorage.getItem('galvishot_session_id'));
   let inFlight=null,cached=null,retry=null,retryCount=0,lastFingerprint='';
 
-  function visible(node){if(!node||!node.isConnected)return false;const style=getComputedStyle(node);return !node.classList.contains('hidden')&&style.display!=='none'&&style.visibility!=='hidden';}
-  function clarificationActive(){const host=byId('followup-question-container');return visible(host)&&Boolean(host.querySelector('textarea,[data-question-id],[data-question-code]'));}
+  function visible(node){
+    if(!node||!node.isConnected)return false;
+    for(let current=node;current&&current.nodeType===1;current=current.parentElement){
+      if(current.hidden||current.classList?.contains('hidden'))return false;
+      const style=getComputedStyle(current);
+      if(style.display==='none'||style.visibility==='hidden')return false;
+    }
+    return node.getClientRects().length>0;
+  }
+  function clarificationActive(){
+    const panel=byId('galviscore-followup'),host=byId('followup-question-container');
+    return visible(panel)&&Boolean(host?.querySelector('textarea,[data-question-id],[data-question-code]'));
+  }
   function scoreVisible(){return visible(byId('galviscore-result'))&&!clarificationActive();}
   function label(value){return text(value).replaceAll('_',' ').replace(/\b\w/g,c=>c.toUpperCase());}
   function acuityLabel(band){return ({green:'Green — routine',yellow:'Yellow — passive care / needs attention',orange:'Orange — active care recommended',red:'Red — urgent / specialty escalation'})[text(band).toLowerCase()]||label(band)||'Unavailable';}
