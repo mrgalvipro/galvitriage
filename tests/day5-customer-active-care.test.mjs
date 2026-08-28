@@ -23,7 +23,8 @@ test('H06-H08 browser shows canonical Acuity/GalviGuide routing without replacin
   assert.equal(/bmr_id\s*:/.test(routing),false);
   assert.equal(/calculateGalviScore|calculateAcuity|ACUITY_WEIGHTS|acuityScore\s*=.*reduce/.test(routing),false);
   assert.ok(build.includes('GalviCare Day 5 customer care routing + GalviGuide v2'));
-  assert.ok(build.includes('explicit governed GalviGuide AI guidance'));
+  assert.ok(build.includes('customer-safe governed GalviGuide AI guidance'));
+  assert.ok(build.includes('AI-synthesized Path evidence support'));
 });
 
 test('H02/H06 hidden completed clarification DOM cannot suppress canonical Score metadata or care routing',()=>{
