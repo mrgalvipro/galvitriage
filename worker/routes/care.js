@@ -12,6 +12,7 @@ import {
   createReferral, updateReferralStatus, submitCheckin, reportMilestone,
   reassessCare, enforceGalviGuideBoundary
 } from '../domain/day5-active-care-service.js';
+import { materializeAcceptedFindingCandidate } from '../domain/day5-artifact-review-service.js';
 import { getGovernedClinicBrief } from '../domain/day5-projection-service.js';
 import { recordGalviAuditResult, recordReferralOutcome } from '../domain/day5-care-result-service.js';
 import { getDay5Timeline } from '../domain/day5-timeline-service.js';
@@ -46,7 +47,9 @@ export async function handleCareRoute(request,env,ctx,path){
   }
   if(request.method==='POST'&&path==='/api/v1/finding-decisions'){
     enforceGalviGuideBoundary(caller,'record_finding_decision');
-    const input=await jsonBody(request),data=await recordFindingDecision(env,ctx,caller,idempotencyKey(request),input);
+    let input=await jsonBody(request);
+    input=await materializeAcceptedFindingCandidate(env,ctx,input);
+    const data=await recordFindingDecision(env,ctx,caller,idempotencyKey(request),input);
     return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
   }
   if(request.method==='POST'&&path==='/api/v1/galvirx'){

@@ -22,11 +22,29 @@ test('H06 GalviGuide uses server-side governed Responses API with strict schema 
   assert.ok(guide.includes('source_artifact_ids'));
 });
 
-test('H06 generated answer is unmistakably surfaced separately from route text and next actions',()=>{
-  for(const required of ['GalviCare Day 5 customer care routing + GalviGuide v2','data-day5-guide-answer','data-day5-guide-answer-label','data-day5-guide-answer-source','GalviGuide AI Guidance — generated from your approved care state','This box is the AI-generated answer. Provider: OpenAI','data-day5-guide-actions-label','The GalviGuide AI Guidance box above is the generated answer from your approved care state.']) assert.ok(browser.includes(required),required);
+test('H06 customer UX places question before AI guidance, hides provider metadata, and keeps Recommended Next Actions distinct',()=>{
+  for(const required of ['GalviCare Day 5 customer care routing + GalviGuide v2','Ask GalviGuide a Care-Navigation Question','GalviGuide AI Guidance','Recommended Next Actions','data-day5-guide-send','data-day5-guide-answer','data-day5-guide-actions-label'])assert.ok(browser.includes(required),required);
+  const markup=section(browser,'function markup','function pathEvidenceSection');
+  assert.ok(markup.indexOf('Ask GalviGuide a Care-Navigation Question')<markup.indexOf('data-day5-guide-answer'));
+  assert.equal(markup.includes('provider_response_id'),false);
+  assert.equal(markup.includes('Provider: OpenAI'),false);
+  assert.equal(markup.includes('AI proof'),false);
+  assert.equal(browser.includes('data-day5-guide-answer-source'),false);
+  assert.equal(browser.includes('data-day5-guide-ai-proof'),false);
   assert.ok(browser.includes("answer.dataset.aiGenerated=used?'true':'false'"));
-  assert.ok(browser.includes('provider_response_id'));
-  assert.ok(browser.includes('ai_metadata'));
+});
+
+test('H06 GalviPath evidence-strengthening section can be replaced only by user-invoked governed AI plain-language guidance',()=>{
+  for(const required of ['Evidence to Strengthen Your Care Plan','applyPathEvidenceGuidance','ai_metadata?.used!==true','care_conversation','What evidence should I collect to strengthen my current GalviPath care plan','syncPathEvidence:true','GalviGuide synthesized the current governed evidence needs into plain-language requests'])assert.ok(browser.includes(required),required);
+  const pathSync=section(browser,'function applyPathEvidenceGuidance','function renderGuide');
+  assert.equal(/\bINSERT\b|\bUPDATE\b|\bDELETE\b/i.test(pathSync),false);
+  assert.ok(pathSync.includes('next_actions'));
+});
+
+test('H06/H08 duplicate Business Acuity routing is not injected into GalviChart',()=>{
+  const hosts=section(browser,'function stageHosts','function resultReady');
+  for(const required of ['galviscore-result','galvishot-result','galvisight-result-panel','galvipath-result-panel'])assert.ok(hosts.includes(required),required);
+  assert.equal(hosts.includes('galvichart-day4'),false);
 });
 
 test('H07 prohibited score diagnosis treatment and licensed-advice authority fails closed without write',()=>{
