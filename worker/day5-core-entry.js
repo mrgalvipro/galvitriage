@@ -6,8 +6,23 @@ import { acknowledgeTreatmentPlan, submitCheckin } from './domain/day5-active-ca
 import { createGovernedTreatmentPlan, reviseGovernedTreatmentPlan } from './domain/day5-treatment-service.js';
 import { augmentCustomerChartResponse } from './domain/day5-projection-service.js';
 
-const GUIDE_ALLOWED_INTENTS=new Set(['explain_route','navigate','reminder','request_evidence','clinic_prep']);
+const GUIDE_ALLOWED_INTENTS=new Set(['explain_route','navigate','reminder','request_evidence','clinic_prep','supportive_explanation','care_conversation']);
+const GUIDE_AI_INTENTS=new Set(['clinic_prep','supportive_explanation','care_conversation']);
 const GUIDE_BOUNDARY_MESSAGE='GalviGuide may explain approved outputs, navigate the care path, request evidence, prepare GalviClinic, remind, and facilitate routine check-ins, but may not change GalviScore or Acuity, diagnose, approve treatment, override Business Physician judgment, or provide licensed advice.';
+const GUIDE_PROHIBITED_REQUEST=/\b(?:change|raise|lower|override|rewrite|recalculate|edit)\b.{0,60}\b(?:galviscore|score|acuity|clinical confidence)\b|\bdiagnos(?:e|is|tic)\b|\bapprove\b.{0,40}\b(?:treatment|plan|prescription)\b|\b(?:legal|tax|fiduciary|investment|securities|medical)\s+advice\b|\b(?:tell me|say)\b.{0,40}\b(?:what to invest|what to file|who to sue)\b/i;
+const GUIDE_UNSAFE_OUTPUT=/\b(?:your diagnosis is|i diagnose|treatment (?:is )?approved|prescription (?:is )?approved|clinician approval (?:is )?granted|authorized treatment|your galviscore (?:is now|should be)|your acuity (?:is now|should be)|legal advice:|tax advice:|investment advice:|medical advice:)\b/i;
+const GUIDE_SCHEMA={
+  type:'object',additionalProperties:false,
+  required:['supportive_explanation','care_conversation','next_actions','escalation'],
+  properties:{
+    supportive_explanation:{type:'string',minLength:1,maxLength:1600},
+    care_conversation:{type:'string',minLength:1,maxLength:1600},
+    next_actions:{type:'array',minItems:1,maxItems:4,items:{type:'string',minLength:1,maxLength:320}},
+    escalation:{type:['string','null'],maxLength:600}
+  }
+};
+const text=value=>String(value??'').trim();
+const clamp=(value,min,max)=>Math.min(max,Math.max(min,Number(value)));
 
 async function readiness(env,ctx){
   const migration=await first(env.DB,`SELECT migration_id,name,environment,checksum,applied_at FROM gv1_schema_migrations WHERE name='day5_treatment_contract_v1' ORDER BY applied_at DESC LIMIT 1`);
@@ -33,7 +48,7 @@ async function readiness(env,ctx){
   const indexRow=await env.DB.prepare(`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='index' AND name IN (${placeholders})`).bind(...indexNames).first();
   const triggerRow=await first(env.DB,`SELECT COUNT(*) AS count FROM sqlite_master WHERE type='trigger' AND name IN ('trg_gv1_treatment_events_no_update','trg_gv1_treatment_events_no_delete')`);
   const ready=Boolean(migration&&activeCareMigration&&Object.values(tables).every(v=>v===1)&&Number(indexRow?.count)===indexNames.length&&Number(triggerRow?.count)===2);
-  return success(ctx,{service:'galvicare-1-0-day5',ready,current_schema_version:'D5A2',required_schema_version:'D5A2',migration:migration||null,active_care_migration:activeCareMigration||null,care_tables:tables,contracted_index_count:Number(indexRow?.count||0),expected_index_count:indexNames.length,append_only_trigger_count:Number(triggerRow?.count||0),inherited_runtime:'galvicare_1_0_day4',active_care_contract:'v1',treatment_contract:'evidence_bound_v1',business_physician_governance:'v1',active_care_projection:'v1',care_result_evidence:'v1',governed_treatment_revision:'v1',customer_treatment_acknowledgement:'v1',customer_checkin_session_bound:'v1',customer_care_routing:'v1',galviguide_customer_navigation:'bounded_read_only_v1',acuity_projection:'canonical_day2_score_v1',inherited_customer_cors:'v1'},ready?200:503,ready?'ok':'unavailable');
+  return success(ctx,{service:'galvicare-1-0-day5',ready,current_schema_version:'D5A2',required_schema_version:'D5A2',migration:migration||null,active_care_migration:activeCareMigration||null,care_tables:tables,contracted_index_count:Number(indexRow?.count||0),expected_index_count:indexNames.length,append_only_trigger_count:Number(triggerRow?.count||0),inherited_runtime:'galvicare_1_0_day4',active_care_contract:'v1',treatment_contract:'evidence_bound_v1',business_physician_governance:'v1',active_care_projection:'v1',care_result_evidence:'v1',governed_treatment_revision:'v1',customer_treatment_acknowledgement:'v1',customer_checkin_session_bound:'v1',customer_care_routing:'v1',galviguide_customer_navigation:'governed_ai_bounded_v1',galviguide_provider:'server_side_openai_responses_v1',acuity_projection:'canonical_day2_score_v1',inherited_customer_cors:'v1'},ready?200:503,ready?'ok':'unavailable');
 }
 
 function preserveDay5Cors(response,ctx){
@@ -51,16 +66,13 @@ async function inheritedResponse(request,env,executionContext,ctx){
 }
 
 async function authorizedCustomerChart(request,env,executionContext){
-  const sessionId=String(request.headers.get(CUSTOMER_SESSION_HEADER)||'').trim();
+  const sessionId=text(request.headers.get(CUSTOMER_SESSION_HEADER));
   if(!sessionId)throw new GVError('GV_AUTH_REQUIRED','An authenticated GalviCare customer session is required.',401);
   const requestHeaders=new Headers({
-    'Accept':'application/json',
-    'Content-Type':'application/json',
-    'Cache-Control':'no-cache',
-    [CUSTOMER_SESSION_HEADER]:sessionId,
+    'Accept':'application/json','Content-Type':'application/json','Cache-Control':'no-cache',[CUSTOMER_SESSION_HEADER]:sessionId,
     'X-Correlation-Id':`day5-customer-${crypto.randomUUID()}`
   });
-  const origin=String(request.headers.get('Origin')||'').trim();if(origin)requestHeaders.set('Origin',origin);
+  const origin=text(request.headers.get('Origin'));if(origin)requestHeaders.set('Origin',origin);
   const chartRequest=new Request(`${new URL(request.url).origin}/api/v1/day4/chart`,{method:'POST',headers:requestHeaders,body:'{}'});
   const response=await day4Worker.fetch(chartRequest,env,executionContext);let payload={};try{payload=await response.json()}catch{}
   const data=payload?.data||{};
@@ -70,159 +82,80 @@ async function authorizedCustomerChart(request,env,executionContext){
   return {bmr_id:String(data.bmr_id),principal_id:String(data.principal_id),context_id:String(data.context_id||''),session_id:sessionId};
 }
 
-function parseStored(value){
-  if(!value)return{};
-  if(typeof value==='object')return value;
-  try{return JSON.parse(value)}catch{return{}}
-}
+function parseStored(value){if(!value)return{};if(typeof value==='object')return value;try{return JSON.parse(value)}catch{return{}}}
 
 async function customerCareContext(request,env){
-  const sessionId=String(request.headers.get(CUSTOMER_SESSION_HEADER)||'').trim();
+  const sessionId=text(request.headers.get(CUSTOMER_SESSION_HEADER));
   if(!sessionId)throw new GVError('GV_AUTH_REQUIRED','An authenticated GalviCare customer session is required.',401);
-
-  const legacy=await first(env.DB,`SELECT f.email,v.venture_name
-    FROM ventures v
-    JOIN founders f ON f.founder_id=v.founder_id
-    WHERE v.session_id=?
-    ORDER BY v.updated_at DESC,v.created_at DESC
-    LIMIT 1`,sessionId)
-    ||await first(env.DB,`SELECT f.email,'' AS venture_name
-      FROM founders f WHERE f.session_id=? ORDER BY f.updated_at DESC LIMIT 1`,sessionId);
+  const legacy=await first(env.DB,`SELECT f.email,v.venture_name FROM ventures v JOIN founders f ON f.founder_id=v.founder_id WHERE v.session_id=? ORDER BY v.updated_at DESC,v.created_at DESC LIMIT 1`,sessionId)
+    ||await first(env.DB,`SELECT f.email,'' AS venture_name FROM founders f WHERE f.session_id=? ORDER BY f.updated_at DESC LIMIT 1`,sessionId);
   if(!legacy?.email)throw new GVError('GV_DAY5_SESSION_IDENTITY_MISSING','GalviCare session identity is unavailable.',401);
-
   const founder=await first(env.DB,`SELECT founder_id,email,status FROM gv1_founders WHERE lower(email)=lower(?) LIMIT 1`,legacy.email);
   if(!founder?.founder_id)throw new GVError('GV_DAY5_CANONICAL_IDENTITY_MISSING','Canonical GalviVault identity has not been established for this GalviCare session.',409);
-
-  let canonical=null;
-  const ventureName=String(legacy.venture_name||'').trim();
-  if(ventureName){
-    canonical=await first(env.DB,`SELECT c.context_id,c.founder_id,c.venture_id,c.bmr_id,c.record_mode,c.status,v.venture_name
-      FROM gv1_principal_contexts c
-      JOIN gv1_ventures v ON v.venture_id=c.venture_id
-      WHERE c.founder_id=? AND c.status='active' AND lower(trim(v.venture_name))=lower(trim(?))
-      ORDER BY c.updated_at DESC,c.created_at DESC LIMIT 1`,founder.founder_id,ventureName);
-  }else{
-    canonical=await first(env.DB,`SELECT context_id,founder_id,venture_id,bmr_id,record_mode,status,'' AS venture_name
-      FROM gv1_principal_contexts
-      WHERE founder_id=? AND status='active' AND venture_id IS NULL
-      ORDER BY updated_at DESC,created_at DESC LIMIT 1`,founder.founder_id);
-  }
+  let canonical=null;const ventureName=text(legacy.venture_name);
+  if(ventureName){canonical=await first(env.DB,`SELECT c.context_id,c.founder_id,c.venture_id,c.bmr_id,c.record_mode,c.status,v.venture_name FROM gv1_principal_contexts c JOIN gv1_ventures v ON v.venture_id=c.venture_id WHERE c.founder_id=? AND c.status='active' AND lower(trim(v.venture_name))=lower(trim(?)) ORDER BY c.updated_at DESC,c.created_at DESC LIMIT 1`,founder.founder_id,ventureName);}
+  else{canonical=await first(env.DB,`SELECT context_id,founder_id,venture_id,bmr_id,record_mode,status,'' AS venture_name FROM gv1_principal_contexts WHERE founder_id=? AND status='active' AND venture_id IS NULL ORDER BY updated_at DESC,created_at DESC LIMIT 1`,founder.founder_id);}
   if(!canonical?.context_id)throw new GVError('GV_DAY5_CANONICAL_CONTEXT_MISSING','The authenticated session could not be matched to its canonical GalviVault care context.',409);
-
-  const consent=await first(env.DB,`SELECT status FROM gv1_consent_events
-    WHERE founder_id=? AND purpose='care_processing'
-    ORDER BY recorded_at DESC,consent_id DESC LIMIT 1`,founder.founder_id);
+  const consent=await first(env.DB,`SELECT status FROM gv1_consent_events WHERE founder_id=? AND purpose='care_processing' ORDER BY recorded_at DESC,consent_id DESC LIMIT 1`,founder.founder_id);
   if(consent?.status!=='granted')throw new GVError('GV_CONSENT_REQUIRED','Active care-processing consent is required for GalviCare routing.',403);
-
-  const score=await first(env.DB,`SELECT result_id,payload_json,record_version,rules_version,protocol_version,created_at
-    FROM gv1_day2_intake_results
-    WHERE context_id=? AND result_type='score'
-    ORDER BY record_version DESC,created_at DESC LIMIT 1`,canonical.context_id);
+  const score=await first(env.DB,`SELECT result_id,payload_json,record_version,rules_version,protocol_version,created_at FROM gv1_day2_intake_results WHERE context_id=? AND result_type='score' ORDER BY record_version DESC,created_at DESC LIMIT 1`,canonical.context_id);
   if(!score?.payload_json)throw new GVError('GV_DAY5_CARE_ROUTE_NOT_READY','Canonical GalviScore/Acuity is not ready yet. Complete the existing Score clarification flow and retry.',409,undefined,true);
-
   return {session_id:sessionId,founder,context:canonical,score_row:score,score:parseStored(score.payload_json)};
 }
 
 function careRoute(score={}){
-  const acuityScore=Number(score.acuity_score);
-  const acuityBand=String(score.acuity_band||'').trim().toLowerCase();
-  const disposition=String(score.disposition||'').trim().toLowerCase();
-  const clinicalConfidence=Number(score.clinical_confidence);
-  const overallScore=Number(score.overall_score??score.score??score.galviscore_score);
-  const referral=acuityBand==='red'||disposition==='urgent_active_specialty_referral';
-  const clinic=referral||acuityBand==='orange'||disposition==='active_care_recommended';
-  const passive=acuityBand==='yellow'||disposition==='passive_intervention';
-  const supportLevel=referral?'qualified_referral':clinic?'galviclinic':passive?'galviguide':'self_guided';
-  const recommendedAction=referral?'qualified_referral':clinic?'book_galviclinic':passive?'use_galviguide':'continue_path';
-  const reminder=referral
-    ?'Use the governed specialty/referral pathway; GalviGuide cannot provide the licensed conclusion.'
-    :clinic
-      ?'Continue the governed GalviPath and book GalviClinic for Business Physician review.'
-      :passive
-        ?'Continue the governed GalviPath and use GalviGuide for explanation, evidence requests, reminders, and routine navigation without forcing active care.'
-        :'Continue the governed GalviPath and monitor the evidence; GalviGuide remains available for bounded navigation.';
-  return {
-    overall_score:Number.isFinite(overallScore)?overallScore:null,
-    acuity_score:Number.isFinite(acuityScore)?acuityScore:null,
-    acuity_band:acuityBand||null,
-    clinical_confidence:Number.isFinite(clinicalConfidence)?clinicalConfidence:null,
-    disposition:disposition||null,
-    support_level:supportLevel,
-    recommended_action:recommendedAction,
-    clinic_recommended:clinic,
-    referral_required:referral,
-    guide_available:true,
-    guide_message:GUIDE_BOUNDARY_MESSAGE,
-    reminder
-  };
+  const acuityScore=Number(score.acuity_score),acuityBand=text(score.acuity_band).toLowerCase(),disposition=text(score.disposition).toLowerCase(),clinicalConfidence=Number(score.clinical_confidence),overallScore=Number(score.overall_score??score.score??score.galviscore_score);
+  const referral=acuityBand==='red'||disposition==='urgent_active_specialty_referral',clinic=referral||acuityBand==='orange'||disposition==='active_care_recommended',passive=acuityBand==='yellow'||disposition==='passive_intervention';
+  const supportLevel=referral?'qualified_referral':clinic?'galviclinic':passive?'galviguide':'self_guided',recommendedAction=referral?'qualified_referral':clinic?'book_galviclinic':passive?'use_galviguide':'continue_path';
+  const reminder=referral?'Use the governed specialty/referral pathway; GalviGuide cannot provide the licensed conclusion.':clinic?'Continue the governed GalviPath and book GalviClinic for Business Physician review.':passive?'Continue the governed GalviPath and use GalviGuide for explanation, evidence requests, reminders, and routine navigation without forcing active care.':'Continue the governed GalviPath and monitor the evidence; GalviGuide remains available for bounded navigation.';
+  return {overall_score:Number.isFinite(overallScore)?overallScore:null,acuity_score:Number.isFinite(acuityScore)?acuityScore:null,acuity_band:acuityBand||null,clinical_confidence:Number.isFinite(clinicalConfidence)?clinicalConfidence:null,disposition:disposition||null,support_level:supportLevel,recommended_action:recommendedAction,clinic_recommended:clinic,referral_required:referral,guide_available:true,guide_message:GUIDE_BOUNDARY_MESSAGE,reminder};
 }
 
+async function guideArtifacts(env,care){
+  try{const result=await env.DB.prepare(`SELECT artifact_id,task,product,artifact_json,supporting_evidence_ids_json,contradictory_evidence_ids_json,record_version,generation_source,validation_status,approval_status,prompt_version,schema_version,rules_version,protocol_version,created_at FROM gv1_day3_governed_artifacts WHERE context_id=? AND approval_status='accepted' AND product IN ('GalviShot','GalviSight','GalviPath') ORDER BY created_at DESC LIMIT 6`).bind(care.context.context_id).all();return (result?.results||[]).map(row=>({artifact_id:row.artifact_id,task:row.task,product:row.product,record_version:Number(row.record_version||1),artifact:parseStored(row.artifact_json),supporting_evidence_ids:parseStored(row.supporting_evidence_ids_json||'[]'),contradictory_evidence_ids:parseStored(row.contradictory_evidence_ids_json||'[]'),generation_source:row.generation_source,validation_status:row.validation_status,approval_status:row.approval_status,prompt_version:row.prompt_version,schema_version:row.schema_version,rules_version:row.rules_version,protocol_version:row.protocol_version,created_at:row.created_at}));}
+  catch(error){console.warn('GalviGuide governed-artifact context unavailable',error?.message||error);return[];}
+}
+function lowestDimension(score={}){const raw=score.dimension_scores||score.category_scores||{};const rows=Object.entries(raw).map(([key,value])=>[text(key),Number(value)]).filter(([key,value])=>key&&Number.isFinite(value)).sort((a,b)=>a[1]-b[1]||a[0].localeCompare(b[0]));return rows[0]?{dimension:rows[0][0],score:rows[0][1]}:null;}
+function pathSummary(artifacts=[]){const row=artifacts.find(item=>item.product==='GalviPath'),path=row?.artifact||{};return {artifact_id:row?.artifact_id||null,record_version:row?.record_version||null,objective:text(path.objective)||null,sequence:Array.isArray(path.sequence)?path.sequence.slice(0,5).map(text).filter(Boolean):[],evidence_required:Array.isArray(path.evidence_required)?path.evidence_required.slice(0,5).map(text).filter(Boolean):[],cadence:text(path.cadence)||null,escalation:text(path.escalation)||null,support_level:text(path.support_level)||null};}
+function guideFallback(care,route,artifacts,intent,message,reason='deterministic_fallback'){
+  const low=lowestDimension(care.score),path=pathSummary(artifacts),scoreCopy=route.overall_score==null?'your current GalviScore':`your GalviScore of ${route.overall_score}/100`,acuityCopy=route.acuity_band?`${route.acuity_band} acuity`:'your current acuity';
+  const focus=low?` The lowest current dimension is ${low.dimension} at ${low.score}/100, so that is a useful place to concentrate the next evidence and treatment discussion.`:'',objective=path.objective?` Your current GalviPath objective is: ${path.objective}`:'';
+  const supportive=route.clinic_recommended?`Based on ${scoreCopy} and ${acuityCopy}, your governed care route supports active Business Physician review.${focus}${objective} GalviGuide can help you prepare the evidence and questions for GalviClinic, but it cannot approve or change treatment.`:`Based on ${scoreCopy} and ${acuityCopy}, your current governed route does not require GalviGuide to force active care.${focus}${objective} Continue the GalviPath, gather the requested evidence, and use GalviGuide for explanation, reminders, and routine navigation.`;
+  const conversation=message?`I can help you work through that question using the approved Business Health evidence already in your record. I will keep ${scoreCopy}, Acuity, Clinical Confidence, findings, and treatment authority unchanged. ${route.reminder}`:route.clinic_recommended?'I can help you prepare for GalviClinic by organizing the approved evidence, the current GalviPath, and the questions that are most useful for the Business Physician review.':'I can help you understand the approved evidence, track the GalviPath, request additional evidence, and stay on the monitoring cadence without turning this into an autonomous treatment decision.';
+  return {supportive_explanation:supportive,care_conversation:conversation,next_actions:(path.sequence.length?path.sequence:[route.reminder]).slice(0,4),escalation:route.referral_required?route.reminder:(path.escalation||null),ai_metadata:{attempted:false,used:false,fallback:true,reason,provider:null,provider_response_id:null,model:null}};
+}
+function guideAIConfig(env){const model=text(env?.OPENAI_MODEL_QA),apiKey=text(env?.OPENAI_API_KEY),flag=text(env?.AI_ENABLED).toLowerCase()==='true';return {model,apiKey,enabled:Boolean(flag&&model&&apiKey),timeoutMs:clamp(text(env?.OPENAI_TIMEOUT_MS)||20000,1000,20000),maxInputBytes:clamp(text(env?.OPENAI_MAX_INPUT_BYTES)||24000,4000,64000)};}
+function guidePrompt(intent){return ['You are GalviGuide 1.0, a bounded virtual GalviClinician and care navigator inside GalviCare.','You may make approved Business Health information easier to understand, navigate the current care path, request evidence, prepare GalviClinic, support reminders and routine check-ins.','The supplied canonical_route, canonical_score and accepted governed artifacts are immutable truth. Never change GalviScore, Acuity, Clinical Confidence, findings, evidence status, GalviPath, referral status, or treatment authority.','Do not diagnose the business, confirm findings, approve or prescribe a Treatment Plan, override Business Physician judgment, or provide legal, tax, fiduciary, securities, investment, medical, security-incident, or other licensed-professional advice.','Do not invent facts, evidence, results, provider identities, outcomes, or treatment decisions. When evidence is incomplete, state the uncertainty and suggest the next evidence or human review step.','Use a warm, concise, customer-specific bedside manner. Explain what matters, why it matters, and the next safe step without sounding generic.','Return only the requested JSON schema. Do not reveal hidden chain-of-thought.',`Intent: ${intent}.`].join('\n');}
+function extractOutputText(payload){if(typeof payload?.output_text==='string'&&payload.output_text.trim())return payload.output_text;for(const item of payload?.output||[]){if(item?.type!=='message')continue;for(const content of item?.content||[]){if(content?.type==='output_text'&&typeof content.text==='string'&&content.text.trim())return content.text;}}return '';}
+function validGuideNarration(value){return Boolean(value&&typeof value==='object'&&!Array.isArray(value)&&text(value.supportive_explanation)&&text(value.care_conversation)&&Array.isArray(value.next_actions)&&value.next_actions.length>=1&&value.next_actions.length<=4&&value.next_actions.every(item=>text(item)&&text(item).length<=320)&&(value.escalation===null||typeof value.escalation==='string'));}
+async function governedGuideNarration(env,care,route,artifacts,intent,message){
+  const fallback=guideFallback(care,route,artifacts,intent,message),cfg=guideAIConfig(env);if(!cfg.enabled)return {...fallback,ai_metadata:{...fallback.ai_metadata,reason:'provider_not_configured'}};
+  const payload={intent,user_message:message||null,canonical_route:route,canonical_score:{result_id:care.score_row.result_id,record_version:Number(care.score_row.record_version||1),overall_score:route.overall_score,dimension_scores:care.score.dimension_scores||care.score.category_scores||{},acuity_score:route.acuity_score,acuity_band:route.acuity_band,clinical_confidence:route.clinical_confidence,disposition:route.disposition},governed_artifacts:artifacts.slice(0,4).map(item=>({artifact_id:item.artifact_id,product:item.product,record_version:item.record_version,artifact:item.artifact,supporting_evidence_ids:item.supporting_evidence_ids,contradictory_evidence_ids:item.contradictory_evidence_ids,validation_status:item.validation_status,approval_status:item.approval_status})),policy:{language_only:true,canonical_truth_immutable:true,business_physician_owns_treatment:true,regulated_advice_prohibited:true}};
+  const input=JSON.stringify(payload);if(new TextEncoder().encode(input).byteLength>cfg.maxInputBytes)return {...fallback,ai_metadata:{...fallback.ai_metadata,attempted:true,reason:'provider_input_too_large'}};
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),cfg.timeoutMs);let response,raw={};
+  try{response=await fetch('https://api.openai.com/v1/responses',{method:'POST',signal:controller.signal,headers:{'authorization':`Bearer ${cfg.apiKey}`,'content-type':'application/json'},body:JSON.stringify({model:cfg.model,store:false,instructions:guidePrompt(intent),input,max_output_tokens:900,text:{format:{type:'json_schema',name:'galvicare_day5_galviguide',strict:true,schema:GUIDE_SCHEMA}}})});try{raw=await response.json()}catch{}if(!response.ok)return {...fallback,ai_metadata:{attempted:true,used:false,fallback:true,reason:`provider_http_${response.status}`,provider:'openai',provider_response_id:text(raw?.id)||null,model:text(raw?.model)||cfg.model}};}
+  catch(error){return {...fallback,ai_metadata:{attempted:true,used:false,fallback:true,reason:error?.name==='AbortError'?'provider_timeout':'provider_unavailable',provider:'openai',provider_response_id:null,model:cfg.model}};}finally{clearTimeout(timer);}
+  const output=extractOutputText(raw);let narration=null;try{narration=JSON.parse(output)}catch{}if(!validGuideNarration(narration)||GUIDE_UNSAFE_OUTPUT.test(JSON.stringify(narration||{})))return {...fallback,ai_metadata:{attempted:true,used:false,fallback:true,reason:validGuideNarration(narration)?'unsafe_output':'invalid_schema',provider:'openai',provider_response_id:text(raw?.id)||null,model:text(raw?.model)||cfg.model}};
+  return {...narration,ai_metadata:{attempted:true,used:true,fallback:false,reason:null,provider:'openai',provider_response_id:text(raw?.id)||null,model:text(raw?.model)||cfg.model,usage:raw?.usage||null}};
+}
 async function customerGalviGuide(request,env){
-  const input=await jsonBody(request);
-  const intent=String(input?.intent||'explain_route').trim().toLowerCase();
-  if(!GUIDE_ALLOWED_INTENTS.has(intent)){
-    throw new GVError('GV_GUIDE_BOUNDARY',GUIDE_BOUNDARY_MESSAGE,403,{intent,next_action:'human_review'});
-  }
-  const care=await customerCareContext(request,env);
-  return {
-    ...careRoute(care.score),
-    intent,
-    read_only:true,
-    canonical_source:'gv1_day2_intake_results',
-    source_result_id:care.score_row.result_id,
-    source_record_version:Number(care.score_row.record_version||1),
-    rules_version:care.score_row.rules_version||care.score.rules_version||null,
-    protocol_version:care.score_row.protocol_version||care.score.protocol_version||null,
-    score_recomputed_in_browser:false,
-    acuity_recomputed_in_browser:false
-  };
+  const input=await jsonBody(request),intent=text(input?.intent||'explain_route').toLowerCase(),message=text(input?.message).slice(0,1200);
+  if(!GUIDE_ALLOWED_INTENTS.has(intent)||GUIDE_PROHIBITED_REQUEST.test(message))throw new GVError('GV_GUIDE_BOUNDARY',GUIDE_BOUNDARY_MESSAGE,403,{intent,next_action:'human_review',write_performed:false});
+  const care=await customerCareContext(request,env),route=careRoute(care.score),artifacts=GUIDE_AI_INTENTS.has(intent)?await guideArtifacts(env,care):[];
+  const narration=GUIDE_AI_INTENTS.has(intent)?await governedGuideNarration(env,care,route,artifacts,intent,message):{supportive_explanation:null,care_conversation:null,next_actions:[],escalation:null,ai_metadata:{attempted:false,used:false,fallback:false,reason:'navigation_only',provider:null,provider_response_id:null,model:null}};
+  return {...route,intent,read_only:true,canonical_source:'gv1_day2_intake_results',source_result_id:care.score_row.result_id,source_record_version:Number(care.score_row.record_version||1),rules_version:care.score_row.rules_version||care.score.rules_version||null,protocol_version:care.score_row.protocol_version||care.score.protocol_version||null,source_artifact_ids:artifacts.map(item=>item.artifact_id),score_recomputed_in_browser:false,acuity_recomputed_in_browser:false,guide_version:'governed_ai_narration_v1',...narration};
 }
 
-const worker={
-  async fetch(request,env,executionContext){
-    const ctx=context(request,env);
-    try{
-      requireRuntime(env,ctx);
-      if(ctx.origin&&!ctx.allowedOrigins.includes(ctx.origin)) throw new GVError('GV_CORS_DENIED','The request origin is not allowed.',403);
-      const url=new URL(request.url); const path=url.pathname.replace(/\/+$/,'')||'/';
-      if(request.method==='OPTIONS'&&path.startsWith('/api/v1/')) return new Response(null,{status:204,headers:headers(ctx)});
-      if(request.method==='GET'&&(path==='/api/v1/day5/readiness'||path==='/api/v1/day5/schema-version')) return readiness(env,ctx);
-      if(request.method==='POST'&&path==='/api/v1/day5/customer/galviguide'){
-        const data=await customerGalviGuide(request,env);
-        return success(ctx,data,200,'ok',{identity_source:'authenticated_session_canonical_context',read_only:true,galviguide_boundary:'v1'});
-      }
-      if(request.method==='POST'&&path==='/api/v1/treatment-plans'){
-        const input=await jsonBody(request),data=await createGovernedTreatmentPlan(env,ctx,actor(request),idempotencyKey(request),input);
-        return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
-      }
-      const governedRevision=path.match(/^\/api\/v1\/treatment-plans\/([^/]+)\/revisions$/);
-      if(request.method==='POST'&&governedRevision){
-        const input=await jsonBody(request),data=await reviseGovernedTreatmentPlan(env,ctx,actor(request),idempotencyKey(request),decodeURIComponent(governedRevision[1]),input);
-        return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});
-      }
-      const customerAck=path.match(/^\/api\/v1\/day5\/customer\/treatment-plans\/([^/]+)\/acknowledgement$/);
-      if(request.method==='POST'&&customerAck){
-        const customer=await authorizedCustomerChart(request,env,executionContext),input=await jsonBody(request);
-        const data=await acknowledgeTreatmentPlan(env,ctx,{role:'customer',id:customer.principal_id},idempotencyKey(request),decodeURIComponent(customerAck[1]),{...input,bmr_id:customer.bmr_id});
-        return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,identity_source:'authenticated_galvichart'});
-      }
-      if(request.method==='POST'&&path==='/api/v1/day5/customer/checkins'){
-        const customer=await authorizedCustomerChart(request,env,executionContext),input=await jsonBody(request);
-        const data=await submitCheckin(env,ctx,{role:'customer',id:customer.principal_id},idempotencyKey(request),{...input,bmr_id:customer.bmr_id});
-        return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,identity_source:'authenticated_galvichart'});
-      }
-      if(request.method==='POST'&&path==='/api/v1/day4/chart'){
-        const upstream=await inheritedResponse(request,env,executionContext,ctx);
-        return augmentCustomerChartResponse(upstream,env);
-      }
-      const response=await handleCareRoute(request,env,ctx,path);
-      if(response) return response;
-      return inheritedResponse(request,env,executionContext,ctx);
-    }catch(error){
-      console.error('GalviCare 1.0 Day 5 error',error?.code||'GV_INTERNAL',error?.message||'unexpected');
-      return failure(ctx,error);
-    }
-  }
-};
-
+const worker={async fetch(request,env,executionContext){
+  const ctx=context(request,env);try{requireRuntime(env,ctx);if(ctx.origin&&!ctx.allowedOrigins.includes(ctx.origin))throw new GVError('GV_CORS_DENIED','The request origin is not allowed.',403);const url=new URL(request.url),path=url.pathname.replace(/\/+$/,'')||'/';
+    if(request.method==='OPTIONS'&&path.startsWith('/api/v1/'))return new Response(null,{status:204,headers:headers(ctx)});
+    if(request.method==='GET'&&(path==='/api/v1/day5/readiness'||path==='/api/v1/day5/schema-version'))return readiness(env,ctx);
+    if(request.method==='POST'&&path==='/api/v1/day5/customer/galviguide'){const data=await customerGalviGuide(request,env);return success(ctx,data,200,'ok',{identity_source:'authenticated_session_canonical_context',read_only:true,galviguide_boundary:'v1',galviguide_ai:'server_side_bounded_v1'});}
+    if(request.method==='POST'&&path==='/api/v1/treatment-plans'){const input=await jsonBody(request),data=await createGovernedTreatmentPlan(env,ctx,actor(request),idempotencyKey(request),input);return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});}
+    const governedRevision=path.match(/^\/api\/v1\/treatment-plans\/([^/]+)\/revisions$/);if(request.method==='POST'&&governedRevision){const input=await jsonBody(request),data=await reviseGovernedTreatmentPlan(env,ctx,actor(request),idempotencyKey(request),decodeURIComponent(governedRevision[1]),input);return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay});}
+    const customerAck=path.match(/^\/api\/v1\/day5\/customer\/treatment-plans\/([^/]+)\/acknowledgement$/);if(request.method==='POST'&&customerAck){const customer=await authorizedCustomerChart(request,env,executionContext),input=await jsonBody(request);const data=await acknowledgeTreatmentPlan(env,ctx,{role:'customer',id:customer.principal_id},idempotencyKey(request),decodeURIComponent(customerAck[1]),{...input,bmr_id:customer.bmr_id});return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,identity_source:'authenticated_galvichart'});}
+    if(request.method==='POST'&&path==='/api/v1/day5/customer/checkins'){const customer=await authorizedCustomerChart(request,env,executionContext),input=await jsonBody(request);const data=await submitCheckin(env,ctx,{role:'customer',id:customer.principal_id},idempotencyKey(request),{...input,bmr_id:customer.bmr_id});return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,identity_source:'authenticated_galvichart'});}
+    if(request.method==='POST'&&path==='/api/v1/day4/chart'){const upstream=await inheritedResponse(request,env,executionContext,ctx);return augmentCustomerChartResponse(upstream,env);}
+    const response=await handleCareRoute(request,env,ctx,path);if(response)return response;return inheritedResponse(request,env,executionContext,ctx);
+  }catch(error){console.error('GalviCare 1.0 Day 5 error',error?.code||'GV_INTERNAL',error?.message||'unexpected');return failure(ctx,error);}}};
 export default worker;
