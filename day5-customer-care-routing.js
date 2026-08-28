@@ -14,7 +14,9 @@
  */
 (()=>{
   'use strict';
-  const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v2';
+  /* Stable v1 signature is intentionally preserved because the cumulative frontend
+   * composer uses it to replace, rather than duplicate, the already-injected adapter. */
+  const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v1';
   const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev';
   const SESSION_HEADER='X-Galvi-Day3-Session';
   const FOLLOWUP_IDS=['followup-question-container','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions'];
@@ -81,7 +83,7 @@
       <h3>GalviScore + Business Health Acuity</h3>
       <p><strong>GalviScore:</strong> ${route.overall_score==null?'—':esc(route.overall_score)}/100</p>
       <p><span class="day5-acuity-badge day5-acuity-${esc(band||'green')}">Acuity ${route.acuity_score==null?'—':esc(route.acuity_score)}/100 · ${esc(bandLabel(band))}</span></p>
-      <p class="day5-route-muted"><strong>Important:</strong> GalviScore measures current Business Health. Acuity measures how urgently care should escalate. This route is server-owned and is not recomputed by the browser.</p>
+      <p class="day5-route-muted"><strong>Important:</strong> GalviScore measures current Business Health. Acuity measures how urgently care should escalate. The existing “What you should watch?” box is GalviScore guidance; this Care Routing panel is the GalviGuide/GalviPath routing layer. This route is server-owned and is not recomputed by the browser.</p>
       <div class="day5-route-grid">
         <div class="day5-route-cell"><strong>Disposition</strong><br>${esc(careLabel(route.disposition))}</div>
         <div class="day5-route-cell"><strong>Recommended support</strong><br>${esc(supportLabel(route.support_level))}</div>
@@ -109,9 +111,7 @@
   function routeFingerprint(route){return JSON.stringify([text(route?.source_result_id),Number(route?.source_record_version||0),route?.overall_score??null,route?.acuity_score??null,text(route?.acuity_band),route?.clinical_confidence??null,text(route?.disposition),text(route?.support_level),Boolean(route?.clinic_recommended),Boolean(route?.referral_required)]);}
   function insertPanelSafely(host,panel){
     if(!host?.isConnected||!panel)return false;
-    if(isChartHost(host.id)){
-      const grid=host.querySelector('.gchart-grid');if(grid?.isConnected){grid.insertAdjacentElement('beforebegin',panel);return true;}
-    }
+    if(isChartHost(host.id)){const grid=host.querySelector('.gchart-grid');if(grid?.isConnected){grid.insertAdjacentElement('beforebegin',panel);return true;}}
     const row=host.querySelector('.button-row');
     if(row?.isConnected&&host.contains(row)){try{row.insertAdjacentElement('beforebegin',panel);return true}catch(error){if(error?.name!=='NotFoundError')throw error}}
     if(host.isConnected){host.appendChild(panel);return true}return false;
