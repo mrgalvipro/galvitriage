@@ -8,18 +8,20 @@
  *   own Active Care DOM writes; this permanently removes the customer-bootstrap/Chart read loop;
  * - Active Care projection is fingerprinted so unchanged canonical state is a DOM no-op;
  * - View GalviChart is reattached to Shot, Sight and Path customer surfaces if another renderer
- *   replaces the original button row, while entitlement remains server-authoritative.
+ *   replaces the original button row, while entitlement remains server-authoritative;
+ * - H19 accepts the canonical active-care section from the supported Chart response envelopes
+ *   and performs one bounded reread when a newly persisted plan is not visible on the first read.
  */
 (()=>{
   'use strict';
-  const SIGNATURE='GalviCare Day 5 customer Treatment Plan acknowledgement v1';
+  const SIGNATURE='GalviCare Day 5 customer Treatment Plan acknowledgement v1.1';
   const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev';
   const SESSION_HEADER='X-Galvi-Day3-Session';
   const text=(value)=>String(value??'').trim();
   const byId=(id)=>document.getElementById(id);
   const esc=(value)=>String(value??'').replace(/[&<>"']/g,(c)=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const session=()=>typeof window.getStoredSessionId==='function'?text(window.getStoredSessionId()):text(localStorage.getItem('galvicare_session_id')||localStorage.getItem('galvishot_session_id'));
-  let rendering=false,chartWasActive=false,lastActiveFingerprint='';
+  let rendering=false,chartWasActive=false,lastActiveFingerprint='',boundedRereadPending=false;
 
   function stableKey(kind,planId){
     const storageKey=`galvicare_day5_h19_${kind}_${planId}`;
@@ -40,6 +42,9 @@
     return payload;
   }
 
+  function activeCareFromChart(chart){
+    return chart?.data?.sections?.active_care||chart?.data?.active_care||chart?.sections?.active_care||chart?.active_care||null;
+  }
   function currentPlan(active){return Array.isArray(active?.treatment_plans)?active.treatment_plans[0]||null:null}
   function alreadyAcknowledged(active,planId){return (active?.acknowledgements||[]).some((row)=>text(row?.treatment_plan_id)===text(planId)&&row?.event_type==='customer_acknowledged')}
   function checkinCount(active,planId){return (active?.checkins||[]).filter((row)=>text(row?.treatment_plan_id)===text(planId)).length}
@@ -67,7 +72,13 @@
     const host=byId('galvichart-day4');if(!host?.classList.contains('active'))return;
     rendering=true;
     try{
-      const chart=await window.GalviChartDay4.read();const active=chart?.data?.sections?.active_care,plan=currentPlan(active);
+      let chart=await window.GalviChartDay4.read();let active=activeCareFromChart(chart),plan=currentPlan(active);
+      if(!plan&&!boundedRereadPending){
+        boundedRereadPending=true;
+        await new Promise(resolve=>setTimeout(resolve,350));
+        chart=await window.GalviChartDay4.read();active=activeCareFromChart(chart);plan=currentPlan(active);
+      }
+      if(plan)boundedRereadPending=false;
       let node=byId('galvichart-day5-active-care');
       if(!plan){if(node)node.remove();lastActiveFingerprint='';return}
       const ack=alreadyAcknowledged(active,plan.treatment_plan_id),checks=checkinCount(active,plan.treatment_plan_id),fingerprint=activeFingerprint(plan,ack,checks);
@@ -79,12 +90,12 @@
       const status=node.querySelector('[data-day5-status]');
       node.querySelector('[data-day5-ack]')?.addEventListener('click',async(event)=>{
         const button=event.currentTarget;button.disabled=true;status.textContent='Saving acknowledgement…';
-        try{await api(`/api/v1/day5/customer/treatment-plans/${encodeURIComponent(plan.treatment_plan_id)}/acknowledgement`,{key:stableKey('ack',plan.treatment_plan_id)});status.textContent='Treatment Plan acknowledged. Your Business Physician remains the author.';lastActiveFingerprint='';await window.GalviChartDay4.open();setTimeout(()=>refresh().catch(()=>{}),0)}
+        try{await api(`/api/v1/day5/customer/treatment-plans/${encodeURIComponent(plan.treatment_plan_id)}/acknowledgement`,{key:stableKey('ack',plan.treatment_plan_id)});status.textContent='Treatment Plan acknowledged. Your Business Physician remains the author.';lastActiveFingerprint='';boundedRereadPending=false;await window.GalviChartDay4.open();setTimeout(()=>refresh().catch(()=>{}),0)}
         catch(error){status.textContent=`${error.code||'GV_DAY5_ACK'}: ${error.message}`;button.disabled=false}
       });
       node.querySelector('[data-day5-checkin]')?.addEventListener('click',async(event)=>{
         const button=event.currentTarget,summary=text(byId('day5-checkin-summary')?.value);button.disabled=true;status.textContent='Saving scheduled check-in…';
-        try{await api('/api/v1/day5/customer/checkins',{key:stableKey('checkin',plan.treatment_plan_id),body:{treatment_plan_id:plan.treatment_plan_id,due_context:'scheduled',responses:{summary:summary||'Scheduled Business Health check-in submitted.'},adherence_state:'reported'}});status.textContent='Scheduled check-in saved to the same Business Health Record.';lastActiveFingerprint='';await window.GalviChartDay4.open();setTimeout(()=>refresh().catch(()=>{}),0)}
+        try{await api('/api/v1/day5/customer/checkins',{key:stableKey('checkin',plan.treatment_plan_id),body:{treatment_plan_id:plan.treatment_plan_id,due_context:'scheduled',responses:{summary:summary||'Scheduled Business Health check-in submitted.'},adherence_state:'reported'}});status.textContent='Scheduled check-in saved to the same Business Health Record.';lastActiveFingerprint='';boundedRereadPending=false;await window.GalviChartDay4.open();setTimeout(()=>refresh().catch(()=>{}),0)}
         catch(error){status.textContent=`${error.code||'GV_DAY5_CHECKIN'}: ${error.message}`;button.disabled=false}
       });
     }catch(error){console.warn(SIGNATURE,error?.code||'',error?.message||error)}finally{rendering=false}
@@ -101,7 +112,7 @@
       chartWasActive=active;
     });
     observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class']});
-    document.addEventListener('click',(event)=>{if(event.target?.closest?.('[data-day4-chart-button]'))setTimeout(()=>refresh().catch(()=>{}),400)});
+    document.addEventListener('click',(event)=>{if(event.target?.closest?.('[data-day4-chart-button]')){boundedRereadPending=false;setTimeout(()=>refresh().catch(()=>{}),400)}});
     chartWasActive=Boolean(byId('galvichart-day4')?.classList.contains('active'));
     if(chartWasActive)refresh().catch(()=>{});
     window.GalviCareDay5Customer=Object.freeze({refresh,ensureChartButtons,signature:SIGNATURE});
