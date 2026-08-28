@@ -35,7 +35,7 @@ test('H06 customer UX places question before AI guidance, hides provider metadat
 });
 
 test('H06 GalviPath evidence-strengthening section can be replaced only by user-invoked governed AI plain-language guidance',()=>{
-  for(const required of ['Evidence to Strengthen Your Care Plan','applyPathEvidenceGuidance','ai_metadata?.used!==true','care_conversation','What evidence should I collect to strengthen my current GalviPath care plan','syncPathEvidence:true','GalviGuide synthesized the current governed evidence needs into plain-language requests'])assert.ok(browser.includes(required),required);
+  for(const required of ['evidence to strengthen your care plan','applyPathEvidenceGuidance','ai_metadata?.used!==true','care_conversation','What evidence should I collect to strengthen my current GalviPath care plan','syncPathEvidence:true','GalviGuide synthesized the current governed evidence needs into plain-language requests'])assert.ok(browser.includes(required),required);
   const pathSync=section(browser,'function applyPathEvidenceGuidance','function renderGuide');
   assert.equal(/\bINSERT\b|\bUPDATE\b|\bDELETE\b/i.test(pathSync),false);
   assert.ok(pathSync.includes('next_actions'));
