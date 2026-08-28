@@ -7,6 +7,7 @@ on:
       - qa-revamped-galvicare-0-5
     paths:
       - worker/day5-customer-context-entry.js
+      - worker/day5-final-entry.js
       - wrangler.day5-h19.json
       - .github/workflows/galvivault-day5-h19-qa.yml
 
@@ -44,24 +45,37 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Validate H19 exact venture BHR boundary and inherited Day 5 contracts
+      - name: Validate exact BHR active care and governed Path evidence contracts
         shell: bash
         run: |
           set -euo pipefail
+          node --check worker/day5-final-entry.js
           node --check worker/day5-customer-context-entry.js
           node --check worker/day5-entry.js
           node --check worker/day5-core-entry.js
           node --test tests/day5-customer-active-care.test.mjs
           node --test tests/day5-active-care.test.mjs tests/day5-care.test.mjs
           grep -Fq "session_venture_bmr_context_v2" worker/day5-customer-context-entry.js
-          grep -Fq "FROM gv1_founder_venture_roles r" worker/day5-customer-context-entry.js
-          grep -Fq "FROM gv1_business_medical_records" worker/day5-customer-context-entry.js
-          grep -Fq "founder_id=? AND venture_id=? AND bmr_id=? AND status='active'" worker/day5-customer-context-entry.js
-          grep -Fq "WHERE v.session_id=?" worker/day5-customer-context-entry.js
+          grep -Fq "FROM gv1_founder_venture_roles r" worker/day5-final-entry.js
+          grep -Fq "FROM gv1_business_medical_records" worker/day5-final-entry.js
+          grep -Fq "validation_status='accepted'" worker/day5-final-entry.js
+          grep -Fq "approval_status IN ('not_required','approved')" worker/day5-final-entry.js
+          grep -Fq "https://api.openai.com/v1/responses" worker/day5-final-entry.js
+          grep -Fq "Do not output internal confidence-gap keys" worker/day5-final-entry.js
           ! grep -Eq "bmr_id[[:space:]]*:.*request|body.*bmr_id" worker/day5-customer-context-entry.js
-          node -e "const w=require('./wrangler.day5-h19.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-customer-context-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='D5A2'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
+          node -e "const w=require('./wrangler.day5-h19.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-final-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='D5A2'||w.vars.DAY5_CUSTOMER_CONTEXT_RESOLUTION!=='session_venture_bmr_context_v2'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
 
-      - name: Diagnose H19 canonical BHR and active-care placement
+      - name: Verify governed AI secret remains on existing QA Worker
+        shell: bash
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 secret list --config wrangler.day5-h19.json > h19-secrets.json
+          grep -q 'OPENAI_API_KEY' h19-secrets.json
+
+      - name: Diagnose canonical BHR and active-care placement
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -71,7 +85,7 @@ jobs:
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5-h19.json --command "SELECT tp.treatment_plan_id,tp.name,tp.status,tp.version_no,tp.bmr_id,b.venture_id,v.venture_name,tp.created_at FROM gv1_treatment_plans tp LEFT JOIN gv1_business_medical_records b ON b.bmr_id=tp.bmr_id LEFT JOIN gv1_ventures v ON v.venture_id=b.venture_id ORDER BY tp.created_at DESC LIMIT 25;" | tee h19-plans.json
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5-h19.json --command "SELECT c.context_id,c.founder_id,c.venture_id,c.bmr_id,c.status,c.updated_at,v.venture_name,(SELECT COUNT(*) FROM gv1_treatment_plans tp WHERE tp.bmr_id=c.bmr_id AND tp.status NOT IN ('archived','cancelled','superseded')) AS active_plan_count FROM gv1_principal_contexts c LEFT JOIN gv1_ventures v ON v.venture_id=c.venture_id WHERE c.status='active' ORDER BY c.founder_id,lower(trim(COALESCE(v.venture_name,''))),c.updated_at DESC LIMIT 100;" | tee h19-contexts.json
 
-      - name: Deploy exact H19 candidate to existing QA Worker
+      - name: Deploy exact final Day 5 candidate to existing QA Worker
         run: npx --yes wrangler@4.120.0 deploy --config wrangler.day5-h19.json
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -83,27 +97,27 @@ jobs:
           set -euo pipefail
           BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev'
           for attempt in $(seq 1 30); do
-            curl -fsS -H 'Cache-Control: no-cache' "$BASE/health?h19=$GITHUB_SHA-$attempt" -o h19-health.json || true
-            curl -fsS -H 'Cache-Control: no-cache' "$BASE/api/v1/day5/readiness?h19=$GITHUB_SHA-$attempt" -o h19-ready.json || true
+            curl -fsS -H 'Cache-Control: no-cache' "$BASE/health?day5=$GITHUB_SHA-$attempt" -o h19-health.json || true
+            curl -fsS -H 'Cache-Control: no-cache' "$BASE/api/v1/day5/readiness?day5=$GITHUB_SHA-$attempt" -o h19-ready.json || true
             if grep -q '"success":true' h19-health.json 2>/dev/null \
               && grep -q '"ready":true' h19-ready.json 2>/dev/null \
               && grep -q '"customer_treatment_acknowledgement":"v1"' h19-ready.json 2>/dev/null \
               && grep -q '"customer_checkin_session_bound":"v1"' h19-ready.json 2>/dev/null; then
-              echo "PASS: H19 exact venture/BHR runtime converged on attempt $attempt."
+              echo "PASS: final Day 5 exact-BMR runtime converged on attempt $attempt."
               exit 0
             fi
             sleep 3
           done
-          echo 'FAIL: H19 QA runtime did not converge.' >&2
+          echo 'FAIL: final Day 5 QA runtime did not converge.' >&2
           exit 1
 
-      - name: H19 summary
+      - name: Day 5 summary
         run: |
-          echo '## Day 5 H19 Exact Venture/BHR Context' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Day 5 Exact-BMR Active Care + Governed Path Evidence' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA ref only: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA Worker/D1 only: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Session -> canonical founder -> founder/venture role -> venture -> BHR -> context: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Canonical BHR / active-care placement diagnostic: CAPTURED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 5 cumulative runtime preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Session -> canonical founder -> founder/venture role -> venture -> BMR -> context: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Accepted governed Shot/Sight/Path -> bounded server-side Responses API: READY' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Customer-safe deterministic fallback without internal evidence keys: READY' >> "$GITHUB_STEP_SUMMARY"
           echo '- Customer Treatment Plan acknowledgement/check-in capability: READY' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production/main untouched: PASS' >> "$GITHUB_STEP_SUMMARY"
