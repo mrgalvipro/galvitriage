@@ -16,7 +16,7 @@ test('H06-H08 browser shows canonical Acuity/GalviGuide routing without replacin
     'GalviScore + Business Health Acuity','Yellow — passive care / needs attention',
     'Orange — active care recommended','Open GalviGuide','Prepare with GalviGuide',
     'The existing “What you should watch?” box is GalviScore guidance',
-    'GalviGuide AI Guidance — generated from your approved care state','data-day5-guide-answer',
+    'GalviGuide AI Guidance','data-day5-guide-answer','Ask GalviGuide a Care-Navigation Question','Recommended Next Actions',
     'testBoundary','change_score','stageHosts','galvisight-result-panel','galvipath-result-panel'
   ]) assert.ok(routing.includes(required),required);
   assert.equal(/api\.openai\.com|OPENAI_API_KEY/.test(routing),false);
