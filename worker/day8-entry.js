@@ -1,5 +1,5 @@
 import day5Worker from './day5-entry.js';
-import { GVError, context, failure, headers, success } from './day5-common.js';
+import { GVError, context, failure, headers, success, hash, newId, now, requireId, requireText } from './day5-common.js';
 import { requireClinicianIdentity, asLegacyOperatorHeaders } from './auth/operator-identity.js';
 import { handleOperatorAuth } from './routes/operator-auth.js';
 import { handleOperatorWorkspace } from './routes/operator-workspace.js';
@@ -91,7 +91,7 @@ async function ensureActiveCareSession(request,env,identity){
     env.DB.prepare(`UPDATE gv1_business_medical_records SET current_session_id=?,updated_at=? WHERE bmr_id=?`).bind(ids.sessionId,timestamp,bmrId),
     env.DB.prepare(`INSERT OR IGNORE INTO gv1_journey_events
       (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
-      VALUES (?,?,?,?,'galviclinic_active_care_session_started','GalviClinic','Day5',?,?,?,?,'qa',?)`)
+      VALUES (?,?,?,?,'galviclinic_active_care_session_started','GalviClinic','Day5',?,?,?,?,?,'qa',?)`)
       .bind(ids.eventId,`day5:active_care_session:${bmrId}`,bmrId,ids.sessionId,timestamp,actorType,JSON.stringify({actor_id:actorId,record_version:Number(bmr.record_version||1),reason:'missing_canonical_active_care_session'}),fingerprint,`day5-session-${ids.sessionId}`,timestamp),
     env.DB.prepare(`INSERT OR IGNORE INTO gv1_audit_log
       (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
@@ -102,6 +102,60 @@ async function ensureActiveCareSession(request,env,identity){
   const verified=await env.DB.prepare(`SELECT session_id,bmr_id FROM gv1_assessment_sessions WHERE session_id=? LIMIT 1`).bind(ids.sessionId).first();
   if(!verified||verified.bmr_id!==bmrId) throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','Unable to establish the canonical GalviClinic active-care session.',409);
   return ids.sessionId;
+}
+
+async function recordClinicianNote(request,env,ctx,identity){
+  const body=await requestBody(request);
+  const bmrId=requireId('bmr_id',body.bmr_id);
+  const sourceType=String(body?.source_type||'').trim();
+  if(sourceType!=='facilitator_capture') throw new GVError('GV_REQ_SCHEMA','GalviClinic notes require source_type facilitator_capture.',422);
+  if(String(body?.consent_status||'confirmed').trim()!=='confirmed') throw new GVError('GV_CONSENT_REQUIRED','Confirmed care-processing consent is required for a GalviClinic note.',403);
+  const valueText=requireText('value_text',body.value_text,4000);
+  const sourceRef=String(body?.source_ref||`galviclinic_note_${crypto.randomUUID()}`).trim().slice(0,240);
+  const key=String(request.headers.get('Idempotency-Key')||'').trim();
+  if(!key) throw new GVError('GV_IDEMPOTENCY_REQUIRED','Idempotency-Key header is required.',400);
+
+  const sessionId=await ensureActiveCareSession(request,env,identity);
+  if(!sessionId) throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','A canonical GalviClinic session is required for a clinician note.',409);
+  const record=await env.DB.prepare(`SELECT bmr_id,current_session_id FROM gv1_business_medical_records WHERE bmr_id=? LIMIT 1`).bind(bmrId).first();
+  if(!record) throw new GVError('GV_NOT_FOUND','BMR was not found.',404);
+
+  const capturedAt=String(body?.captured_at||now()).trim();
+  const fp=await hash('day8:clinician-note',{bmrId,sessionId,sourceRef,valueText,capturedAt});
+  const scope='day8:clinician-note';
+  const prior=await env.DB.prepare(`SELECT request_fingerprint,response_entity_id FROM gv1_idempotency_keys WHERE scope=? AND idempotency_key=? LIMIT 1`).bind(scope,key).first();
+  if(prior){
+    if(prior.request_fingerprint!==fp) throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH','Idempotency key was reused with different content.',409);
+    const evidence=await env.DB.prepare(`SELECT evidence_id,bmr_id,session_id,evidence_type,source_product,source_reference,confidence,evidence_version,created_at FROM gv1_evidence_items WHERE evidence_id=? AND bmr_id=? LIMIT 1`).bind(prior.response_entity_id,bmrId).first();
+    if(!evidence) throw new GVError('GV_NOT_FOUND','Stored GalviClinic note evidence was not found.',404);
+    return success(ctx,{evidence,idempotent_replay:true},200,'no_change',{idempotent_replay:true});
+  }
+
+  const ts=now(), evidenceId=newId('evd'), actorType=identity?.role==='business_physician'?'business_physician':'galviclinician';
+  const actorId=String(identity?.operator_id||'').trim()||'clinician';
+  const eventId=newId('jev'), auditId=newId('aud'), receiptId=newId('idem');
+  const content=JSON.stringify({value_type:'text',value_text:valueText,captured_at:capturedAt,consent_status:'confirmed',actor_type:actorType,actor_id:actorId});
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO gv1_evidence_items
+      (evidence_id,bmr_id,session_id,evidence_type,source_product,source_reference,content_json,confidence,evidence_version,created_at)
+      VALUES (?,?,?,'clinician_note','GalviClinic',?,?,NULL,1,?)`)
+      .bind(evidenceId,bmrId,sessionId,sourceRef,content,ts),
+    env.DB.prepare(`INSERT INTO gv1_journey_events
+      (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
+      VALUES (?,?,?,?,'galviclinic_note_recorded','GalviClinic','Day5',?,?,?,?,?,'qa',?)`)
+      .bind(eventId,`day8:clinician-note:${evidenceId}`,bmrId,sessionId,ts,actorType,JSON.stringify({evidence_id:evidenceId,source_reference:sourceRef}),fp,ctx.correlation,ts),
+    env.DB.prepare(`INSERT INTO gv1_audit_log
+      (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+      VALUES (?,'evidence',?,'create',NULL,1,?,'galviclinic','clinician_note',?,?,'qa',?,?)`)
+      .bind(auditId,evidenceId,actorType,JSON.stringify({bmr_id:bmrId,session_id:sessionId,source_reference:sourceRef}),ctx.correlation,ts,ts),
+    env.DB.prepare(`INSERT INTO gv1_idempotency_keys
+      (idempotency_id,scope,idempotency_key,request_fingerprint,response_status,response_entity_type,response_entity_id,created_at)
+      VALUES (?,?,?,?,201,'evidence',?,?)`)
+      .bind(receiptId,scope,key,fp,evidenceId,ts)
+  ]);
+
+  const evidence=await env.DB.prepare(`SELECT evidence_id,bmr_id,session_id,evidence_type,source_product,source_reference,confidence,evidence_version,created_at FROM gv1_evidence_items WHERE evidence_id=? LIMIT 1`).bind(evidenceId).first();
+  return success(ctx,{evidence,idempotent_replay:false},201,'created',{idempotent_replay:false});
 }
 
 async function preflightTreatmentPlanFk(request,env){
@@ -150,8 +204,11 @@ const worker={async fetch(request,env,executionContext){
     if(identity.role!=='business_physician'&&(path==='/api/v1/governance/confirmations'||/\/transitions$/.test(path)||physicianOnly(path)))
       throw new GVError('GV_AUTH_FORBIDDEN','Business Physician authorization is required.',403);
 
+    if(request.method==='POST'&&path==='/api/v1/evidence')
+      return recordClinicianNote(request,env,ctx,identity);
+
     // Start/restore GalviClinic continuity only on Day 5 write commands that require
-    // the canonical session contract. This closes the legacy-BMR 409 without a
+    // the canonical session contract. This closes legacy-BMR continuity without a
     // read-side write, new BMR, manual SQL repair, or shadow clinical identity.
     if(request.method==='POST'&&(path==='/api/v1/recommendations'||path==='/api/v1/treatment-plans'))
       await ensureActiveCareSession(request,env,identity);
