@@ -7,7 +7,9 @@ const migration=read('migrations/day1/0005_day5_governed_care.sql');
 const activeMigration=read('migrations/day1/0006_day5_active_care_loop.sql');
 const treatmentMigration=read('migrations/day1/0007_day5_treatment_contract.sql');
 const ledger=read('migrations/day1/0590_day5_active_care_ledger_reconcile.sql');
-const entry=read('worker/day5-entry.js');
+const entryAdapter=read('worker/day5-entry.js');
+const entryCore=read('worker/day5-core-entry.js');
+const entry=`${entryAdapter}\n${entryCore}`;
 const routes=read('worker/routes/care.js');
 const service=read('worker/domain/care-service.js');
 const activeService=read('worker/domain/day5-active-care-service.js');
@@ -99,6 +101,13 @@ test('Day 5 cumulative Worker preserves QA authority, governed AI/clarification 
   assert.ok(has(treatmentMigration,['clinical_priority','source_versions_json','brief_fingerprint']));
   assert.ok(has(ledger,["'D5A1'","'D5A2'"]));
   assert.ok(has(activeService,['getClinicBrief','recordFindingDecision','addGalviRx','orderGalviAudit','createReferral','submitCheckin','reassessCare']));
+});
+
+test('Day 5 critical-path adapter bounds provider evidence without deleting canonical history or weakening clarification/governance',()=>{
+  assert.ok(has(entryAdapter,["import day5Worker from './day5-core-entry.js'",'MAX_PROVIDER_EVIDENCE_ITEMS=3','selectProviderEvidence','evidence_ids:ids','/api/v1/day5/customer/score-metadata','score_recomputed_in_browser:false','acuity_recomputed_in_browser:false']));
+  assert.equal(entryAdapter.includes('api.openai.com'),false);
+  assert.equal(entryAdapter.includes('DELETE FROM gv1_evidence_items'),false);
+  assert.equal(entryAdapter.includes('UPDATE gv1_evidence_items'),false);
 });
 
 test('Production and GalviCare baseline files remain outside the Day 5 implementation target',()=>{
