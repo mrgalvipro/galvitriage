@@ -11,18 +11,19 @@ const build=read('scripts/day5-build-qa-frontend.mjs');
 
 test('H06-H08 browser shows canonical Acuity/GalviGuide routing without replacing clarification or recomputing truth',()=>{
   for(const required of [
-    'GalviCare Day 5 customer care routing + GalviGuide v1',
+    'GalviCare Day 5 customer care routing + GalviGuide v2',
     '/api/v1/day5/customer/galviguide','X-Galvi-Day3-Session',
     'GalviScore + Business Health Acuity','Yellow — passive care / needs attention',
     'Orange — active care recommended','Open GalviGuide','Prepare with GalviGuide',
     'The existing “What you should watch?” box is GalviScore guidance',
+    'GalviGuide AI Guidance — generated from your approved care state','data-day5-guide-answer',
     'testBoundary','change_score','stageHosts','galvisight-result-panel','galvipath-result-panel'
   ]) assert.ok(routing.includes(required),required);
   assert.equal(/api\.openai\.com|OPENAI_API_KEY/.test(routing),false);
   assert.equal(/bmr_id\s*:/.test(routing),false);
   assert.equal(/calculateGalviScore|calculateAcuity|ACUITY_WEIGHTS|acuityScore\s*=.*reduce/.test(routing),false);
-  assert.ok(build.includes('GalviCare Day 5 customer care routing + GalviGuide v1'));
-  assert.ok(build.includes('server-owned Acuity/GalviGuide routing'));
+  assert.ok(build.includes('GalviCare Day 5 customer care routing + GalviGuide v2'));
+  assert.ok(build.includes('explicit governed GalviGuide AI guidance'));
 });
 
 test('H02/H06 hidden completed clarification DOM cannot suppress canonical Score metadata or care routing',()=>{
