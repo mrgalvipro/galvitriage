@@ -37,20 +37,21 @@ test('H07 GalviGuide customer endpoint is bounded, read-only and fails prohibite
   assert.equal(guide.includes('bmr_id'),false);
 });
 
-test('H02 clarification transition and H06 Acuity projection cannot be broken by current Sight/Path host variants',()=>{
+test('H02 clarification transition and H06 Acuity projection cannot be broken by current result or hidden follow-up host variants',()=>{
   for(const required of [
-    'FOLLOWUP_IDS','followupActive','resultReady','routeFingerprint','insertPanelSafely','stageHosts',
+    'FOLLOWUP_PANELS','followupActive','resultReady','routeFingerprint','insertPanelSafely','stageHosts',
+    'galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup',
     'galvisight-result-panel','galvisight-handoff','galvipath-result-panel','galvipath-result',
     "row.insertAdjacentElement('beforebegin',panel)",
     'if(followupActive()){cached=null;return null}',
     'if(followupActive()){cached=null;return}',
-    "observer.observe(document.body,{subtree:true,childList:true,attributes:true"
+    "observer.observe(document.body,{subtree:true,childList:true,attributes:true",
+    'for(let current=node;current&&current.nodeType===1;current=current.parentElement)',
+    "current.classList?.contains('hidden')",
+    'node.getClientRects().length>0'
   ]) assert.ok(browser.includes(required),required);
 
-  for(const followupId of [
-    'followup-question-container','galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions'
-  ]) assert.ok(browser.includes(followupId),followupId);
-
+  assert.equal(browser.includes("FOLLOWUP_IDS=['followup-question-container'"),false);
   assert.equal(browser.includes('if(row)host.insertBefore(panel,row)'),false);
   assert.ok(browser.includes('existing?.dataset?.day5CareFingerprint===fingerprint'));
   assert.ok(browser.includes('for(const host of stageHosts())'));
