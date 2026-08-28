@@ -16,7 +16,8 @@ const ADAPTERS=[
     required:[
       '/api/v1/day5/customer/galviguide','X-Galvi-Day3-Session','GalviScore + Business Health Acuity',
       'Acuity','Open GalviGuide','Prepare with GalviGuide','GV_DAY5_CARE_ROUTE_NOT_READY',
-      'GalviGuide AI Guidance — generated from your approved care state','data-day5-guide-answer','testBoundary'
+      'Ask GalviGuide a Care-Navigation Question','GalviGuide AI Guidance','Recommended Next Actions',
+      'data-day5-guide-answer','applyPathEvidenceGuidance','testBoundary'
     ]
   },
   {
@@ -61,11 +62,14 @@ for(const required of [
   'galviscore-classification','galviscore-lowest-category','day5-score-acuity-summary','/api/v1/day5/customer/score-metadata',
   'GalviScore + Business Health Acuity','Yellow — passive care / needs attention','Orange — active care recommended',
   'Open GalviGuide','Prepare with GalviGuide','The existing “What you should watch?” box is GalviScore guidance',
-  'GalviGuide AI Guidance — generated from your approved care state','data-day5-guide-answer',
-  'Acknowledge Treatment Plan','Submit scheduled check-in','Acknowledgement is separate from Treatment Plan authorship.',
+  'Ask GalviGuide a Care-Navigation Question','GalviGuide AI Guidance','Recommended Next Actions','data-day5-guide-answer',
+  'applyPathEvidenceGuidance','Acknowledge Treatment Plan','Submit scheduled check-in','Acknowledgement is separate from Treatment Plan authorship.',
   '/api/v1/day5/customer/galviguide','/api/v1/day5/customer/checkins'
 ]){
   if(!html.includes(required))throw new Error(`Generated QA frontend missing Day 5 customer critical-path contract: ${required}`);
 }
+for(const prohibited of ['Provider: OpenAI','AI proof:','generated from your approved care state']){
+  if(html.includes(prohibited))throw new Error(`Generated QA frontend exposes customer-facing GalviGuide technical metadata/copy that must remain hidden: ${prohibited}`);
+}
 writeFileSync(OUT,html,'utf8');
-console.log('PASS — cumulative QA frontend contains canonical Score metadata, explicit governed GalviGuide AI guidance, server-owned Acuity routing, and Treatment Plan acknowledgement/check-in without browser score/Acuity/BMR/OpenAI authority.');
+console.log('PASS — cumulative QA frontend contains canonical Score metadata, customer-safe governed GalviGuide AI guidance, server-owned Acuity routing, AI-synthesized Path evidence support, and Treatment Plan acknowledgement/check-in without browser score/Acuity/BMR/OpenAI authority.');
