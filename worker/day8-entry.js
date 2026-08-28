@@ -33,10 +33,80 @@ function asDay5CareHeaders(request,identity){
   return new Request(request,{headers:h});
 }
 
+async function requestBody(request){
+  try{return await request.clone().json();}catch{return {};}
+}
+
+function continuityIds(bmrId){
+  const suffix=String(bmrId||'').replace(/[^a-zA-Z0-9]/g,'').slice(-28)||'bmr';
+  return {
+    sessionId:`gvs_day5_clinic_${suffix}`,
+    clientKey:`day5-clinic:${bmrId}`,
+    eventId:`jev_day5_clinic_${suffix}`,
+    auditId:`aud_day5_clinic_${suffix}`
+  };
+}
+
+/*
+ * Day 5 active-care session bridge.
+ *
+ * A GalviClinic encounter is allowed to start a new session on the EXISTING BMR.
+ * Reads never call this function. The bridge runs only as part of a clinician
+ * write command and only when the canonical BMR has no valid assessment session.
+ * It does not create a founder, venture, BMR, Chart, or shadow clinic record.
+ * The deterministic IDs + INSERT OR IGNORE make retry/replay duplicate-safe.
+ */
+async function ensureActiveCareSession(request,env,identity){
+  if(!['POST','PUT','PATCH'].includes(request.method)) return null;
+  const body=await requestBody(request);
+  const bmrId=String(body?.bmr_id||'').trim();
+  if(!bmrId) return null;
+  const bmr=await env.DB.prepare(`SELECT bmr_id,venture_id,current_session_id,record_version FROM gv1_business_medical_records WHERE bmr_id=? LIMIT 1`).bind(bmrId).first();
+  if(!bmr) throw new GVError('GV_NOT_FOUND','BMR was not found.',404);
+
+  const currentId=String(bmr.current_session_id||'').trim();
+  if(currentId){
+    const current=await env.DB.prepare(`SELECT session_id,bmr_id FROM gv1_assessment_sessions WHERE session_id=? LIMIT 1`).bind(currentId).first();
+    if(current?.bmr_id===bmrId) return currentId;
+  }
+
+  const latest=await env.DB.prepare(`SELECT session_id FROM gv1_assessment_sessions WHERE bmr_id=? ORDER BY updated_at DESC,created_at DESC LIMIT 1`).bind(bmrId).first();
+  if(latest?.session_id){
+    await env.DB.prepare(`UPDATE gv1_business_medical_records SET current_session_id=?,updated_at=CURRENT_TIMESTAMP WHERE bmr_id=? AND (current_session_id IS NULL OR current_session_id='' OR current_session_id NOT IN (SELECT session_id FROM gv1_assessment_sessions WHERE bmr_id=?))`).bind(latest.session_id,bmrId,bmrId).run();
+    return String(latest.session_id);
+  }
+
+  const founder=await env.DB.prepare(`SELECT founder_id FROM gv1_founder_venture_roles WHERE venture_id=? AND status='active' ORDER BY is_primary DESC,created_at ASC LIMIT 1`).bind(bmr.venture_id).first();
+  if(!founder?.founder_id) throw new GVError('GV_LINEAGE_REQUIRED','Active care requires a canonical founder linked to this BMR venture.',409);
+
+  const ids=continuityIds(bmrId), timestamp=new Date().toISOString();
+  const actorType=identity?.role==='business_physician'?'business_physician':'galviclinician';
+  const actorId=String(identity?.operator_id||'').trim()||'clinician';
+  const fingerprint=`day5-active-care-session:${bmrId}`;
+  await env.DB.batch([
+    env.DB.prepare(`INSERT OR IGNORE INTO gv1_assessment_sessions
+      (session_id,bmr_id,venture_id,founder_id,client_session_key,source,current_stage,status,started_at,completed_at,created_at,updated_at)
+      VALUES (?,?,?,?,?,'galviclinic_day5_continuity','GalviClinic','active',?,NULL,?,?)`)
+      .bind(ids.sessionId,bmrId,bmr.venture_id,founder.founder_id,ids.clientKey,timestamp,timestamp,timestamp),
+    env.DB.prepare(`UPDATE gv1_business_medical_records SET current_session_id=?,updated_at=? WHERE bmr_id=?`).bind(ids.sessionId,timestamp,bmrId),
+    env.DB.prepare(`INSERT OR IGNORE INTO gv1_journey_events
+      (journey_event_id,event_key,bmr_id,session_id,event_name,product,current_stage,occurred_at,actor_type,metadata_json,request_fingerprint,correlation_id,environment,created_at)
+      VALUES (?,?,?,?,'galviclinic_active_care_session_started','GalviClinic','Day5',?,?,?,?,'qa',?)`)
+      .bind(ids.eventId,`day5:active_care_session:${bmrId}`,bmrId,ids.sessionId,timestamp,actorType,JSON.stringify({actor_id:actorId,record_version:Number(bmr.record_version||1),reason:'missing_canonical_active_care_session'}),fingerprint,`day5-session-${ids.sessionId}`,timestamp),
+    env.DB.prepare(`INSERT OR IGNORE INTO gv1_audit_log
+      (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+      VALUES (?,'business_medical_record',?,'session_link',?,?,?,?,?,?,?,'qa',?,?)`)
+      .bind(ids.auditId,bmrId,Number(bmr.record_version||1),Number(bmr.record_version||1),actorType,'day8-entry','day5_active_care_session_bridge',JSON.stringify({session_id:ids.sessionId,venture_id:bmr.venture_id,founder_id:founder.founder_id}),`day5-session-${ids.sessionId}`,timestamp,timestamp)
+  ]);
+
+  const verified=await env.DB.prepare(`SELECT session_id,bmr_id FROM gv1_assessment_sessions WHERE session_id=? LIMIT 1`).bind(ids.sessionId).first();
+  if(!verified||verified.bmr_id!==bmrId) throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','Unable to establish the canonical GalviClinic active-care session.',409);
+  return ids.sessionId;
+}
+
 async function preflightTreatmentPlanFk(request,env){
   if(request.method!=='POST') return;
-  let body={};
-  try{ body=await request.clone().json(); }catch{ return; }
+  const body=await requestBody(request);
   const bmrId=String(body?.bmr_id||'').trim();
   if(!bmrId) return;
   const bmr=await env.DB.prepare(`SELECT bmr_id,current_session_id FROM gv1_business_medical_records WHERE bmr_id=? LIMIT 1`).bind(bmrId).first();
@@ -79,6 +149,12 @@ const worker={async fetch(request,env,executionContext){
     const identity=await requireClinicianIdentity(request,env);
     if(identity.role!=='business_physician'&&(path==='/api/v1/governance/confirmations'||/\/transitions$/.test(path)||physicianOnly(path)))
       throw new GVError('GV_AUTH_FORBIDDEN','Business Physician authorization is required.',403);
+
+    // Start/restore GalviClinic continuity only on Day 5 write commands that require
+    // the canonical session contract. This closes the legacy-BMR 409 without a
+    // read-side write, new BMR, manual SQL repair, or shadow clinical identity.
+    if(request.method==='POST'&&(path==='/api/v1/recommendations'||path==='/api/v1/treatment-plans'))
+      await ensureActiveCareSession(request,env,identity);
     if(path==='/api/v1/treatment-plans') await preflightTreatmentPlanFk(request,env);
     if(activeCarePath(path)) return day5Worker.fetch(asDay5CareHeaders(request,identity),env,executionContext);
     const secured=asLegacyOperatorHeaders(request,identity);
