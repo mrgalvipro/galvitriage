@@ -85,7 +85,9 @@ jobs:
           grep -Fq 'GalviCare Day 5 canonical GalviScore metadata v1' dist-qa/index.html
           grep -Fq '/api/v1/day5/customer/score-metadata' dist-qa/index.html
           grep -Fq 'day5-score-acuity-summary' dist-qa/index.html
-          grep -Fq 'GalviCare Day 5 customer care routing + GalviGuide v1' dist-qa/index.html
+          grep -Fq 'GalviCare Day 5 customer care routing + GalviGuide v2' dist-qa/index.html
+          grep -Fq 'GalviGuide AI Guidance — generated from your approved care state' dist-qa/index.html
+          grep -Fq 'data-day5-guide-answer' dist-qa/index.html
           grep -Fq 'GalviScore + Business Health Acuity' dist-qa/index.html
           grep -Fq 'Yellow — passive care / needs attention' dist-qa/index.html
           grep -Fq 'Orange — active care recommended' dist-qa/index.html
@@ -140,7 +142,9 @@ jobs:
               && grep -Fq 'GalviCare Day 5 canonical GalviScore metadata v1' qa-runtime.html 2>/dev/null \
               && grep -Fq '/api/v1/day5/customer/score-metadata' qa-runtime.html 2>/dev/null \
               && grep -Fq 'day5-score-acuity-summary' qa-runtime.html 2>/dev/null \
-              && grep -Fq 'GalviCare Day 5 customer care routing + GalviGuide v1' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'GalviCare Day 5 customer care routing + GalviGuide v2' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'GalviGuide AI Guidance — generated from your approved care state' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'data-day5-guide-answer' qa-runtime.html 2>/dev/null \
               && grep -Fq 'GalviScore + Business Health Acuity' qa-runtime.html 2>/dev/null \
               && grep -Fq 'Yellow — passive care / needs attention' qa-runtime.html 2>/dev/null \
               && grep -Fq 'Orange — active care recommended' qa-runtime.html 2>/dev/null \
@@ -194,7 +198,7 @@ jobs:
           echo '- Day7D clarification/replay regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 4 GalviChart/secure return: PRESERVED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 5 canonical Acuity/disposition projection: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 5 bounded GalviGuide routing: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 5 bounded GalviGuide AI guidance: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 5 Treatment Plan acknowledgement: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 5 scheduled customer check-in: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Customer BMR authority remains server-resolved: PASS' >> "$GITHUB_STEP_SUMMARY"
