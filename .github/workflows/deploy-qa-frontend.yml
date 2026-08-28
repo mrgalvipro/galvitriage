@@ -86,8 +86,11 @@ jobs:
           grep -Fq '/api/v1/day5/customer/score-metadata' dist-qa/index.html
           grep -Fq 'day5-score-acuity-summary' dist-qa/index.html
           grep -Fq 'GalviCare Day 5 customer care routing + GalviGuide v2' dist-qa/index.html
-          grep -Fq 'GalviGuide AI Guidance — generated from your approved care state' dist-qa/index.html
+          grep -Fq 'Ask GalviGuide a Care-Navigation Question' dist-qa/index.html
+          grep -Fq 'GalviGuide AI Guidance' dist-qa/index.html
+          grep -Fq 'Recommended Next Actions' dist-qa/index.html
           grep -Fq 'data-day5-guide-answer' dist-qa/index.html
+          grep -Fq 'applyPathEvidenceGuidance' dist-qa/index.html
           grep -Fq 'GalviScore + Business Health Acuity' dist-qa/index.html
           grep -Fq 'Yellow — passive care / needs attention' dist-qa/index.html
           grep -Fq 'Orange — active care recommended' dist-qa/index.html
@@ -109,6 +112,9 @@ jobs:
           grep -Fq 'Documents' dist-qa/index.html
           grep -Fq 'GalviClinic' dist-qa/index.html
           grep -Fq 'History' dist-qa/index.html
+          ! grep -Fq 'generated from your approved care state' dist-qa/index.html
+          ! grep -Fq 'Provider: OpenAI' dist-qa/index.html
+          ! grep -Fq 'AI proof:' dist-qa/index.html
           ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
           ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY' day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-score-metadata.js day5-customer-care-routing.js day5-customer-active-care.js
           ! grep -Eq 'bmr_id[[:space:]]*:' day5-score-metadata.js
@@ -143,8 +149,11 @@ jobs:
               && grep -Fq '/api/v1/day5/customer/score-metadata' qa-runtime.html 2>/dev/null \
               && grep -Fq 'day5-score-acuity-summary' qa-runtime.html 2>/dev/null \
               && grep -Fq 'GalviCare Day 5 customer care routing + GalviGuide v2' qa-runtime.html 2>/dev/null \
-              && grep -Fq 'GalviGuide AI Guidance — generated from your approved care state' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'Ask GalviGuide a Care-Navigation Question' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'GalviGuide AI Guidance' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'Recommended Next Actions' qa-runtime.html 2>/dev/null \
               && grep -Fq 'data-day5-guide-answer' qa-runtime.html 2>/dev/null \
+              && grep -Fq 'applyPathEvidenceGuidance' qa-runtime.html 2>/dev/null \
               && grep -Fq 'GalviScore + Business Health Acuity' qa-runtime.html 2>/dev/null \
               && grep -Fq 'Yellow — passive care / needs attention' qa-runtime.html 2>/dev/null \
               && grep -Fq 'Orange — active care recommended' qa-runtime.html 2>/dev/null \
@@ -158,6 +167,9 @@ jobs:
               && grep -Fq 'What GalviCare understands right now' qa-runtime.html 2>/dev/null \
               && grep -Fq 'View GalviChart™' qa-runtime.html 2>/dev/null \
               && grep -Fq '/api/v1/day4/chart' qa-runtime.html 2>/dev/null \
+              && ! grep -Fq 'generated from your approved care state' qa-runtime.html 2>/dev/null \
+              && ! grep -Fq 'Provider: OpenAI' qa-runtime.html 2>/dev/null \
+              && ! grep -Fq 'AI proof:' qa-runtime.html 2>/dev/null \
               && ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' qa-runtime.html 2>/dev/null; then
               echo "PASS: cumulative Day 5 QA frontend converged on attempt $attempt."
               exit 0
@@ -198,7 +210,7 @@ jobs:
           echo '- Day7D clarification/replay regression: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 4 GalviChart/secure return: PRESERVED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 5 canonical Acuity/disposition projection: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 5 bounded GalviGuide AI guidance: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 5 customer-safe GalviGuide AI guidance + Path evidence synthesis: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 5 Treatment Plan acknowledgement: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 5 scheduled customer check-in: DEPLOYED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Customer BMR authority remains server-resolved: PASS' >> "$GITHUB_STEP_SUMMARY"
