@@ -1,4 +1,4 @@
-import day5Core from './day5-core-entry.js';
+import day5Runtime from './day5-entry.js';
 import day4Worker from './day4-session-identity-entry.js';
 import { GVError, CUSTOMER_SESSION_HEADER, context, failure, idempotencyKey, jsonBody, requireRuntime, success } from './day5-common.js';
 import { first } from './repositories/care-repository.js';
@@ -119,7 +119,7 @@ export default{async fetch(request,env,executionContext){
 
     if(request.method==='POST'&&path==='/api/v1/day4/chart'&&text(request.headers.get(CUSTOMER_SESSION_HEADER))){
       const scoped=await scopedChartRequest(request,env);
-      return markContextResolution(await day5Core.fetch(scoped.request,env,executionContext));
+      return markContextResolution(await day5Runtime.fetch(scoped.request,env,executionContext));
     }
 
     const customerAck=path.match(/^\/api\/v1\/day5\/customer\/treatment-plans\/([^/]+)\/acknowledgement$/);
@@ -135,7 +135,7 @@ export default{async fetch(request,env,executionContext){
       return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,identity_source:DAY5_CUSTOMER_CONTEXT_RESOLUTION});
     }
 
-    return day5Core.fetch(request,env,executionContext);
+    return day5Runtime.fetch(request,env,executionContext);
   }catch(error){
     console.error('GalviCare 1.0 Day 5 customer context error',error?.code||'GV_INTERNAL',error?.message||'unexpected');
     return failure(ctx,error);
