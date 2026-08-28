@@ -15,7 +15,8 @@ const ADAPTERS=[
     signature:'GalviCare Day 5 Path evidence strengthening projection v1',
     required:[
       'Evidence guidance:','required_data_completeness','evidence_quality','answer_consistency',
-      'corroboration','context_completeness','customer_safe_v1','GalviCareDay5EvidenceStrengthening'
+      'corroboration','context_completeness','customer_safe_v1','GalviCareDay5EvidenceStrengthening',
+      'if(status.innerHTML!==STATUS_HTML)','if(scheduled)return','queueMicrotask(()=>{scheduled=false;humanize()})'
     ]
   },
   {
@@ -76,6 +77,7 @@ for(const config of ADAPTERS){
 for(const required of [
   'galviscore-classification','galviscore-lowest-category','day5-score-acuity-summary','/api/v1/day5/customer/score-metadata',
   'GalviCare Day 5 Path evidence strengthening projection v1','Evidence guidance:','customer_safe_v1',
+  'if(status.innerHTML!==STATUS_HTML)','if(scheduled)return','queueMicrotask(()=>{scheduled=false;humanize()})',
   'GalviCare Day 5 governed Path evidence synthesis v1','customer-specific evidence requests',
   'GalviScore + Business Health Acuity','Yellow — passive care / needs attention','Orange — active care recommended',
   'Open GalviGuide','Prepare with GalviGuide','The existing “What you should watch?” box is GalviScore guidance',
@@ -89,4 +91,4 @@ for(const prohibited of ['Provider: OpenAI','AI proof:','generated from your app
   if(html.includes(prohibited))throw new Error(`Generated QA frontend exposes customer-facing GalviGuide technical metadata/copy that must remain hidden: ${prohibited}`);
 }
 writeFileSync(OUT,html,'utf8');
-console.log('PASS — cumulative QA frontend contains canonical Score metadata, customer-safe governed GalviGuide AI guidance, customer-safe Path evidence fallback, AI-synthesized Path evidence support through the server-side governed Path route, server-owned Acuity routing, and Treatment Plan acknowledgement/check-in without browser score/Acuity/BMR/OpenAI authority.');
+console.log('PASS — cumulative QA frontend contains canonical Score metadata, customer-safe governed GalviGuide AI guidance, customer-safe Path evidence fallback with idempotent DOM reconciliation, AI-synthesized Path evidence support through the server-side governed Path route, server-owned Acuity routing, and Treatment Plan acknowledgement/check-in without browser score/Acuity/BMR/OpenAI authority.');
