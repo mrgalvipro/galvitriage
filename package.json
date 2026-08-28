@@ -24,7 +24,7 @@
     "stabilization:gate": "npm run check && npm test",
     "test:session": "node --test tests/session-continuity.test.mjs",
     "test:day4": "node --test tests/day4-worker.test.mjs",
-    "test:day5": "node --test tests/day5-care.test.mjs tests/day5-active-care.test.mjs tests/day5-care-routing.test.mjs",
+    "test:day5": "node --test tests/day5-care-routing.test.mjs tests/day5-care.test.mjs tests/day5-active-care.test.mjs",
     "day5:syntax": "node --check worker/day5-entry.js && node --check worker/day5-core-entry.js && node --check worker/day5-common.js && node --check worker/routes/care.js && node --check worker/domain/care-service.js && node --check worker/domain/day5-active-care-service.js && node --check worker/domain/day5-treatment-service.js && node --check worker/domain/day5-projection-service.js && node --check worker/domain/day5-care-result-service.js && node --check worker/domain/day5-timeline-service.js && node --check worker/repositories/care-repository.js && node --check day5-customer-care-routing.js",
     "day5:regression": "npm run test:day3:regression && npm run test:day4 && npm run test:session",
     "day5:gate": "npm run day5:syntax && npm run test:day5 && npm run day5:regression",
