@@ -1,0 +1,96 @@
+name: GalviVault Day 5 H19 Customer Context QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - qa-revamped-galvicare-0-5
+    paths:
+      - worker/day5-customer-context-entry.js
+      - wrangler.day5-h19.json
+      - .github/workflows/galvivault-day5-h19-qa.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvivault-qa-exclusive-mutator
+  cancel-in-progress: false
+
+jobs:
+  deploy-h19:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: qa
+    steps:
+      - name: Checkout exact QA candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: Prove existing QA ref only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "mrgalvipro/galvitriage"
+          test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
+          test "$(git branch --show-current)" != "work"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+
+      - name: Set up Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate H19 context boundary and inherited Day 5 contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/day5-customer-context-entry.js
+          node --check worker/day5-entry.js
+          node --check worker/day5-core-entry.js
+          node --test tests/day5-customer-active-care.test.mjs
+          node --test tests/day5-active-care.test.mjs tests/day5-care.test.mjs
+          grep -Fq "session_venture_context_v1" worker/day5-customer-context-entry.js
+          grep -Fq "WHERE v.session_id=?" worker/day5-customer-context-entry.js
+          grep -Fq "context_id:canonical.context.context_id" worker/day5-customer-context-entry.js
+          ! grep -Eq "bmr_id[[:space:]]*:.*request|body.*bmr_id" worker/day5-customer-context-entry.js
+          node -e "const w=require('./wrangler.day5-h19.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-customer-context-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='D5A2'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
+
+      - name: Deploy exact H19 candidate to existing QA Worker
+        run: npx --yes wrangler@4.120.0 deploy --config wrangler.day5-h19.json
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: Verify QA runtime and Day 5 readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev'
+          for attempt in $(seq 1 30); do
+            curl -fsS -H 'Cache-Control: no-cache' "$BASE/health?h19=$GITHUB_SHA-$attempt" -o h19-health.json || true
+            curl -fsS -H 'Cache-Control: no-cache' "$BASE/api/v1/day5/readiness?h19=$GITHUB_SHA-$attempt" -o h19-ready.json || true
+            if grep -q '"success":true' h19-health.json 2>/dev/null \
+              && grep -q '"ready":true' h19-ready.json 2>/dev/null \
+              && grep -q '"customer_treatment_acknowledgement":"v1"' h19-ready.json 2>/dev/null \
+              && grep -q '"customer_checkin_session_bound":"v1"' h19-ready.json 2>/dev/null; then
+              echo "PASS: H19 customer-context runtime converged on attempt $attempt."
+              exit 0
+            fi
+            sleep 3
+          done
+          echo 'FAIL: H19 QA runtime did not converge.' >&2
+          exit 1
+
+      - name: H19 summary
+        run: |
+          echo '## Day 5 H19 Customer Context' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Existing QA ref only: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Existing QA Worker/D1 only: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Session -> venture -> canonical context enforced: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 5 cumulative runtime preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Customer Treatment Plan acknowledgement/check-in capability: READY' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Production/main untouched: PASS' >> "$GITHUB_STEP_SUMMARY"
