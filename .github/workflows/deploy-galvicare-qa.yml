@@ -1,259 +1,74 @@
-name: Deploy GalviCare QA Worker
+name: GalviCare Day7D Legacy Regression Validator
 
+# Day 5+ cumulative QA ownership contract:
+# - galvivault-p0-day1-qa is owned by the cumulative Day 5 governed-care workflow.
+# - galvicare-0-5-qa is owned by the cumulative Day 5 browser workflow.
+# - This legacy Day7D workflow is intentionally manual-only. It may validate the
+#   inherited Day7D clarification/governed-AI contracts but cannot automatically
+#   deploy an older runtime over an active Day 5 candidate.
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - qa-revamped-galvicare-0-5
-    paths:
-      - "worker/worker.js"
-      - "worker/day7d-engine.js"
-      - "worker/day7d-day3-critical-path.js"
-      - "worker/day7d-runtime.js"
-      - "day7d-browser-customer-intelligence.js"
-      - "day3-governed-ai-customer-bridge.mjs"
-      - "scripts/day7b-build-qa-frontend.mjs"
-      - "scripts/day7d-preflight.mjs"
-      - "migrations/0006_day7d_customer_intelligence.sql"
-      - "tests/day7c-integration.test.mjs"
-      - "tests/day7d-customer-intelligence.test.mjs"
-      - "tests/day7d-customer-path-contract.test.mjs"
-      - "index.html"
-      - "qa-frontend-worker.js"
-      - "wrangler.day7d.json"
-      - "wrangler.qa-frontend.jsonc"
-      - "package.json"
-      - ".github/workflows/deploy-galvicare-qa.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: galvicare-qa-single-authoritative-deployer
+  group: galvicare-day7d-legacy-regression-validator
   cancel-in-progress: true
 
-env:
-  QA_API_URL: https://galvicare-triage-intake.mrgalvipro.workers.dev/api
-  QA_FRONTEND_URL: https://galvicare-0-5-qa.mrgalvipro.workers.dev
-  DAY7D_RULES_VERSION: galviengine_customer_intelligence_v0_5_4
-  DAY7D_QUESTION_VERSION: clinical_followups_v0_5_4
-  DAY7D_CONTENT_VERSION: galvicare_day7d_customer_intelligence_v0_5_6
-  DAY7D_RELEASE_CONTRACT: day7d_cumulative_customer_intelligence_v3
-
 jobs:
-  qa-release-gate:
-    name: Day 3 customer path → evidence intake → entitlement → governed AI → runtime proof
+  regression:
+    name: Validate inherited Day7D contracts without deployment
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-
+    timeout-minutes: 20
     steps:
-      - name: Checkout exact QA candidate
+      - name: Checkout requested QA candidate
         uses: actions/checkout@v4
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
 
+      - name: Prove approved QA ref
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "mrgalvipro/galvitriage"
+          test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
+          test "$(git branch --show-current)" != "work"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+
       - name: Set up Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: '22'
 
       - name: Install dependencies
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: Compute matched customer-path release fingerprint
-        shell: bash
-        run: |
-          set -euo pipefail
-          RELEASE_ID="$({ sha256sum worker/worker.js worker/day7d-engine.js worker/day7d-day3-critical-path.js day7d-browser-customer-intelligence.js day3-governed-ai-customer-bridge.mjs scripts/day7b-build-qa-frontend.mjs scripts/day7d-preflight.mjs tests/day7c-integration.test.mjs tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs index.html qa-frontend-worker.js wrangler.day7d.json wrangler.qa-frontend.jsonc; } | sha256sum | awk '{print $1}')"
-          test -n "$RELEASE_ID"
-          echo "DAY7D_RELEASE_ID=$RELEASE_ID" >> "$GITHUB_ENV"
-          echo "Matched GalviCare QA customer-path candidate fingerprint: $RELEASE_ID"
-
-      - name: Run authoritative pre-human gate
+      - name: Validate inherited clarification and governed-AI contracts
         shell: bash
         run: |
           set -euo pipefail
           node --check worker/day7d-engine.js
           node --check worker/day7d-day3-critical-path.js
           node --check day7d-browser-customer-intelligence.js
-          npm run day7d:gate
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const bridge=fs.readFileSync('day3-governed-ai-customer-bridge.mjs','utf8');
-          const wrapper=fs.readFileSync('worker/day7d-day3-critical-path.js','utf8');
-          const browser=fs.readFileSync('day7d-browser-customer-intelligence.js','utf8');
-          const bridgeRequired=[
-            'GalviCare Day 3 governed AI customer bridge v2',
-            "SESSION_HEADER='X-Galvi-Day3-Session'",
-            '/api/v1/day3/customer-bootstrap',
-            'authoritative_galvicare_session',
-            'GOVERNED BUSINESS HEALTH INTELLIGENCE',
-            '/api/v1/day3/shot','/api/v1/day3/sight','/api/v1/day3/path'
-          ];
-          const missing=bridgeRequired.filter(token=>!bridge.includes(token));
-          if(missing.length) throw new Error(`Day 3 customer bridge missing: ${missing.join(', ')}`);
-          if(/day1\\\.\<name\>|example\\\.invalid/.test(bridge)) throw new Error('P0 regression: customer governed AI requires a synthetic Day 1 Human-E2E identity.');
-          if(/api\.openai\.com|OPENAI_API_KEY/.test(bridge)) throw new Error('P0 regression: browser bridge references OpenAI provider access or a secret binding.');
-          for(const token of ['pre-entitlement evidence','result_generation_locked','paid_result_generated: false','if (await entitled(env.DB, sessionId, product))']) if(!wrapper.includes(token)) throw new Error(`Pre-entitlement evidence wrapper missing ${token}`);
-          for(const token of ['entitlement_required','holdForEntitlement','result_generation_locked']) if(!browser.includes(token)) throw new Error(`Browser entitlement hold missing ${token}`);
-          console.log('PASS: evidence collection is distinct from entitlement; paid generation remains server-gated; governed AI uses canonical session identity.');
-          NODE
+          node --test tests/day7d-customer-intelligence.test.mjs tests/day7d-customer-path-contract.test.mjs
+          node --test tests/day4-galvicare-1-0.test.mjs
 
-      - name: Verify generated cumulative QA frontend
+      - name: Prove legacy validator has no deployment authority
         shell: bash
         run: |
           set -euo pipefail
-          test -f dist-qa/index.html
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const html=fs.readFileSync('dist-qa/index.html','utf8');
-          const required=[
-            'GALVICARE QA / TEST ENVIRONMENT — NO LIVE PAYMENTS',
-            'Day 7D cumulative customer-intelligence browser adapter.',
-            'GalviCare Day 3 governed AI customer bridge v2',
-            'GOVERNED BUSINESS HEALTH INTELLIGENCE',
-            'X-Galvi-Day3-Session',
-            '/api/v1/day3/customer-bootstrap',
-            'holdForEntitlement',
-            'entitlement_required',
-            'get_or_generate_galviscore',
-            'galvishot-followup-questions','galvisight-followup-questions','galvipath-followup-questions'
-          ];
-          const missing=required.filter(token=>!html.includes(token));
-          if(missing.length) throw new Error(`Generated QA frontend missing: ${missing.join(', ')}`);
-          if(html.split('Day 7D cumulative customer-intelligence browser adapter.').length-1!==1) throw new Error('Expected one authoritative Day 7D adapter.');
-          if(html.split('GalviCare Day 3 governed AI customer bridge v2').length-1!==1) throw new Error('Expected one Day 3 governed-AI customer bridge.');
-          console.log('PASS: generated customer path preserves deterministic score, pre-payment evidence, verified entitlement, and governed-AI projection.');
-          NODE
+          if grep -nE 'wrangler(@[^ ]+)?[[:space:]]+(deploy|d1 execute|versions deploy)|cloudflare/wrangler-action|CLOUDFLARE_API_TOKEN|CLOUDFLARE_ACCOUNT_ID' .github/workflows/deploy-galvicare-qa.yml | grep -v 'grep -nE'; then
+            echo 'FAIL: legacy Day7D validator contains deployment or D1 mutation authority.' >&2
+            exit 1
+          fi
+          echo 'PASS: legacy Day7D workflow is validation-only; cumulative Day5 owns QA deployment.'
 
-      - name: Apply additive Day 7D schema to existing QA D1
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4"
-          packageManager: npm
-          command: d1 execute galvivault-0-5-qa --remote --file=migrations/0006_day7d_customer_intelligence.sql --config wrangler.day7d.json
-
-      - name: Build exact-candidate Day 7D runtime config
-        shell: bash
+      - name: Summary
         run: |
-          set -euo pipefail
-          jq '.main="worker/day7d-day3-critical-path.js" | .vars.DAY7D_DEPLOY_SHA=env.DAY7D_RELEASE_ID | .vars.DAY7D_DEPLOY_TARGET="galvicare-triage-intake"' \
-            wrangler.day7d.json > wrangler.day7d-runtime.generated.json
-          test "$(jq -r '.name' wrangler.day7d-runtime.generated.json)" = "galvicare-triage-intake"
-          test "$(jq -r '.main' wrangler.day7d-runtime.generated.json)" = "worker/day7d-day3-critical-path.js"
-          test "$(jq -r '.vars.ENVIRONMENT' wrangler.day7d-runtime.generated.json)" = "qa"
-          test "$(jq -r '.d1_databases[] | select(.binding=="DB") | .database_name' wrangler.day7d-runtime.generated.json)" = "galvivault-0-5-qa"
-
-      - name: Deploy authoritative deterministic QA Worker
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4"
-          packageManager: npm
-          command: deploy --config wrangler.day7d-runtime.generated.json
-
-      - name: Remove generated runtime config
-        if: always()
-        shell: bash
-        run: rm -f wrangler.day7d-runtime.generated.json
-
-      - name: Deploy authoritative QA frontend
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          wranglerVersion: "4"
-          packageManager: npm
-          command: deploy --config wrangler.qa-frontend.jsonc --var DAY7D_FRONTEND_RELEASE_ID:${{ env.DAY7D_RELEASE_ID }}
-
-      - name: Verify deployed deterministic Worker P0 convergence
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          const expected={
-            enabled:true,
-            rules_version:process.env.DAY7D_RULES_VERSION,
-            question_version:process.env.DAY7D_QUESTION_VERSION,
-            content_version:process.env.DAY7D_CONTENT_VERSION,
-            entrypoint:'worker/day7d-day3-critical-path.js',
-            release_contract:process.env.DAY7D_RELEASE_CONTRACT,
-            galviscore_clarification_server_owned:true,
-            objective_score_immutable:true,
-            progressive_followups:true,
-            dynamic_question_count:true,
-            approved_low_confidence_question_count:3,
-            evidence_version_cache:true,
-            cumulative_clinic_brief:true,
-            prior_product_results_in_clinical_file:true,
-            bounded_multi_question_submit:true,
-            collision_safe_followup_save:true,
-            legacy_generation_bypass_closed:true,
-            atomic_followup_save:true,
-            server_selected_question_validation:true,
-            save_returns_regenerated_result:true,
-            pre_entitlement_evidence_capture:true,
-            paid_generation_server_verified:true
-          };
-          const deadline=Date.now()+120000;let consecutive=0,last=null;
-          while(Date.now()<deadline){
-            try{
-              const nonce=Date.now();
-              const response=await fetch(process.env.QA_API_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'health_check',nonce:`worker-${nonce}`})});
-              const body=await response.json();
-              const mismatches=[];
-              if(!response.ok||body?.success!==true)mismatches.push(`health http/success=${response.status}/${body?.success}`);
-              for(const [key,value] of Object.entries(expected))if(body?.day7d?.[key]!==value)mismatches.push(`${key}: ${JSON.stringify(body?.day7d?.[key])}`);
-              const routeResponse=await fetch(process.env.QA_API_URL,{method:'POST',headers:{'content-type':'application/json','cache-control':'no-cache'},body:JSON.stringify({action:'get_or_generate_galviscore',session_id:`__day3_route_probe_${nonce}`,payload:{}})});
-              let routeBody={};
-              try{routeBody=await routeResponse.json();}catch{mismatches.push(`clarification route returned non-JSON http=${routeResponse.status}`);}
-              if(routeBody?.code==='UNSUPPORTED_API_ACTION'||routeBody?.message==='Unsupported /api action')mismatches.push('clarification route is still served by legacy UNSUPPORTED_API_ACTION runtime');
-              if(routeResponse.status!==402||routeBody?.status!=='locked'||routeBody?.product!=='GalviScore')mismatches.push(`clarification route contract=${routeResponse.status}/${routeBody?.status}/${routeBody?.product}`);
-              if(routeResponse.headers.get('x-galvi-day7d-rules')!==process.env.DAY7D_RULES_VERSION)mismatches.push(`clarification route rules header=${routeResponse.headers.get('x-galvi-day7d-rules')}`);
-              last={mismatches,health_status:response.status,route_status:routeResponse.status,route_body:routeBody};
-              consecutive=mismatches.length===0?consecutive+1:0;
-              if(consecutive>=3){console.log('PASS: deployed deterministic Worker, clarification action surface, and pre-entitlement evidence boundary converged.');process.exit(0);}
-            }catch(error){last={error:String(error)};consecutive=0;}
-            await new Promise(resolve=>setTimeout(resolve,2500));
-          }
-          throw new Error(`Deterministic Worker/action surface did not converge: ${JSON.stringify(last)}`);
-          NODE
-
-      - name: Verify deployed complete QA frontend
-        shell: bash
-        run: |
-          node --input-type=module <<'NODE'
-          const deadline=Date.now()+120000;let consecutive=0,last=null;
-          while(Date.now()<deadline){
-            try{
-              const healthResponse=await fetch(`${process.env.QA_FRONTEND_URL}/health?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
-              const health=await healthResponse.json();
-              const response=await fetch(`${process.env.QA_FRONTEND_URL}/?release=${Date.now()}`,{headers:{'cache-control':'no-cache'}});
-              const html=await response.text();
-              const required=['Day 7D cumulative customer-intelligence browser adapter.','GalviCare Day 3 governed AI customer bridge v2','GOVERNED BUSINESS HEALTH INTELLIGENCE','X-Galvi-Day3-Session','/api/v1/day3/customer-bootstrap','holdForEntitlement'];
-              const valid=response.ok&&healthResponse.ok&&health?.release_id===process.env.DAY7D_RELEASE_ID&&required.every(token=>html.includes(token));
-              last={status:response.status,health_status:healthResponse.status,release_id:health?.release_id,missing:required.filter(token=>!html.includes(token))};
-              consecutive=valid?consecutive+1:0;
-              if(consecutive>=3){console.log('PASS: deployed QA frontend matches canonical-session governed-AI candidate.');process.exit(0);}
-            }catch(error){last={error:String(error)};consecutive=0;}
-            await new Promise(resolve=>setTimeout(resolve,2500));
-          }
-          throw new Error(`QA frontend did not converge: ${JSON.stringify(last)}`);
-          NODE
-
-      - name: READY FOR FINAL DAY 3 HUMAN E2E
-        if: success()
-        run: |
-          echo '## GALVICARE DAY 3 CUSTOMER PATH QA RELEASE: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo "- Candidate SHA: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Candidate fingerprint: $DAY7D_RELEASE_ID" >> "$GITHUB_STEP_SUMMARY"
-          echo '- Deterministic GalviScore response contract preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Deployed get_or_generate_galviscore route contract: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Pre-entitlement follow-up evidence capture: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Paid-result generation remains server-entitlement-gated: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 3 canonical-session governed-AI browser bridge deployed: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Production touched: NO' >> "$GITHUB_STEP_SUMMARY"
-          echo '**READY FOR FINAL DAY 3 HUMAN E2E**' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Legacy Day7D Regression Validator' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Automatic QA deployment: RETIRED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day7D clarification/governed-AI regression: VALIDATED' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Cumulative deployment owner: Day 5' >> "$GITHUB_STEP_SUMMARY"
