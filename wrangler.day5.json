@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvivault-p0-day1-qa",
-  "main": "worker/day5-critical-path-entry.js",
+  "main": "worker/day5-entry.js",
   "compatibility_date": "2026-07-23",
   "workers_dev": true,
   "observability": { "enabled": true },
@@ -26,7 +26,6 @@
     "DAY5_ACTIVE_CARE_SCHEMA": "v1",
     "DAY5_TREATMENT_CONTRACT": "evidence_bound_v1",
     "DAY5_BUSINESS_PHYSICIAN_GOVERNANCE": "v1",
-    "DAY5_CRITICAL_PATH_RUNTIME": "day5_governed_ai_evidence_window_v1",
     "GALVICLINIC_BOOKING_URL": "https://calendly.com/galvilpro/galviclinic-day7c-qa",
     "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,https://galvicare-0-5-qa.mrgalvipro.workers.dev,http://localhost:8787,http://127.0.0.1:8787"
   },
