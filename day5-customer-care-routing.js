@@ -4,10 +4,10 @@
  */
 (()=>{
 'use strict';
-const SIGNATURE='GalviCare Day 5 customer care routing + governed GalviGuide v2';
+const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v1';
 const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev',SESSION_HEADER='X-Galvi-Day3-Session';
 const FOLLOWUP_PANELS=['galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup'];
-const text=v=>String(v??'').trim(),byId=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const text=v=>String(v??'').trim(),byId=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 const session=()=>typeof window.getStoredSessionId==='function'?text(window.getStoredSessionId()):text(localStorage.getItem('galvicare_session_id')||localStorage.getItem('galvishot_session_id'));
 let cached=null,inFlight=null,retryTimer=null,retryCount=0;
 function installStyle(){if(byId('day5-care-routing-style'))return;const s=document.createElement('style');s.id='day5-care-routing-style';s.textContent='.day5-care-route{border:1px solid #d9e3ea;background:#fbfdff;border-radius:14px;padding:16px;margin:18px 0}.day5-acuity-badge{display:inline-flex;border:1px solid;border-radius:999px;padding:6px 10px;font-weight:800}.day5-acuity-green{background:#ecfdf5;color:#166534}.day5-acuity-yellow{background:#fef9c3;color:#713f12}.day5-acuity-orange{background:#ffedd5;color:#9a3412}.day5-acuity-red{background:#fee2e2;color:#991b1b}.day5-route-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;margin:12px 0}.day5-route-cell,.day5-guide-response{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:10px}.day5-guide-box{border-left:4px solid #174a73;background:#f8fafc;border-radius:10px;padding:12px;margin-top:12px}.day5-guide-compose{display:grid;gap:8px;margin-top:12px}.day5-guide-compose textarea{width:100%;min-height:78px;box-sizing:border-box}.day5-route-muted{color:#4b5563;font-size:13px;line-height:1.5}';document.head.appendChild(s)}
