@@ -12,7 +12,9 @@ const treatment=read('worker/domain/day5-treatment-service.js');
 const projection=read('worker/domain/day5-projection-service.js');
 const results=read('worker/domain/day5-care-result-service.js');
 const timeline=read('worker/domain/day5-timeline-service.js');
-const entry=read('worker/day5-entry.js');
+const entryAdapter=read('worker/day5-entry.js');
+const entryCore=read('worker/day5-core-entry.js');
+const entry=`${entryAdapter}\n${entryCore}`;
 const wrangler=JSON.parse(read('wrangler.day5.json'));
 const has=(t,a)=>a.every(x=>t.includes(x));
 
@@ -98,6 +100,12 @@ test('AC-17 inherited Day3/Day4 customer routes preserve the exact browser CORS 
   assert.ok(has(common,['Cache-Control',CUSTOMER_HEADER_TOKEN(),'Access-Control-Request-Headers']));
   assert.ok(has(entry,['preserveDay5Cors','inheritedResponse','Access-Control-Allow-Origin','Access-Control-Allow-Headers','X-Galvi-Day5-Inherited-Cors','return inheritedResponse(request,env,executionContext,ctx)']));
   assert.ok(wrangler.vars.ALLOWED_ORIGINS.includes('https://galvicare-0-5-qa.mrgalvipro.workers.dev'));
+});
+
+test('AC-18 cumulative adapter preserves all active-care authority while bounding only provider projection',()=>{
+  assert.ok(has(entryAdapter,["import day5Worker from './day5-core-entry.js'",'MAX_PROVIDER_EVIDENCE_ITEMS=3','selectProviderEvidence','/api/v1/day5/customer/score-metadata']));
+  assert.equal(entryAdapter.includes('createGovernedTreatmentPlan('),false);
+  assert.equal(entryAdapter.includes('DELETE FROM gv1_evidence_items'),false);
 });
 
 function CUSTOMER_HEADER_TOKEN(){return 'X-Galvi-Day3-Session';}
