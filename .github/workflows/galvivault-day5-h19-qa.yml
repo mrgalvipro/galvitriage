@@ -44,7 +44,7 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Validate H19 context boundary and inherited Day 5 contracts
+      - name: Validate H19 exact venture BHR boundary and inherited Day 5 contracts
         shell: bash
         run: |
           set -euo pipefail
@@ -53,9 +53,11 @@ jobs:
           node --check worker/day5-core-entry.js
           node --test tests/day5-customer-active-care.test.mjs
           node --test tests/day5-active-care.test.mjs tests/day5-care.test.mjs
-          grep -Fq "session_venture_context_v1" worker/day5-customer-context-entry.js
+          grep -Fq "session_venture_bmr_context_v2" worker/day5-customer-context-entry.js
+          grep -Fq "FROM gv1_founder_venture_roles r" worker/day5-customer-context-entry.js
+          grep -Fq "FROM gv1_business_medical_records" worker/day5-customer-context-entry.js
+          grep -Fq "founder_id=? AND venture_id=? AND bmr_id=? AND status='active'" worker/day5-customer-context-entry.js
           grep -Fq "WHERE v.session_id=?" worker/day5-customer-context-entry.js
-          grep -Fq "context_id:canonical.context.context_id" worker/day5-customer-context-entry.js
           ! grep -Eq "bmr_id[[:space:]]*:.*request|body.*bmr_id" worker/day5-customer-context-entry.js
           node -e "const w=require('./wrangler.day5-h19.json'); if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day5-customer-context-entry.js'||w.vars.ENVIRONMENT!=='qa'||w.vars.MIN_SCHEMA_VERSION!=='D5A2'||w.d1_databases?.[0]?.database_name!=='galvivault-0-5-qa'||w.d1_databases?.[0]?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') process.exit(1)"
 
@@ -68,7 +70,6 @@ jobs:
           set -euo pipefail
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5-h19.json --command "SELECT tp.treatment_plan_id,tp.name,tp.status,tp.version_no,tp.bmr_id,b.venture_id,v.venture_name,tp.created_at FROM gv1_treatment_plans tp LEFT JOIN gv1_business_medical_records b ON b.bmr_id=tp.bmr_id LEFT JOIN gv1_ventures v ON v.venture_id=b.venture_id ORDER BY tp.created_at DESC LIMIT 25;" | tee h19-plans.json
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5-h19.json --command "SELECT c.context_id,c.founder_id,c.venture_id,c.bmr_id,c.status,c.updated_at,v.venture_name,(SELECT COUNT(*) FROM gv1_treatment_plans tp WHERE tp.bmr_id=c.bmr_id AND tp.status NOT IN ('archived','cancelled','superseded')) AS active_plan_count FROM gv1_principal_contexts c LEFT JOIN gv1_ventures v ON v.venture_id=c.venture_id WHERE c.status='active' ORDER BY c.founder_id,lower(trim(COALESCE(v.venture_name,''))),c.updated_at DESC LIMIT 100;" | tee h19-contexts.json
-          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day5-h19.json --command "SELECT c.founder_id,lower(trim(COALESCE(v.venture_name,''))) AS venture_key,COUNT(*) AS active_context_count,SUM((SELECT COUNT(*) FROM gv1_treatment_plans tp WHERE tp.bmr_id=c.bmr_id AND tp.status NOT IN ('archived','cancelled','superseded'))) AS active_plan_count FROM gv1_principal_contexts c LEFT JOIN gv1_ventures v ON v.venture_id=c.venture_id WHERE c.status='active' GROUP BY c.founder_id,venture_key HAVING COUNT(*)>1 OR active_plan_count>0 ORDER BY active_plan_count DESC,active_context_count DESC;" | tee h19-duplicates.json
 
       - name: Deploy exact H19 candidate to existing QA Worker
         run: npx --yes wrangler@4.120.0 deploy --config wrangler.day5-h19.json
@@ -88,7 +89,7 @@ jobs:
               && grep -q '"ready":true' h19-ready.json 2>/dev/null \
               && grep -q '"customer_treatment_acknowledgement":"v1"' h19-ready.json 2>/dev/null \
               && grep -q '"customer_checkin_session_bound":"v1"' h19-ready.json 2>/dev/null; then
-              echo "PASS: H19 customer-context runtime converged on attempt $attempt."
+              echo "PASS: H19 exact venture/BHR runtime converged on attempt $attempt."
               exit 0
             fi
             sleep 3
@@ -98,10 +99,10 @@ jobs:
 
       - name: H19 summary
         run: |
-          echo '## Day 5 H19 Customer Context' >> "$GITHUB_STEP_SUMMARY"
+          echo '## Day 5 H19 Exact Venture/BHR Context' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA ref only: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA Worker/D1 only: PASS' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Session -> venture -> canonical context enforced: PASS' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Session -> canonical founder -> founder/venture role -> venture -> BHR -> context: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Canonical BHR / active-care placement diagnostic: CAPTURED' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 5 cumulative runtime preserved: PASS' >> "$GITHUB_STEP_SUMMARY"
           echo '- Customer Treatment Plan acknowledgement/check-in capability: READY' >> "$GITHUB_STEP_SUMMARY"
