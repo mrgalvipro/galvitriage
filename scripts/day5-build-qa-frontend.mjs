@@ -2,6 +2,15 @@ import { readFileSync, writeFileSync } from 'node:fs';
 const OUT='dist-qa/index.html';
 const ADAPTERS=[
   {
+    source:'day5-score-metadata.js',
+    signature:'GalviCare Day 5 canonical GalviScore metadata v1',
+    required:[
+      '/api/v1/day5/customer/score-metadata','X-Galvi-Day3-Session','galviscore-classification',
+      'galviscore-lowest-category','day5-score-acuity-summary','Acuity is server-owned care urgency',
+      'GalviCareDay5ScoreMetadata'
+    ]
+  },
+  {
     source:'day5-customer-care-routing.js',
     signature:'GalviCare Day 5 customer care routing + GalviGuide v1',
     required:[
@@ -46,6 +55,7 @@ for(const config of ADAPTERS){
   if((html.split(config.signature).length-1)!==1)throw new Error(`Generated QA frontend must contain exactly one ${config.signature} adapter.`);
 }
 for(const required of [
+  'galviscore-classification','galviscore-lowest-category','day5-score-acuity-summary','/api/v1/day5/customer/score-metadata',
   'GalviScore + Business Health Acuity','Yellow — passive care / needs attention','Orange — active care recommended',
   'Open GalviGuide','Prepare with GalviGuide','The existing “What you should watch?” box is GalviScore guidance',
   'Acknowledge Treatment Plan','Submit scheduled check-in','Acknowledgement is separate from Treatment Plan authorship.',
@@ -54,4 +64,4 @@ for(const required of [
   if(!html.includes(required))throw new Error(`Generated QA frontend missing Day 5 customer critical-path contract: ${required}`);
 }
 writeFileSync(OUT,html,'utf8');
-console.log('PASS — cumulative QA frontend contains server-owned Acuity/GalviGuide routing plus Treatment Plan acknowledgement/check-in without browser BMR/OpenAI authority.');
+console.log('PASS — cumulative QA frontend contains canonical Score metadata, server-owned Acuity/GalviGuide routing, and Treatment Plan acknowledgement/check-in without browser score/Acuity/BMR/OpenAI authority.');
