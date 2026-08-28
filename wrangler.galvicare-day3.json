@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvivault-p0-day1-qa",
-  "main": "worker/day5-day3-critical-path.js",
+  "main": "worker/day3-unified-customer-api.js",
   "compatibility_date": "2026-07-23",
   "workers_dev": true,
   "observability": { "enabled": true },
@@ -20,7 +20,6 @@
     "DAY3_CUSTOMER_CORS_VERSION": "v3",
     "DAY3_CUSTOMER_EVIDENCE_API": "unified_governed_worker_v1",
     "DAY3_CUSTOMER_EVIDENCE_RUNTIME": "collision_safe_v2",
-    "DAY5_DAY3_CRITICAL_PATH": "bounded_evidence_window_v1",
     "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,https://galvicare-0-5-qa.mrgalvipro.workers.dev,http://localhost:8787,http://127.0.0.1:8787"
   },
   "d1_databases": [
