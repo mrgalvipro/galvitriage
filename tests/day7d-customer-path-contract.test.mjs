@@ -11,6 +11,7 @@ const browser=fs.readFileSync('day7d-browser-customer-intelligence.js','utf8');
 const builder=fs.readFileSync('scripts/day7b-build-qa-frontend.mjs','utf8');
 const preflight=fs.readFileSync('scripts/day7d-preflight.mjs','utf8');
 const deploy=fs.readFileSync('.github/workflows/deploy-galvicare-qa.yml','utf8');
+const cumulativeFrontend=fs.readFileSync('.github/workflows/deploy-qa-frontend.yml','utf8');
 const compatibility=fs.readFileSync('.github/workflows/day7c-qa-deploy.yml','utf8');
 const source=fs.readFileSync('index.html','utf8');
 
@@ -169,13 +170,15 @@ test('preflight and runtime share one v3 release contract',()=>{
   ])has(engine,token,'runtime health capability');
 });
 
-test('one automatic deployer owns Worker and frontend; Day 7C is compatibility-only',()=>{
-  has(deploy,'wrangler.qa-frontend.jsonc','QA frontend deploy target');
-  has(deploy,'Deploy authoritative QA frontend','frontend deployment step');
-  has(deploy,'Verify deployed deterministic Worker P0 convergence','Worker runtime proof step');
-  has(compatibility,'workflow_dispatch:','manual compatibility trigger');
-  lacks(compatibility,'push:','no competing push deployment');
-  lacks(compatibility,'wrangler-action','no competing Cloudflare deployment');
+test('cumulative Day 5 frontend owns automatic QA deployment; legacy Day 7D and Day 7C are manual compatibility validators',()=>{
+  has(deploy,'workflow_dispatch:','legacy Day7D manual trigger');
+  lacks(deploy,'push:','legacy Day7D has no competing automatic push deployment');
+  has(cumulativeFrontend,'wrangler.qa-frontend.jsonc','cumulative QA frontend deploy target');
+  has(cumulativeFrontend,'Deploy existing dedicated QA frontend Worker','cumulative frontend deployment step');
+  has(cumulativeFrontend,'Verify QA frontend runtime convergence','cumulative frontend runtime proof step');
+  has(compatibility,'workflow_dispatch:','manual Day7C compatibility trigger');
+  lacks(compatibility,'push:','no competing Day7C push deployment');
+  lacks(compatibility,'wrangler-action','no competing Day7C Cloudflare deployment');
 });
 
 test('legacy GalviSight prerequisite check binds GalviShot explicitly and never passes undefined product to D1',()=>{
