@@ -41,24 +41,38 @@ export async function handleOperatorAuth(request,env,ctx,path,success){
     const p=await body(request), email=normEmail(p.email), token=clean(p.enrollment_token), credentialId=clean(p.credential_id), publicJwk=p.public_jwk;
     if(!email||!token||!credentialId||!publicJwk)throw new GVError('GV_REQ_SCHEMA','email, enrollment_token, credential_id, and public_jwk are required.',422);
     if(clean(publicJwk.kty)!=='EC'||clean(publicJwk.crv)!=='P-256'||!clean(publicJwk.x)||!clean(publicJwk.y))throw new GVError('GV_REQ_SCHEMA','A P-256 public credential is required.',422);
-    const existing=await one(env.DB,`SELECT credential_id FROM gv8_operator_credentials WHERE email_normalized=?`,email);
-    if(existing)throw new GVError('GV_AUTH_FORBIDDEN','This operator is already enrolled.',403);
-    const tokenHash=await sha256(token);
-    let operator=null, invitation=null;
-    const bootstrapEmail=normEmail(env.BUSINESS_PHYSICIAN_EMAIL), bootstrapHash=clean(env.BUSINESS_PHYSICIAN_ENROLLMENT_HASH);
-    if(email===bootstrapEmail&&bootstrapHash&&tokenHash===bootstrapHash){
+
+    const tokenHash=await sha256(token), bootstrapEmail=normEmail(env.BUSINESS_PHYSICIAN_EMAIL), bootstrapHash=clean(env.BUSINESS_PHYSICIAN_ENROLLMENT_HASH);
+    const bootstrapUse=bootstrapHash?await one(env.DB,`SELECT used_at FROM gv8_operator_invitations WHERE invitation_hash=?`,bootstrapHash):null;
+    const bootstrapAuthorized=email===bootstrapEmail&&Boolean(bootstrapHash)&&tokenHash===bootstrapHash&&!bootstrapUse?.used_at;
+    const existing=await one(env.DB,`SELECT credential_id,operator_id,email_normalized,display_name,role,status FROM gv8_operator_credentials WHERE email_normalized=? AND status='active'`,email);
+    let operator=null, invitation=null, deviceReplaced=false;
+
+    if(bootstrapAuthorized){
       operator={operator_id:'op_mrgalvipro_qa',email_normalized:email,display_name:'Mr. GalviPro',role:'business_physician'};
+      if(existing){
+        if(existing.operator_id!==operator.operator_id||existing.role!=='business_physician')throw new GVError('GV_AUTH_FORBIDDEN','Existing clinician identity cannot be replaced by the Business Physician recovery flow.',403);
+        deviceReplaced=true;
+      }
     }else{
       invitation=await one(env.DB,`SELECT invitation_hash,operator_id,email_normalized,display_name,role,expires_at,used_at FROM gv8_operator_invitations WHERE invitation_hash=?`,tokenHash);
       if(invitation&&!invitation.used_at&&invitation.expires_at>iso()&&invitation.email_normalized===email)operator=invitation;
     }
-    if(!operator)throw new GVError('GV_AUTH_FORBIDDEN','Enrollment is not authorized.',403);
-    await env.DB.batch([
-      env.DB.prepare(`INSERT INTO gv8_operator_credentials(credential_id,operator_id,email_normalized,display_name,role,public_jwk,status,created_at,updated_at) VALUES(?,?,?,?,?,?, 'active',?,?)`).bind(credentialId,operator.operator_id,email,operator.display_name,operator.role,JSON.stringify(publicJwk),iso(),iso()),
-      ...(invitation?[env.DB.prepare(`UPDATE gv8_operator_invitations SET used_at=? WHERE invitation_hash=? AND used_at IS NULL`).bind(iso(),tokenHash)]:[])
-    ]);
+    if(existing&&!deviceReplaced)throw new GVError('GV_AUTH_FORBIDDEN','This operator is already enrolled. Use the approved-device sign-in or a newly issued one-time Business Physician recovery code.',403);
+    if(!operator)throw new GVError('GV_AUTH_FORBIDDEN','Enrollment is not authorized or the one-time code has already been used.',403);
+
+    const now=iso(), statements=[];
+    if(deviceReplaced){
+      statements.push(env.DB.prepare(`UPDATE gv8_operator_credentials SET status='disabled',updated_at=? WHERE operator_id=? AND email_normalized=? AND status='active'`).bind(now,operator.operator_id,email));
+      statements.push(env.DB.prepare(`UPDATE gv8_operator_sessions SET revoked_at=? WHERE operator_id=? AND revoked_at IS NULL`).bind(now,operator.operator_id));
+    }
+    statements.push(env.DB.prepare(`INSERT INTO gv8_operator_credentials(credential_id,operator_id,email_normalized,display_name,role,public_jwk,status,created_at,updated_at) VALUES(?,?,?,?,?,?, 'active',?,?)`).bind(credentialId,operator.operator_id,email,operator.display_name,operator.role,JSON.stringify(publicJwk),now,now));
+    if(invitation)statements.push(env.DB.prepare(`UPDATE gv8_operator_invitations SET used_at=? WHERE invitation_hash=? AND used_at IS NULL`).bind(now,tokenHash));
+    if(bootstrapAuthorized)statements.push(env.DB.prepare(`INSERT OR REPLACE INTO gv8_operator_invitations(invitation_hash,operator_id,email_normalized,display_name,role,expires_at,used_at,created_at,created_by) VALUES(?,?,?,?,?,?,?,?,?)`).bind(bootstrapHash,operator.operator_id,email,operator.display_name,operator.role,now,now,now,'qa_business_physician_bootstrap'));
+    await env.DB.batch(statements);
+
     const session=await issueSession(env,operator,credentialId);
-    const response=success(ctx,{operator_id:operator.operator_id,display_name:operator.display_name,role:operator.role,environment:ctx.environment,auth_expires_at:session.expires},201);
+    const response=success(ctx,{operator_id:operator.operator_id,display_name:operator.display_name,role:operator.role,environment:ctx.environment,auth_expires_at:session.expires,device_replaced:deviceReplaced,enrollment_code_consumed:true},201);
     response.headers.append('Set-Cookie',sessionCookie(session.token,8*60*60)); return response;
   }
 
