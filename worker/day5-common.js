@@ -9,13 +9,14 @@ export const {
 export const API_VERSION = 'v1';
 export const REQUIRED_SCHEMA = '0005';
 export const CUSTOMER_SESSION_HEADER = 'X-Galvi-Day3-Session';
+export const DAY1_ACTOR_HEADER = 'X-Galvi-Day1-Actor';
 
 export function headers(ctx) {
   const result = day4.headers(ctx);
   if (ctx.origin && ctx.allowedOrigins.includes(ctx.origin)) {
     const allowed = String(result.get('Access-Control-Allow-Headers') || '')
       .split(',').map((value) => value.trim()).filter(Boolean);
-    for (const required of ['Cache-Control', CUSTOMER_SESSION_HEADER]) {
+    for (const required of ['Cache-Control', CUSTOMER_SESSION_HEADER, DAY1_ACTOR_HEADER]) {
       if (!allowed.some((value) => value.toLowerCase() === required.toLowerCase())) allowed.push(required);
     }
     result.set('Access-Control-Allow-Headers', allowed.join(', '));
