@@ -6,12 +6,14 @@ on:
     branches: [qa-revamped-galvicare-0-5]
     paths:
       - worker/day5-entry.js
+      - worker/day5-core-entry.js
       - worker/day5-common.js
       - worker/routes/care.js
       - worker/domain/care-service.js
       - worker/domain/day5-active-care-service.js
       - worker/domain/day5-treatment-service.js
       - worker/domain/day5-timeline-service.js
+      - worker/domain/day5-projection-service.js
       - worker/repositories/care-repository.js
       - migrations/day1/0005_day5_governed_care.sql
       - migrations/day1/0006_day5_active_care_loop.sql
