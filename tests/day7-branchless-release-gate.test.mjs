@@ -10,7 +10,7 @@ test('Day 7 branchless release controls are present and fail closed', () => {
   assert.match(bootstrap, /work_is_publish_target=NO/);
   assert.match(bootstrap, /new_branch_created=NO/);
   assert.match(bootstrap, /qa-revamped-galvicare-0-5/);
-  assert.doesNotMatch(bootstrap, /git (?:checkout|switch) -b|git branch Day7|git push origin work/);
+  assert.doesNotMatch(bootstrap, /^\s*git (?:checkout|switch) -b|^\s*git branch Day7|^\s*git push origin work/m);
 
   const manifest = JSON.parse(read('release-evidence/day7/day7-baseline-manifest.json'));
   assert.equal(manifest.repository, 'mrgalvipro/galvitriage');

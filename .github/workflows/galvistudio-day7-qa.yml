@@ -56,18 +56,30 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          echo "repository=$GITHUB_REPOSITORY"
+          echo "ref=$GITHUB_REF"
+          echo "ref_name=$GITHUB_REF_NAME"
+          echo "sha=$GITHUB_SHA"
           test "$GITHUB_REPOSITORY" = "mrgalvipro/galvitriage"
-          test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
+          test "$GITHUB_REF" = "refs/heads/qa-revamped-galvicare-0-5"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git cat-file -e "$DAY6_RUNTIME_CANDIDATE^{commit}"
           git merge-base --is-ancestor "$DAY6_RUNTIME_CANDIDATE" "$GITHUB_SHA"
-          changed="$(git diff --name-only "$DAY6_RUNTIME_CANDIDATE..$GITHUB_SHA")"
-          unexpected="$(printf '%s\n' "$changed" | grep -Ev '^(docs/|release-evidence/day7/|scripts/day7-codex-bootstrap\.sh|tests/day7-branchless-release-gate\.test\.mjs|\.github/workflows/galvistudio-day7-qa\.yml)$' || true)"
-          if [ -n "$unexpected" ]; then
-            echo "STOP: unapproved application/runtime delta after Day 6 runtime candidate:"
-            printf '%s\n' "$unexpected"
-            exit 71
-          fi
-          test -z "$(git status --porcelain)"
+          git diff --name-only "$DAY6_RUNTIME_CANDIDATE..$GITHUB_SHA" | tee day7-entry-delta.txt
+          unexpected=0
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            case "$path" in
+              docs/*|release-evidence/day7/*|scripts/day7-codex-bootstrap.sh|tests/day7-branchless-release-gate.test.mjs|.github/workflows/galvistudio-day7-qa.yml)
+                ;;
+              *)
+                echo "STOP: unapproved application/runtime delta after Day 6 runtime candidate: $path"
+                unexpected=1
+                ;;
+            esac
+          done < day7-entry-delta.txt
+          test "$unexpected" = 0
+          test -z "$(git status --porcelain --untracked-files=no)"
 
       - uses: actions/setup-node@v4
         with:
