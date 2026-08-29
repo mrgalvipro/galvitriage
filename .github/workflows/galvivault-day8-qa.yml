@@ -13,6 +13,7 @@ on:
       - 'worker/routes/operator-auth.js'
       - 'worker/routes/operator-workspace.js'
       - 'worker/domain/care-service.js'
+      - 'worker/domain/day5-projection-service.js'
       - 'tests/day8-clinician-workspace.test.mjs'
       - 'migrations/day8/**'
       - 'wrangler.day8.json'
