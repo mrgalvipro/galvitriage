@@ -11,7 +11,7 @@ const checks=[
 ()=>w.includes('npm run day5:gate'),()=>w.includes('npm run day5:gate'),()=>w.includes('npm run day5:gate'),
 ()=>H(w,['worker/day6-entry.js','worker/domain/day6-studio-service.js','worker/routes/day6-studio.js','wrangler.day6.json']),
 ()=>w.includes('branches: [qa-revamped-galvicare-0-5]')&&!w.includes('create_branch'),
-()=>FOUR_PILLARS.length===4,()=>catalogProjection().pillars.length===4,()=>SPUR_TRACKS.some(x=>x.code==='dreamer'),
+()=>FOUR_PILLARS.length===4,()=>catalogProjection().pillars.length===4,()=>SPUR_TRACKS.some(x=>x.code==='pre_founder'&&x.name==='SPUR Pre-Founder'),
 ()=>m.includes('bmr_id TEXT REFERENCES gv1_business_medical_records'),()=>SPUR_TRACKS.length===3,
 ()=>JSON.stringify(SPUR_STAGES.map(x=>x.code))===JSON.stringify(['Discern','Discover','Prepare','Validate','Build','Steward']),
 ()=>r.includes("path==='/api/v1/day6/studio/engagements'"),()=>s.includes('Source Treatment Plan is outside the authorized BMR.'),
