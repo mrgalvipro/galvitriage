@@ -1,0 +1,25 @@
+{
+  "schema": "galvistudio-galvicare-day7-baseline-v1",
+  "repository": "mrgalvipro/galvitriage",
+  "qa_ref": "qa-revamped-galvicare-0-5",
+  "production_ref": "main",
+  "diagnostic_local_head": "60e8bb0a0238a1735bbac75cbf3397e6bb531ace",
+  "diagnostic_local_branch": "work",
+  "remote_qa_head_verified_after_diagnostic": "60e8bb0a0238a1735bbac75cbf3397e6bb531ace",
+  "day6_runtime_code_candidate": "a197197217939f6301ca96c6ff0310bb8724d778",
+  "day6_runtime_candidate_reason": "Last application/runtime-affecting QA commit before the Day 7 Builder documentation-only commit. Must be re-proven by the Day 7 QA workflow before being treated as signed release evidence.",
+  "qa_head_delta_from_day6_runtime_candidate": [
+    "docs/GalviStudio_1_0_GalviCare_1_0_Day_7_Builder_Guide_CODEX_Implementation_Engineer_Edition_v1_0.md"
+  ],
+  "stale_legacy_evidence_candidate_excluded": "6f13c8f3dea37f89ae83e86bfa9013830f4ba1c4",
+  "stale_evidence_reason": "Legacy GalviVault 0.5/Day 7 evidence (2026-08-07) is not the GalviStudio/GalviCare 1.0 Day 6 handoff.",
+  "branch_policy": {
+    "new_branches_allowed": false,
+    "work_is_publish_target": false,
+    "qa_authoring_target": "qa-revamped-galvicare-0-5",
+    "production_target": "main",
+    "force_push_allowed": false
+  },
+  "manual_repair": false,
+  "status": "DAY7_ENTRY_REMEDIATION_REQUIRED_REPROVE_DAY6"
+}
