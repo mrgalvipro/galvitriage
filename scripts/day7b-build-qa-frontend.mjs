@@ -62,7 +62,7 @@ const DAY6_PIN_REPAIR=`(()=>{
 let html=readFileSync(SOURCE,'utf8');
 const day7dBrowser=readFileSync(DAY7D_BROWSER,'utf8');
 const day1Customer=readFileSync(DAY1_CUSTOMER,'utf8');
-const day1HumanE2E=readFileSync(DAY1_HUMAN_E2E,'utf8');
+let day1HumanE2E=readFileSync(DAY1_HUMAN_E2E,'utf8');
 
 for(const contract of [
   `const GALVICARE_INTAKE_ENDPOINT = '${PROD_WORKER}';`,
@@ -89,6 +89,15 @@ for(const contract of [
   DAY6_HUMAN_SIGNATURE,'day6-human-e2e-spur-panel','day6-spur-track','D6-H04 Select SPUR Route','D6-H05 Prescribe Route','D6-H06 Replay Engagement',
   "['dreamer','founder']",'Initial stage:','Minimum deliverable:'
 ]) if(!day1HumanE2E.includes(contract)) throw new Error(`Day 1/Day 6 Human E2E browser contract missing: ${contract}`);
+
+// QA-only vocabulary normalization: retain the legacy internal SPUR key for stored-data compatibility,
+// but never expose “Dreamer” as a person/track label in the Human E2E experience.
+day1HumanE2E=day1HumanE2E
+  .replaceAll('Pre-Founder / Dreamer Pathway','Pre-Founder Pathway')
+  .replaceAll('Expected SPUR Dreamer and Founder tracks were not both returned.','Expected SPUR Pre-Founder and Founder tracks were not both returned.')
+  .replaceAll('SPUR Dreamer','SPUR Pre-Founder')
+  .replaceAll('the H03 Pre-Founder principal created above. Run H3 Create Pre-Founder first.','the H03 Pre-Founder principal in this same browser session. Run “Use Synthetic QA Identity” then “H3 Create Pre-Founder”, then continue H04 → H05 → H06.');
+
 for(const contract of [
   DAY3_CUSTOMER_SIGNATURE,DAY1_WORKER,"SESSION_HEADER='X-Galvi-Day3-Session'",'/api/v1/day3/customer-bootstrap',
   '/api/v1/day3/shot','/api/v1/day3/sight','/api/v1/day3/path','authoritative_galvicare_session',
@@ -119,6 +128,7 @@ const day1Count=html.split(DAY1_HUMAN_SIGNATURE).length-1;if(day1Count!==2)throw
 const day6Count=html.split(DAY6_HUMAN_SIGNATURE).length-1;if(day6Count!==1)throw new Error(`Generated QA frontend must contain exactly one Day 6 Human E2E SPUR adapter; found ${day6Count}.`);
 const day6PinCount=html.split(DAY6_PIN_SIGNATURE).length-1;if(day6PinCount!==1)throw new Error(`Generated QA frontend must contain exactly one Day 6 persistent pin repair; found ${day6PinCount}.`);
 if(html.includes(LEGACY_SIGNATURE))throw new Error('Legacy Day 7D adapter marker survived the QA build.');
+if(html.includes('SPUR Dreamer')||html.includes('Pre-Founder / Dreamer Pathway'))throw new Error('Generated QA Human E2E must expose Pre-Founder terminology, not Dreamer terminology.');
 
 for(const required of [
   DAY7D_RELEASE_CONTRACT,QA_WORKER,DAY1_WORKER,QA_CUSTOMER_URL,QA_GA4,QA_CLARITY,QA_CALENDLY,TEST_STRIPE_MARKER,...Object.values(STRIPE).map(x=>x.test),
@@ -127,7 +137,7 @@ for(const required of [
   'skipCurrentQuestion','SKIPPED_ANSWER','stopImmediatePropagation','installAuthoritativeStageRoutes','invokeLegacyWithResponse','MAX_VISIBLE_TARGETED_QUESTIONS=3','holdForEntitlement','entitlement_required','result_generation_locked','galvipath-book-galviclinic',
   DAY3_CUSTOMER_SIGNATURE,'customer-session-projection-v2','X-Galvi-Day3-Session','/api/v1/day3/customer-bootstrap','/api/v1/day3/shot','/api/v1/day3/sight','/api/v1/day3/path','authoritative_galvicare_session','openai_governed','GOVERNED BUSINESS HEALTH INTELLIGENCE',
   DAY1_CUSTOMER_SIGNATURE,'prefounder-customer-pathway','GALVICARE™ | PRE-FOUNDER PATHWAY','What is a Founder?','Founder Development Institute',DAY1_HUMAN_SIGNATURE,'day1-human-e2e-panel','H3 Create Pre-Founder','H14 Runtime Health',DAY1_VISIBILITY_ID,DAY1_VISIBILITY_SELECTOR,'display:block!important','visibility:visible!important',
-  DAY6_HUMAN_SIGNATURE,DAY6_PIN_SIGNATURE,'day6-human-e2e-spur-panel','day6-spur-track','D6-H04 Select SPUR Route','D6-H05 Prescribe Route','D6-H06 Replay Engagement','galvicare-day6-human-e2e','data-day6-pinned'
+  DAY6_HUMAN_SIGNATURE,DAY6_PIN_SIGNATURE,'day6-human-e2e-spur-panel','day6-spur-track','D6-H04 Select SPUR Route','D6-H05 Prescribe Route','D6-H06 Replay Engagement','galvicare-day6-human-e2e','data-day6-pinned','SPUR Pre-Founder','Pre-Founder Pathway'
 ]) if(!html.includes(required)) throw new Error(`Generated QA frontend missing cumulative journey contract: ${required}`);
 if(html.includes(PROD_WORKER))throw new Error('Production Worker leaked into QA frontend.');for(const {live} of Object.values(STRIPE))if(html.includes(live))throw new Error(`LIVE Stripe link leaked into QA frontend: ${live}`);
 if(/api\.openai\.com|OPENAI_API_KEY/.test(html))throw new Error('Generated QA browser must not contain OpenAI provider access or secret references.');
@@ -140,6 +150,6 @@ console.log('PASS — Day 3 governed-AI customer bridge resolves canonical ident
 console.log('PASS — deterministic GalviScore action and projection contract remain unchanged.');
 console.log('PASS — customer-facing Pre-Founder education is stage-gated to Idea and contains no Dreamer terminology.');
 console.log('PASS — Day 1 Human E2E Pre-Founder path remains QA-only and isolated.');
-console.log('PASS — Day 6 H04-H06 SPUR selector is injected, force-visible, and persistently pinned to the stable Day 1 Human-E2E QA panel.');
+console.log('PASS — Day 6 H04-H06 SPUR selector exposes Pre-Founder terminology and remains pinned to the stable Day 1 Human-E2E QA panel.');
 console.log('PASS — canonical Production endpoints and LIVE payment links are transformed only in dist-qa.');
 console.log('PASS — Triage → Vitals → Score → evidence intake → verified entitlement → governed Shot → governed Sight → governed Path → Clinic contract is present.');
