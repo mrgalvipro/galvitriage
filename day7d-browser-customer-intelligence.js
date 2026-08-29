@@ -13,6 +13,8 @@
   };
   const MAX_VISIBLE_TARGETED_QUESTIONS=3;
   const SKIPPED_ANSWER='Skipped for now — no additional evidence supplied.';
+  const DAY7D_REQUEST_TIMEOUT_MS=12000;
+  const PAID_SCORE_ENTITLEMENT_RETRIES=6;
   const CLIENT_ACTION_ALIASES={
     get_or_generate_galvishot:'get_or_create_galvishot',get_galvishot:'get_or_create_galvishot',generate_galvishot:'get_or_create_galvishot',
     get_or_create_galvisight:'get_or_generate_galvisight',get_galvisight:'get_or_generate_galvisight',generate_galvisight:'get_or_generate_galvisight',
@@ -20,9 +22,11 @@
   };
   const queues={GalviScore:[],GalviShot:[],GalviSight:[],GalviPath:[]};
   const inFlight={GalviScore:null,GalviShot:null,GalviSight:null,GalviPath:null};
+  const hydrationFlight={GalviScore:null,GalviShot:null,GalviSight:null,GalviPath:null};
   const hydration={GalviScore:'',GalviShot:'',GalviSight:'',GalviPath:''};
   const scoreBaseline={value:null};
   const el=id=>document.getElementById(id);
+  const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   const session=()=>typeof getStoredSessionId==='function'?String(getStoredSessionId()||'').trim():String(localStorage.getItem('galvicare_session_id')||localStorage.getItem('galvishot_session_id')||'').trim();
   const DAY3_CUSTOMER_API_ENDPOINT='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev/api';
   const endpoint=()=>{
@@ -39,11 +43,22 @@
     if(!sid)throw new Error('GalviCare session is unavailable. Refresh and resume the same QA journey.');
     const requestedAction=String(action||'').trim();
     const canonicalAction=CLIENT_ACTION_ALIASES[requestedAction]||requestedAction;
-    const response=await fetch(endpoint(),{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Cache-Control':'no-cache'},
-      body:JSON.stringify({action:canonicalAction,session_id:sid,payload})
-    });
+    const controller=new AbortController();
+    const timer=setTimeout(()=>controller.abort(),DAY7D_REQUEST_TIMEOUT_MS);
+    let response;
+    try{
+      response=await fetch(endpoint(),{
+        method:'POST',
+        signal:controller.signal,
+        headers:{'Content-Type':'application/json','Cache-Control':'no-cache','X-Correlation-Id':`day6-h17-${canonicalAction}-${crypto.randomUUID?.()||Date.now()}`},
+        body:JSON.stringify({action:canonicalAction,session_id:sid,payload})
+      });
+    }catch(error){
+      if(error?.name==='AbortError'){
+        const timeout=new Error(`${canonicalAction}: GalviCare canonical evidence request timed out safely.`);timeout.code='GV_DAY6_H17_TIMEOUT';timeout.status=504;throw timeout;
+      }
+      throw error;
+    }finally{clearTimeout(timer);}
     const raw=await response.text();
     let body={};
     try{body=raw?JSON.parse(raw):{};}catch{body={success:false,code:'NON_JSON_API_RESPONSE',message:'GalviCare API returned a non-JSON response.'};}
@@ -79,7 +94,11 @@
 
   function exposeFollowupStage(product,response){
     const cfg=STAGES[product];
-    if(product==='GalviScore'){if(typeof hideGalviScoreScreens==='function')hideGalviScoreScreens();el(cfg.host)?.classList.remove('hidden');}
+    if(product==='GalviScore'){
+      if(typeof hideGalviScoreScreens==='function')hideGalviScoreScreens();
+      const host=el(cfg.host);if(host){host.classList.remove('hidden');host.style.display='block';}
+      if(typeof clearGalviCareReturnPending==='function')clearGalviCareReturnPending();
+    }
     else{if(typeof hideUpstream==='function')hideUpstream();const host=el(cfg.host);if(host){host.classList.remove('hidden');host.style.display='block';}}
     renderQuestions(product,response);el(cfg.followup)?.scrollIntoView({behavior:'smooth',block:'start'});return true;
   }
@@ -134,6 +153,45 @@
   function suppressLegacyFormSubmit(product){const cfg=STAGES[product],panel=el(cfg.followup),form=panel?.closest('form');if(!form||form.dataset.day7dAuthoritativeSubmit==='1')return;form.dataset.day7dAuthoritativeSubmit='1';form.addEventListener('submit',event=>{if(ownsEvent(product,event)){event.preventDefault();event.stopImmediatePropagation();}},true);}
   function bind(product){const cfg=STAGES[product];ensureStageUi(product);suppressLegacyFormSubmit(product);const submit=el(cfg.submit),skip=el(cfg.skip);if(submit&&submit.dataset.day7dAuthoritative!=='1'){submit.dataset.day7dAuthoritative='1';submit.type='button';submit.addEventListener('click',async event=>{event.preventDefault();event.stopImmediatePropagation();try{await completeVisibleQuestions(product,false);}catch{}},true);}if(skip&&skip.dataset.day7dAuthoritative!=='1'){skip.dataset.day7dAuthoritative='1';skip.type='button';skip.addEventListener('click',async event=>{event.preventDefault();event.stopImmediatePropagation();try{await completeVisibleQuestions(product,true);}catch{}},true);}}
 
+  async function resumeGalviScoreAfterVerifiedPayment(sessionId){
+    const sid=String(sessionId||'').trim();
+    if(!sid)throw new Error('Verified GalviScore payment did not resolve a canonical GalviCare session.');
+    if(typeof persistSessionId==='function')persistSessionId(sid);
+    try{localStorage.setItem('payment_galviscore','paid');}catch{}
+    if(typeof hideInitialJourneyForPaidReturn==='function')hideInitialJourneyForPaidReturn();
+    let lastError=null;
+    for(let attempt=1;attempt<=PAID_SCORE_ENTITLEMENT_RETRIES;attempt++){
+      try{
+        const response=await call(STAGES.GalviScore.get,{});
+        const status=responseStatus(response);
+        if(status==='needs_followup'){
+          exposeFollowupStage('GalviScore',response);
+          return true;
+        }
+        if(status==='ok'||status==='evidence_ready'){
+          const rendered=await renderReadyStage('GalviScore',response);
+          if(rendered!==false){if(typeof clearGalviCareReturnPending==='function')clearGalviCareReturnPending();return true;}
+        }
+        lastError=new Error(`GalviScore canonical paid-return state is ${status||'unavailable'}.`);
+      }catch(error){
+        lastError=error;
+        if(Number(error?.status)!==402&&error?.code!=='GV_DAY6_H17_TIMEOUT')break;
+      }
+      if(attempt<PAID_SCORE_ENTITLEMENT_RETRIES)await sleep(250*attempt);
+    }
+    if(typeof showPaymentSessionRecoveryError==='function')showPaymentSessionRecoveryError(lastError||new Error('GalviScore clarification could not be restored safely.'),sid);
+    return false;
+  }
+
+  function installPaidScoreReturnRoute(){
+    const current=window.renderGalviScoreAfterPayment;
+    if(typeof current!=='function'||current?.__day6H17Authoritative===true)return;
+    window.__galviLegacyRenderGalviScoreAfterPayment=current;
+    const wrapper=async sessionId=>resumeGalviScoreAfterVerifiedPayment(sessionId);
+    wrapper.__day6H17Authoritative=true;
+    window.renderGalviScoreAfterPayment=wrapper;
+  }
+
   const routeWrappers={};
   function installRoute(name,product){
     const current=window[name];if(typeof current!=='function'||current?.__day7dAuthoritative===true)return;
@@ -144,7 +202,7 @@
     const wrapper=product==='GalviScore'?async scoreResult=>{scoreBaseline.value=objectiveScore(scoreResult);if(typeof cacheGalviScoreResult==='function')cacheGalviScoreResult(scoreResult);const response=await call(STAGES.GalviScore.get,{});if(responseStatus(response)==='needs_followup')return exposeFollowupStage('GalviScore',response);await renderReadyStage('GalviScore',response);return'result';}:async()=>{const response=await call(STAGES[product].get,{});return responseStatus(response)==='needs_followup'?exposeFollowupStage(product,response):entitlementPending(response)?holdForEntitlement(product,response,el(STAGES[product].status)):renderReadyStage(product,response);};
     wrapper.__day7dAuthoritative=true;routeWrappers[name]=wrapper;window[name]=wrapper;
   }
-  function installAuthoritativeStageRoutes(){installRoute('routeByGalviScoreConfidence','GalviScore');installRoute('showIntegratedGalviShotResult','GalviShot');installRoute('showGalviSight','GalviSight');installRoute('showGalviPath','GalviPath');}
+  function installAuthoritativeStageRoutes(){installPaidScoreReturnRoute();installRoute('routeByGalviScoreConfidence','GalviScore');installRoute('showIntegratedGalviShotResult','GalviShot');installRoute('showGalviSight','GalviSight');installRoute('showGalviPath','GalviPath');}
 
   function visible(node){if(!node)return false;const style=getComputedStyle(node);return !node.classList.contains('hidden')&&style.display!=='none'&&style.visibility!=='hidden';}
   function stageShouldHydrate(product){
@@ -163,16 +221,20 @@
   }
   async function hydrate(product,force=false){
     if(!session()||!stageShouldHydrate(product)||inFlight[product])return false;
+    if(hydrationFlight[product])return hydrationFlight[product];
     const key=hydrationKey(product);if(!force&&hydration[product]===key)return false;hydration[product]=key;
-    try{
-      const response=await call(STAGES[product].get,{});
-      if(responseStatus(response)==='needs_followup')return exposeFollowupStage(product,response);
-      if(product!=='GalviScore'&&entitlementPending(response))return false;
-      return false;
-    }catch(error){
-      if(!(product==='GalviScore'&&Number(error?.status)===402))showError(product,error);
-      return false;
-    }
+    const operation=(async()=>{
+      try{
+        const response=await call(STAGES[product].get,{});
+        if(responseStatus(response)==='needs_followup')return exposeFollowupStage(product,response);
+        if(product!=='GalviScore'&&entitlementPending(response))return false;
+        return false;
+      }catch(error){
+        if(!(product==='GalviScore'&&Number(error?.status)===402))showError(product,error);
+        return false;
+      }
+    })();
+    hydrationFlight[product]=operation;try{return await operation;}finally{hydrationFlight[product]=null;}
   }
 
   function initialize(forceHydration=false){Object.keys(STAGES).forEach(bind);installAuthoritativeStageRoutes();for(const product of Object.keys(STAGES))hydrate(product,forceHydration);}
@@ -182,5 +244,5 @@
   const routeInstaller=setInterval(()=>initialize(false),250);setTimeout(()=>clearInterval(routeInstaller),30000);
   const observer=new MutationObserver(()=>queueMicrotask(()=>initialize(false)));observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});
 
-  window.GalviCareDay7D={renderQuestions,saveAnswers:product=>completeVisibleQuestions(product,false),skipCurrentQuestion:product=>completeVisibleQuestions(product,true),ensureStageUi,exposeFollowupStage,renderReadyStage,installAuthoritativeStageRoutes,assertImmutableGalviScore,holdForEntitlement,entitlementPending,hydrate,callAuthoritativeApi:call};
+  window.GalviCareDay7D={renderQuestions,saveAnswers:product=>completeVisibleQuestions(product,false),skipCurrentQuestion:product=>completeVisibleQuestions(product,true),ensureStageUi,exposeFollowupStage,renderReadyStage,installAuthoritativeStageRoutes,installPaidScoreReturnRoute,resumeGalviScoreAfterVerifiedPayment,assertImmutableGalviScore,holdForEntitlement,entitlementPending,hydrate,callAuthoritativeApi:call};
 })();
