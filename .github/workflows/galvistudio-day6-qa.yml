@@ -1,0 +1,224 @@
+name: GalviStudio Day 6 QA VDM and GalviPro Practice
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [qa-revamped-galvicare-0-5]
+    paths:
+      - worker/day6-entry.js
+      - worker/domain/day6-catalog.js
+      - worker/domain/day6-studio-service.js
+      - worker/routes/day6-studio.js
+      - migrations/day1/0600_day6_studio_vdm.sql
+      - tests/day6-studio.test.mjs
+      - scripts/day6-deployed-e2e.mjs
+      - wrangler.day6.json
+      - .github/workflows/galvistudio-day6-qa.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: galvivault-qa-exclusive-mutator
+  cancel-in-progress: false
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  DAY6_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
+  QA_WORKER_NAME: galvivault-p0-day1-qa
+  SIGNED_DAY5_SHA: 43cec8bf28dbeeabb6fac340aa5161aa1fc1b94c
+
+jobs:
+  day6-gate-deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    environment: qa
+    steps:
+      - name: Checkout exact existing QA candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+
+      - name: P0 existing-QA-only and signed Day 5 ancestry proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "mrgalvipro/galvitriage"
+          test "$GITHUB_REF_NAME" = "qa-revamped-galvicare-0-5"
+          test "$(git branch --show-current)" != "work"
+          test "$(git branch --show-current)" != "main"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$SIGNED_DAY5_SHA" "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          echo "PASS: Day 6 uses only the existing QA ref and descends from signed Day 5."
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install repository dependencies
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Prove exact existing Worker and D1 bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const w=JSON.parse(fs.readFileSync('wrangler.day6.json','utf8'));
+          const db=w.d1_databases?.[0];
+          if(w.name!=='galvivault-p0-day1-qa') throw new Error('Day6 must use existing QA Worker.');
+          if(w.main!=='worker/day6-entry.js') throw new Error('Day6 cumulative entry mismatch.');
+          if(w.vars?.ENVIRONMENT!=='qa'||w.vars?.MIN_SCHEMA_VERSION!=='D6A1') throw new Error('Day6 QA/schema configuration mismatch.');
+          if(db?.binding!=='DB'||db?.database_name!=='galvivault-0-5-qa'||db?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') throw new Error('Day6 must use existing canonical QA D1.');
+          NODE
+          test ! -e wrangler.production.day6.json
+
+      - name: Day 6 syntax and T01-T50 contract gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check worker/day6-entry.js
+          node --check worker/domain/day6-catalog.js
+          node --check worker/domain/day6-studio-service.js
+          node --check worker/routes/day6-studio.js
+          node --check scripts/day6-deployed-e2e.mjs
+          node --test tests/day6-studio.test.mjs | tee day6-t01-t50.txt
+          grep -Eq '# tests 50|tests 50' day6-t01-t50.txt
+          grep -Eq '# fail 0|fail 0' day6-t01-t50.txt
+          grep -Eq '# skipped 0|skipped 0' day6-t01-t50.txt
+
+      - name: Full inherited Day 3 Day 4 Day 5 regression gate
+        run: npm run day5:gate
+
+      - name: Inspect and apply additive Day 6 schema only if missing
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day6.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE name='day6_studio_vdm_v1';" | tee day6-migration-before.txt
+          if ! grep -q 'day6_studio_vdm_v1' day6-migration-before.txt; then
+            npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day6.json --file migrations/day1/0600_day6_studio_vdm.sql
+          fi
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day6.json --command "SELECT migration_id,name,environment,checksum FROM gv1_schema_migrations WHERE name='day6_studio_vdm_v1'; SELECT name FROM sqlite_master WHERE type='table' AND name IN ('gv1_studio_engagements','gv1_studio_stage_gates','gv1_studio_artifact_refs','gv1_studio_outcomes','gv1_studio_venture_proof') ORDER BY name;" | tee day6-schema.txt
+          grep -q '"migration_id": "D6A1"' day6-schema.txt
+          for t in gv1_studio_engagements gv1_studio_stage_gates gv1_studio_artifact_refs gv1_studio_outcomes gv1_studio_venture_proof; do grep -q "$t" day6-schema.txt; done
+
+      - name: Capture immutable pre-Day6 Worker rollback version
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY6_QA_URL/health?before=$GITHUB_SHA" | tee day6-before-health.json
+          npx --yes wrangler@4.120.0 versions list --name "$QA_WORKER_NAME" --config wrangler.day6.json --json > /tmp/day6-before-versions.json
+          ROLLBACK_VERSION_ID=$(node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const v=JSON.parse(fs.readFileSync('/tmp/day6-before-versions.json','utf8'));
+          const rows=Array.isArray(v)?v:[];
+          rows.sort((a,b)=>Date.parse(b.created_on||b.created_at||0)-Date.parse(a.created_on||a.created_at||0));
+          console.log(rows[0]?.id||rows[0]?.version_id||'');
+          NODE
+          )
+          test -n "$ROLLBACK_VERSION_ID"
+          echo "DAY6_ROLLBACK_VERSION_ID=$ROLLBACK_VERSION_ID" >> "$GITHUB_ENV"
+          echo "$ROLLBACK_VERSION_ID" > day6-rollback-version-id.txt
+
+      - name: Deploy exact-SHA cumulative Day 6 QA Worker
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 deploy --config wrangler.day6.json --var COMMIT_SHA:$GITHUB_SHA | tee day6-deploy.txt
+          npx --yes wrangler@4.120.0 versions list --name "$QA_WORKER_NAME" --config wrangler.day6.json --json > /tmp/day6-after-versions.json
+          CANDIDATE_VERSION_ID=$(node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const v=JSON.parse(fs.readFileSync('/tmp/day6-after-versions.json','utf8'));
+          const rows=Array.isArray(v)?v:[];
+          rows.sort((a,b)=>Date.parse(b.created_on||b.created_at||0)-Date.parse(a.created_on||a.created_at||0));
+          console.log(rows[0]?.id||rows[0]?.version_id||'');
+          NODE
+          )
+          test -n "$CANDIDATE_VERSION_ID"
+          echo "DAY6_CANDIDATE_VERSION_ID=$CANDIDATE_VERSION_ID" >> "$GITHUB_ENV"
+          echo "$CANDIDATE_VERSION_ID" > day6-worker-version-id.txt
+
+      - name: Wait for Worker convergence
+        run: sleep 12
+
+      - name: Verify exact deployed Day 6 and inherited Day 5 readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY6_QA_URL/health?sha=$GITHUB_SHA" | tee day6-health.json
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY6_QA_URL/api/v1/day5/readiness?sha=$GITHUB_SHA" | tee day6-day5-readiness.json
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY6_QA_URL/api/v1/day6/readiness?sha=$GITHUB_SHA" | tee day6-readiness.json
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY6_QA_URL/api/v1/day6/studio/catalog?sha=$GITHUB_SHA" | tee day6-catalog.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const h=JSON.parse(fs.readFileSync('day6-health.json','utf8'));
+          const d5=JSON.parse(fs.readFileSync('day6-day5-readiness.json','utf8'));
+          const d6=JSON.parse(fs.readFileSync('day6-readiness.json','utf8'));
+          const cat=JSON.parse(fs.readFileSync('day6-catalog.json','utf8'));
+          if(h?.success!==true||h?.data?.commit_sha!==process.env.GITHUB_SHA) throw new Error('Exact Day6 deployed SHA proof failed.');
+          if(d5?.success!==true||d5?.data?.ready!==true) throw new Error('Inherited Day5 readiness regressed.');
+          if(d6?.success!==true||d6?.data?.ready!==true||d6?.data?.current_schema_version!=='D6A1') throw new Error('Day6 readiness failed.');
+          if(cat?.success!==true||cat?.data?.pillars?.length!==4||cat?.data?.spur?.stages?.length!==6||cat?.data?.sprints?.length!==7) throw new Error('Day6 catalog/SPUR/Sprint projection failed.');
+          NODE
+
+      - name: Execute deployed Day 6 critical-path E2E and D1 assertions
+        run: node scripts/day6-deployed-e2e.mjs | tee day6-deployed-e2e.json
+
+      - name: Re-run inherited regression after Day 6 deployed E2E
+        run: npm run day5:gate
+
+      - name: Rehearse non-destructive rollback to pre-Day6 runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 versions deploy --name "$QA_WORKER_NAME" --version-id "$DAY6_ROLLBACK_VERSION_ID" --percentage 100 --message "Day6 rollback rehearsal before $GITHUB_SHA" --config wrangler.day6.json -y
+          sleep 10
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY6_QA_URL/health?rollback=$GITHUB_SHA" | tee day6-rollback-health.json
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY6_QA_URL/api/v1/day5/readiness?rollback=$GITHUB_SHA" | tee day6-rollback-day5-readiness.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const h=JSON.parse(fs.readFileSync('day6-rollback-health.json','utf8'));
+          const d=JSON.parse(fs.readFileSync('day6-rollback-day5-readiness.json','utf8'));
+          if(h?.success!==true||d?.success!==true||d?.data?.ready!==true) throw new Error('Non-destructive Day5 rollback smoke failed.');
+          NODE
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day6.json --command "SELECT migration_id,name FROM gv1_schema_migrations WHERE name='day6_studio_vdm_v1'; SELECT COUNT(*) AS studio_engagements FROM gv1_studio_engagements; SELECT COUNT(*) AS studio_outcomes FROM gv1_studio_outcomes;" | tee day6-rollback-d1.txt
+          grep -q 'day6_studio_vdm_v1' day6-rollback-d1.txt
+
+      - name: Restore exact Day 6 candidate after rollback rehearsal
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.120.0 versions deploy --name "$QA_WORKER_NAME" --version-id "$DAY6_CANDIDATE_VERSION_ID" --percentage 100 --message "Restore Day6 exact SHA $GITHUB_SHA" --config wrangler.day6.json -y
+          ready=0
+          for attempt in 1 2 3 4 5 6; do
+            sleep 10
+            if curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY6_QA_URL/api/v1/day6/readiness?restore=$GITHUB_SHA&attempt=$attempt" -o /tmp/day6-restore.json; then
+              if node -e "const d=require('/tmp/day6-restore.json');process.exit(d.success&&d.data?.ready?0:1)"; then ready=1; break; fi
+            fi
+          done
+          test "$ready" = 1
+          curl --fail --silent --show-error -H 'Cache-Control: no-cache' "$DAY6_QA_URL/health?restore=$GITHUB_SHA" | tee day6-restore-health.json
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const h=JSON.parse(fs.readFileSync('day6-restore-health.json','utf8'));
+          if(h?.success!==true||h?.data?.commit_sha!==process.env.GITHUB_SHA) throw new Error('Exact Day6 candidate restore identity failed.');
+          NODE
+
+      - name: Day 6 evidence summary
+        if: always()
+        shell: bash
+        run: |
+          echo '## GalviStudio / GalviCare Day 6 QA' >> "$GITHUB_STEP_SUMMARY"
+          echo "- Existing QA ref only: $GITHUB_REF_NAME" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Candidate SHA: $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo '- New branch created: NO' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Work ref pushed: NO' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Existing QA Worker/D1 reused: YES' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 6 T01-T50 mandatory tests: executed' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Inherited Day 3/4/5 gate: executed' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Deployed Day 6 E2E + D1 assertions: executed' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Non-destructive rollback + candidate restore: executed' >> "$GITHUB_STEP_SUMMARY"
