@@ -238,6 +238,11 @@
   }
 
   function initialize(forceHydration=false){Object.keys(STAGES).forEach(bind);installAuthoritativeStageRoutes();for(const product of Object.keys(STAGES))hydrate(product,forceHydration);}
+  // The QA builder appends this adapter after the legacy application scripts while
+  // document.readyState is still "loading". Install route ownership immediately so
+  // the base paid-return DOMContentLoaded callback cannot race the authoritative
+  // GalviScore clarification route. DOM binding/hydration still waits for readiness.
+  installAuthoritativeStageRoutes();
   document.addEventListener('DOMContentLoaded',()=>initialize(true));
   if(document.readyState!=='loading')queueMicrotask(()=>initialize(true));
   for(const event of ['pageshow','focus','hashchange','popstate'])window.addEventListener(event,()=>initialize(true));
