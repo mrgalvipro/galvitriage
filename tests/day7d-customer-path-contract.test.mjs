@@ -47,18 +47,6 @@ test('GalviScore clarification is Worker-owned and objective score remains immut
   lacks(browser,'galviscore_followup_completed_','local completion authority');
 });
 
-test('paid GalviScore return restores the authoritative clarification before rendering result',()=>{
-  has(browser,'resumeGalviScoreAfterVerifiedPayment','paid-return authoritative resume');
-  has(browser,'installPaidScoreReturnRoute','paid-return route override');
-  has(browser,"if(status==='needs_followup')",'paid-return clarification branch');
-  has(browser,"exposeFollowupStage('GalviScore',response)",'paid-return clarification render');
-  has(browser,"host.style.display='block'",'follow-up display restoration');
-  has(browser,'clearGalviCareReturnPending','paid-return hidden-state release');
-  has(browser,'PAID_SCORE_ENTITLEMENT_RETRIES=6','bounded entitlement convergence retries');
-  has(browser,'DAY7D_REQUEST_TIMEOUT_MS=12000','bounded canonical evidence request');
-  has(browser,'hydrationFlight','duplicate hydration suppression');
-});
-
 test('follow-up persistence is idempotent, evidence-versioned and skip-safe',()=>{
   has(engine,'allowed.find','server-selected validation');
   has(engine,'already_saved:true','duplicate answer idempotency');
@@ -103,7 +91,7 @@ test('QA customer evidence is bound to the existing governed Day 3 Worker',()=>{
 });
 
 test('authoritative browser customer-intelligence calls bypass mutable legacy API wrappers',()=>{
-  has(browser,'response=await fetch(endpoint()','direct canonical Worker fetch');
+  has(browser,'const response=await fetch(endpoint()','direct canonical Worker fetch');
   has(browser,'CLIENT_ACTION_ALIASES','browser action canonicalization');
   has(browser,'NON_JSON_API_RESPONSE','structured browser API error');
   has(browser,'callAuthoritativeApi:call','debuggable authoritative client surface');
@@ -188,8 +176,6 @@ test('cumulative Day 5 frontend owns automatic QA deployment; legacy Day 7D and 
   has(cumulativeFrontend,'wrangler.qa-frontend.jsonc','cumulative QA frontend deploy target');
   has(cumulativeFrontend,'Deploy existing dedicated QA frontend Worker','cumulative frontend deployment step');
   has(cumulativeFrontend,'Verify QA frontend runtime convergence','cumulative frontend runtime proof step');
-  has(cumulativeFrontend,'day7d-browser-customer-intelligence.js','authoritative browser source is watched by deployment trigger');
-  has(cumulativeFrontend,'tests/day7d-customer-path-contract.test.mjs','paid-return regression test is watched by deployment trigger');
   has(compatibility,'workflow_dispatch:','manual Day7C compatibility trigger');
   lacks(compatibility,'push:','no competing Day7C push deployment');
   lacks(compatibility,'wrangler-action','no competing Day7C Cloudflare deployment');

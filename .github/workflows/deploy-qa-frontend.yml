@@ -10,7 +10,6 @@ on:
       - day1-prefounder-customer.js
       - day1-prefounder-qa.js
       - day3-governed-ai-customer-bridge.mjs
-      - day7d-browser-customer-intelligence.js
       - day4-galvichart-browser.js
       - day4-customer-experience-hardening.js
       - day4-single-current-governed-product.js
@@ -23,8 +22,6 @@ on:
       - scripts/day4-build-qa-frontend.mjs
       - scripts/day5-build-qa-frontend.mjs
       - tests/day1-prefounder-customer.test.mjs
-      - tests/day7d-customer-intelligence.test.mjs
-      - tests/day7d-customer-path-contract.test.mjs
       - tests/day4-galvicare-1-0.test.mjs
       - tests/day5-care-routing.test.mjs
       - tests/day5-customer-active-care.test.mjs
