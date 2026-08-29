@@ -5,6 +5,7 @@ on:
   push:
     branches: [qa-revamped-galvicare-0-5]
     paths:
+      - worker/day5-common.js
       - worker/day6-entry.js
       - worker/domain/day6-catalog.js
       - worker/domain/day6-studio-service.js
