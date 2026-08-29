@@ -42,7 +42,7 @@ export const FOUR_PILLARS = Object.freeze([
 ]);
 
 export const SPUR_TRACKS = Object.freeze([
-  { code: 'pre_founder', name: 'SPUR Pre-Founder', primary_person: 'individual exploring ownership/founder readiness before a real venture exists', outcome: 'Founder Life/Ownership Thesis + Evidence-Based Opportunity Thesis' },
+  { code: 'dreamer', name: 'SPUR Pre-Founder', primary_person: 'individual exploring ownership/founder readiness before a real venture exists', outcome: 'Founder Life/Ownership Thesis + Evidence-Based Opportunity Thesis' },
   { code: 'founder', name: 'SPUR Founder', primary_person: 'individual preparing to create a venture', outcome: 'Readiness Development Plan + evidence-based go/no-go' },
   { code: 'operator_steward', name: 'SPUR Operator/Steward', primary_person: 'existing owner/executive', outcome: 'operating venture/treatment roadmap + stewardship plan' }
 ]);
