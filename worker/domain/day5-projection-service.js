@@ -23,9 +23,30 @@ async function canonicalTreatmentSources(db,bmrId){
 export async function getGovernedClinicBrief(env,actor,bmrId){
   const base=await getClinicBrief(env,actor,bmrId);
   const sources=await canonicalTreatmentSources(env.DB,base.bmr_id);
-  const sourceState={...base.source_state,context_id:sources.context_id,treatment_source_versions:sources.source_versions,treatment_source_refs:sources.source_refs};
+
+  // H21 critical-path repair: reassessment writes were canonical and returning 201,
+  // but the clinician clinic-brief projection did not read them back. Keep this a
+  // bounded, read-only, same-BMR projection query; do not create a second record,
+  // migration, AI call, or client-side reconstruction.
+  const reassessments=await all(env.DB,`SELECT reassessment_id,bmr_id,treatment_plan_id,decision,reason,evidence_refs_json,outcome_refs_json,source_versions_json,actor_type,actor_id,correlation_id,created_at FROM gv1_reassessments WHERE bmr_id=? ORDER BY created_at DESC LIMIT 25`,base.bmr_id);
+
+  const sourceState={
+    ...base.source_state,
+    context_id:sources.context_id,
+    treatment_source_versions:sources.source_versions,
+    treatment_source_refs:sources.source_refs,
+    reassessment_state:reassessments.slice(0,10).map(row=>[row.reassessment_id,row.treatment_plan_id,row.decision,row.created_at])
+  };
   const briefFingerprint=await hash('day5:clinic-brief',sourceState);
-  return {...base,brief_fingerprint:briefFingerprint,source_state:sourceState,source_versions:sources.source_versions,source_refs:sources.source_refs,generation_sources:sources.generation_sources};
+  return {
+    ...base,
+    reassessments,
+    brief_fingerprint:briefFingerprint,
+    source_state:sourceState,
+    source_versions:sources.source_versions,
+    source_refs:sources.source_refs,
+    generation_sources:sources.generation_sources
+  };
 }
 
 export function assertCanonicalSourceVersions(brief,supplied){
