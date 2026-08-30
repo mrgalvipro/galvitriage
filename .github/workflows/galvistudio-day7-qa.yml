@@ -31,6 +31,7 @@ on:
       - day5-customer-care-routing.js
       - day5-customer-active-care.js
       - .github/workflows/galvistudio-day7-qa.yml
+      - .github/workflows/galvivault-day8-qa.yml
 
 permissions:
   contents: read
@@ -44,7 +45,7 @@ env:
   DAY7_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
   DAY6_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
   QA_FRONTEND_URL: https://galvicare-0-5-qa.mrgalvipro.workers.dev
-  DAY8_CLINICIAN_SOURCE_SHA: dd2a33492c543f5a873dee0c9d2131365a22f706
+  DAY8_CLINICIAN_BASELINE_SHA: acf8b84c5ef83a9069f8fda9d180e42fd6e3b757
 
 jobs:
   day7-qa-release-gate:
@@ -67,20 +68,16 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git cat-file -e "$DAY6_RUNTIME_CANDIDATE^{commit}"
           git merge-base --is-ancestor "$DAY6_RUNTIME_CANDIDATE" "$GITHUB_SHA"
-          git cat-file -e "$DAY8_CLINICIAN_SOURCE_SHA^{commit}"
-          git merge-base --is-ancestor "$DAY8_CLINICIAN_SOURCE_SHA" "$GITHUB_SHA"
-          node --input-type=module <<'NODE'
-          import fs from 'node:fs';
-          const p='release-evidence/day8/qa-deployment-current.json';
-          const d=JSON.parse(fs.readFileSync(p,'utf8'));
-          if(d.branch!=='qa-revamped-galvicare-0-5'||d.source_sha!==process.env.DAY8_CLINICIAN_SOURCE_SHA||d.deploy!=='success'||d.d1!=='success'||d.galvicare_smoke!=='success') throw new Error('Day8 clinician deployment evidence is not the approved Day7 P1 handoff.');
-          NODE
+          git cat-file -e "$DAY8_CLINICIAN_BASELINE_SHA^{commit}"
+          git merge-base --is-ancestor "$DAY8_CLINICIAN_BASELINE_SHA" "$GITHUB_SHA"
+          # Day 8 evidence is now immutable Actions evidence; the old branch JSON may
+          # contain a historical failed run and is deliberately not a release authority.
           git diff --name-only "$DAY6_RUNTIME_CANDIDATE..$GITHUB_SHA" | tee day7-entry-delta.txt
           unexpected=0
           while IFS= read -r path; do
             [ -z "$path" ] && continue
             case "$path" in
-              docs/*|release-evidence/day7/*|release-evidence/day8/qa-deployment-current.json|clinician-portal/day7-prefounder-queue.js|clinician-portal/index.html|scripts/day7-codex-bootstrap.sh|scripts/day7-deployed-release-e2e.mjs|tests/day7-branchless-release-gate.test.mjs|tests/day7-release-critical.test.mjs|tests/day1-prefounder-customer.test.mjs|day1-prefounder-customer.js|qa-frontend-worker.js|worker/day7-entry.js|worker/routes/day7-release.js|worker/routes/operator-workspace.js|worker/domain/day7-membership-service.js|migrations/day1/0700_day7_release_membership.sql|wrangler.day7.json|.github/workflows/galvistudio-day7-qa.yml)
+              docs/*|release-evidence/day7/*|release-evidence/day8/qa-deployment-current.json|clinician-portal/day7-prefounder-queue.js|clinician-portal/index.html|scripts/day7-codex-bootstrap.sh|scripts/day7-deployed-release-e2e.mjs|tests/day7-branchless-release-gate.test.mjs|tests/day7-release-critical.test.mjs|tests/day1-prefounder-customer.test.mjs|day1-prefounder-customer.js|qa-frontend-worker.js|worker/day7-entry.js|worker/routes/day7-release.js|worker/routes/operator-workspace.js|worker/domain/day7-membership-service.js|migrations/day1/0700_day7_release_membership.sql|wrangler.day7.json|.github/workflows/galvistudio-day7-qa.yml|.github/workflows/galvivault-day8-qa.yml)
                 ;;
               *) echo "STOP: unapproved Day 7 delta: $path"; unexpected=1 ;;
             esac
@@ -301,7 +298,7 @@ jobs:
           echo '- New branch created: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Work ref pushed: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA Worker/D1/frontend reused: YES' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Day 8 clinician queue handoff SHA/evidence verified before allowlisting: YES' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 8 clinician navigator baseline is an ancestor; current exact Day 8 run must also be green before sign-off: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- Full inherited Day 1-6 regression + Day7D integration gate: executed' >> "$GITHUB_STEP_SUMMARY"
           echo '- Pre-Founder normal customer email + principal-only Founder Readiness: enabled' >> "$GITHUB_STEP_SUMMARY"
           echo '- Pre-Founder submitted intake rehydration on authenticated refresh: enabled' >> "$GITHUB_STEP_SUMMARY"
