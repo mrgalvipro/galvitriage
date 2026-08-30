@@ -54,14 +54,32 @@ test('governed AI remains server-side and deterministic Founder Readiness stays 
   assert.doesNotMatch(s,/api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}/);
 });
 
-test('human_e2e only exposes QA physician control and does not select customer functionality',()=>{
+test('human_e2e only exposes the QA physician control and never enables it by default',()=>{
   const s=read('day1-prefounder-customer.js');
   assert.match(s,/qaDiagnostic\(\)/);
   assert.match(s,/QA Human E2E — Business Physician control/);
   assert.match(s,/qa-physician-plan/);
-  assert.match(s,/This control is QA-only and is not part of the customer-facing production path/);
+  assert.match(s,/This control is QA-only and appears only when Human E2E mode is explicitly enabled/);
+  assert.match(s,/data-human-e2e-control="business-physician"/);
+  assert.doesNotMatch(s,/data-qa-only="true"><summary><strong>QA Human E2E — Business Physician control/);
   assert.doesNotMatch(s,/history\.replaceState/);
   assert.doesNotMatch(s,/searchParams\.set\('human_e2e'/);
+});
+
+test('hard refresh restores the canonical Pre-Founder session instead of falling into legacy gt session recovery',()=>{
+  const s=read('day1-prefounder-customer.js');
+  assert.match(s,/function liveSession\(\)/);
+  assert.match(s,/function suppressLegacyRestore\(\)/);
+  assert.match(s,/function resumeExisting\(\)/);
+  assert.match(s,/Canonical Pre-Founder record restored/);
+  assert.match(s,/if\(liveSession\(\)\)setTimeout\(resumeExisting,50\)/);
+  assert.match(s,/localStorage\.removeItem\(key\);sessionStorage\.removeItem\(key\)/);
+});
+
+test('Green zero acuity explains urgency versus Founder Readiness in customer-safe copy',()=>{
+  const s=read('day1-prefounder-customer.js');
+  assert.match(s,/No urgent care trigger identified from your current intake\. Acuity measures urgency, not Founder Readiness\./);
+  assert.match(s,/acuityCopy\(score\)/);
 });
 
 test('default customer source contains no legacy Day1 operator panel and builder still injects it separately',()=>{
