@@ -69,7 +69,7 @@ jobs:
           while IFS= read -r path; do
             [ -z "$path" ] && continue
             case "$path" in
-              docs/*|release-evidence/day7/*|scripts/day7-codex-bootstrap.sh|scripts/day7-deployed-release-e2e.mjs|tests/day7-branchless-release-gate.test.mjs|tests/day7-release-critical.test.mjs|worker/day7-entry.js|worker/routes/day7-release.js|worker/domain/day7-membership-service.js|migrations/day1/0700_day7_release_membership.sql|wrangler.day7.json|.github/workflows/galvistudio-day7-qa.yml)
+              docs/*|release-evidence/day7/*|scripts/day7-codex-bootstrap.sh|scripts/day7-deployed-release-e2e.mjs|tests/day7-branchless-release-gate.test.mjs|tests/day7-release-critical.test.mjs|tests/day1-prefounder-customer.test.mjs|day1-prefounder-customer.js|worker/day7-entry.js|worker/routes/day7-release.js|worker/domain/day7-membership-service.js|migrations/day1/0700_day7_release_membership.sql|wrangler.day7.json|.github/workflows/galvistudio-day7-qa.yml)
                 ;;
               *) echo "STOP: unapproved Day 7 delta: $path"; unexpected=1 ;;
             esac
@@ -90,10 +90,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          node --check day1-prefounder-customer.js
           node --check worker/day7-entry.js
           node --check worker/domain/day7-membership-service.js
           node --check worker/routes/day7-release.js
           node --check scripts/day7-deployed-release-e2e.mjs
+          node --test tests/day1-prefounder-customer.test.mjs
           node --test tests/day7-branchless-release-gate.test.mjs
           node --test tests/day7-release-critical.test.mjs | tee day7-t01-t60-control-map.txt
           grep -Eq '# fail 0|fail 0' day7-t01-t60-control-map.txt
@@ -133,8 +135,10 @@ jobs:
           node scripts/day5-build-qa-frontend.mjs
           test -s dist-qa/index.html
           grep -Fq 'GALVICARE QA / TEST ENVIRONMENT' dist-qa/index.html
+          grep -Fq 'GalviScore™ | Founder Readiness' dist-qa/index.html
+          grep -Fq 'SPUR™ Pre-Founder Route' dist-qa/index.html
           ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
-          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}' day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-score-metadata.js day5-customer-care-routing.js day5-customer-active-care.js worker/day7-entry.js worker/routes/day7-release.js worker/domain/day7-membership-service.js
+          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}' day1-prefounder-customer.js day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-score-metadata.js day5-customer-care-routing.js day5-customer-active-care.js worker/day7-entry.js worker/routes/day7-release.js worker/domain/day7-membership-service.js
 
       - name: Prove exact QA Worker and canonical D1 binding
         shell: bash
@@ -257,6 +261,7 @@ jobs:
         run: |
           set -euo pipefail
           npm run day5:gate
+          node --test tests/day1-prefounder-customer.test.mjs
           node --test tests/day7-release-critical.test.mjs
 
       - name: Archive Day 7 QA evidence
@@ -280,6 +285,7 @@ jobs:
           echo '- Work ref pushed: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA Worker/D1/frontend reused: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- Full inherited Day 1-6 regression + Day7D integration gate: executed' >> "$GITHUB_STEP_SUMMARY"
+          echo '- P0-02 principal-only Founder Readiness + SPUR contract: re-proven' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 6 deployed E2E: re-proven against exact candidate' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 7 Membership beta start/check-in/cancel/replay: executed' >> "$GITHUB_STEP_SUMMARY"
           echo "- Rollback rehearsal: ${{ steps.rollback.outcome }}" >> "$GITHUB_STEP_SUMMARY"
