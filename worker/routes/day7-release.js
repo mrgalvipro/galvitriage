@@ -6,6 +6,7 @@ import {
 const AI_PROMPT_VERSION='day7_prefounder_readiness_v1';
 const AI_SCHEMA_VERSION='day7_prefounder_readiness_schema_v1';
 const AI_SCOPE='day7:prefounder-readiness-ai';
+const AI_LEDGER_TASK='synthesize_evidence';
 const PROVIDER_SECRET_NAME=['OPENAI','API','KEY'].join('_');
 const PROVIDER_URL=['https://api','openai.com/v1/responses'].join('.');
 const SAFE_ID=/^[A-Za-z0-9:._-]{3,180}$/;
@@ -146,10 +147,44 @@ async function persistAi(env,ctx,key,fingerprint,context,record){
   const generationId=record.generation_id||newId('pfr_ai');
   const timestamp=now();
   const stored={...record,generation_id:generationId,idempotent_replay:false};
-  await env.DB.batch([
-    env.DB.prepare(`INSERT INTO gv1_audit_log(audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at) VALUES(?,?,?,'append',NULL,1,'customer',?,?,?,?,?,?,?,?)`).bind(newId('aud'),'prefounder_readiness_interpretation',generationId,record.generation_source,record.validation_status==='accepted'?'AI_ACCEPTED':'AI_FALLBACK',JSON.stringify(stored),ctx.correlation,ctx.environment,timestamp,timestamp),
-    env.DB.prepare(`INSERT INTO gv1_idempotency_keys(idempotency_id,scope,idempotency_key,request_fingerprint,response_status,response_entity_type,response_entity_id,created_at) VALUES(?,?,?,?,201,'prefounder_readiness_interpretation',?,?)`).bind(newId('idem'),AI_SCOPE,key,fingerprint,generationId,timestamp)
-  ]);
+  const evidenceRows=[];
+  const supporting=new Set(record.supporting_evidence_refs||[]);
+  const contradictory=new Set(record.contradictory_evidence_refs||[]);
+  for(const evidenceId of [...new Set([...supporting,...contradictory])]){
+    evidenceRows.push(env.DB.prepare(`INSERT OR IGNORE INTO gv1_day3_generation_evidence(generation_id,evidence_kind,evidence_id,role,created_at) VALUES(?,'principal',?,?,?)`).bind(
+      generationId,evidenceId,contradictory.has(evidenceId)?'contradictory':'supporting',timestamp
+    ));
+  }
+  try{
+    await env.DB.batch([
+      env.DB.prepare(`INSERT INTO gv1_day3_ai_generations(generation_id,context_id,founder_id,bmr_id,task,request_fingerprint,attempt_no,provider,provider_response_id,model,prompt_version,schema_version,rules_version,protocol_version,evidence_bundle_hash,deterministic_context_hash,proposal_json,validation_status,validation_errors_json,approval_status,customer_projection,correlation_id,latency_ms,usage_json,created_at,completed_at) VALUES(?,?,?,NULL,?,?,1,?,?,?,?,?,?,?,?,?,?,?,?,'not_required',?,?,?,?,?,?)`).bind(
+        generationId,context.context_id,context.founder_id,AI_LEDGER_TASK,fingerprint,
+        record.provider_metadata?.provider||record.generation_source,
+        record.provider_metadata?.provider_response_id||null,
+        record.provider_metadata?.model||record.model_config||null,
+        record.prompt_version,record.schema_version,record.rules_version,record.protocol_version,
+        record.evidence_bundle_hash,record.deterministic_context_hash,JSON.stringify(stored),
+        record.validation_status,JSON.stringify(record.validation_errors||[]),
+        record.generation_source==='openai_governed'&&record.validation_status==='accepted'?1:0,
+        ctx.correlation,record.provider_metadata?.latency_ms??null,
+        record.provider_metadata?.usage?JSON.stringify(record.provider_metadata.usage):null,
+        timestamp,timestamp
+      ),
+      ...evidenceRows,
+      env.DB.prepare(`INSERT INTO gv1_audit_log(audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at) VALUES(?,?,?,'append',NULL,1,'customer',?,?,?,?,?,?,?)`).bind(
+        newId('aud'),'prefounder_readiness_interpretation',generationId,record.generation_source,
+        record.validation_status==='accepted'?'AI_ACCEPTED':'AI_FALLBACK',JSON.stringify(stored),
+        ctx.correlation,ctx.environment,timestamp,timestamp
+      ),
+      env.DB.prepare(`INSERT INTO gv1_idempotency_keys(idempotency_id,scope,idempotency_key,request_fingerprint,response_status,response_entity_type,response_entity_id,created_at) VALUES(?,?,?,?,201,'prefounder_readiness_interpretation',?,?)`).bind(
+        newId('idem'),AI_SCOPE,key,fingerprint,generationId,timestamp
+      )
+    ]);
+  }catch(error){
+    const replayed=await replayAi(env,key,fingerprint);
+    if(replayed)return replayed;
+    throw error;
+  }
   return stored;
 }
 
@@ -157,25 +192,49 @@ async function preFounderAi(request,env,ctx,key,input){
   const context=await preFounderContext(env,request,ctx,input.context_id);
   const [vitals,score]=await Promise.all([day2Result(env,context.context_id,'vitals'),day2Result(env,context.context_id,'score')]);
   if(vitals.score_type!=='founder_readiness'||score.score_type!=='founder_readiness'||vitals.payload.score_type!=='founder_readiness'||score.payload.score_type!=='founder_readiness') throw new GVError('GV_SCOPE_MISMATCH','Founder Readiness AI interpretation cannot consume Business Health results.',409);
-  const evidenceRefs=[vitals.result_id,score.result_id,...vitals.supporting_evidence_ids,...score.supporting_evidence_ids].filter(Boolean);
+  const supportingEvidence=[...new Set([...vitals.supporting_evidence_ids,...score.supporting_evidence_ids].map(clean).filter(Boolean))];
+  const contradictoryEvidence=[...new Set([...vitals.contradictory_evidence_ids,...score.contradictory_evidence_ids].map(clean).filter(Boolean))];
+  const canonicalResultIds={vitals:vitals.result_id,score:score.result_id};
   const fingerprint=await hash(AI_SCOPE,{context_id:context.context_id,vitals:vitals.result_id,score:score.result_id,prompt_version:AI_PROMPT_VERSION,schema_version:AI_SCHEMA_VERSION});
   const replayed=await replayAi(env,key,fingerprint);if(replayed)return replayed;
   let projection,providerMeta={},generationSource='rules_fallback',validationStatus='accepted',validationErrors=[];
   try{
     const generated=await callProvider(env,score,vitals);
     validationErrors=validateProposal(generated.proposal);
-    if(validationErrors.length){projection=fallbackProjection(score,vitals,validationErrors[0]);generationSource='rules_fallback';validationStatus='rejected';providerMeta={provider:generated.provider,provider_response_id:generated.provider_response_id,model:generated.model,latency_ms:generated.latency_ms};}
-    else{projection={summary:bounded(generated.proposal.summary),strengths:generated.proposal.strengths.map(x=>bounded(x,700)),focus_areas:generated.proposal.focus_areas.map(x=>bounded(x,700)),next_step:bounded(generated.proposal.next_step),confidence_note:bounded(generated.proposal.confidence_note)};generationSource='openai_governed';validationStatus='accepted';providerMeta={provider:generated.provider,provider_response_id:generated.provider_response_id,model:generated.model,latency_ms:generated.latency_ms,usage:generated.usage};}
+    if(validationErrors.length){
+      projection=fallbackProjection(score,vitals,validationErrors[0]);
+      generationSource='rules_fallback';validationStatus='rejected';
+      providerMeta={provider:generated.provider,provider_response_id:generated.provider_response_id,model:generated.model,latency_ms:generated.latency_ms,usage:generated.usage};
+    }else{
+      projection={summary:bounded(generated.proposal.summary),strengths:generated.proposal.strengths.map(x=>bounded(x,700)),focus_areas:generated.proposal.focus_areas.map(x=>bounded(x,700)),next_step:bounded(generated.proposal.next_step),confidence_note:bounded(generated.proposal.confidence_note)};
+      generationSource='openai_governed';validationStatus='accepted';
+      providerMeta={provider:generated.provider,provider_response_id:generated.provider_response_id,model:generated.model,latency_ms:generated.latency_ms,usage:generated.usage};
+    }
   }catch(error){
     projection=fallbackProjection(score,vitals,error?.code||'provider_fallback');
+    validationStatus='rejected';
     validationErrors=[error?.code||'GV_AI_FALLBACK'];
   }
+  const deterministic={
+    lifecycle_state:'pre_founder',record_mode:'principal_only',venture_id:null,bmr_id:null,score_type:'founder_readiness',
+    canonical_score:score.payload.overall_score,canonical_dimensions:score.payload.dimension_scores||vitals.payload.dimension_scores||{},
+    acuity_score:score.payload.acuity_score,acuity_band:score.payload.acuity_band,
+    clinical_confidence:score.payload.clinical_confidence??vitals.payload.clinical_confidence,
+    canonical_result_ids:canonicalResultIds,route:'SPUR Pre-Founder'
+  };
+  const evidenceBundleHash=await hash('day7-prefounder-evidence',{supporting:supportingEvidence,contradictory:contradictoryEvidence,canonical_result_ids:canonicalResultIds});
+  const deterministicContextHash=await hash('day7-prefounder-deterministic',deterministic);
+  const modelConfig=clean(env.OPENAI_MODEL_QA||env.OPENAI_MODEL_PROD||env.OPENAI_MODEL)||null;
   return persistAi(env,ctx,key,fingerprint,context,{
     generation_id:newId('pfr_ai'),context_id:context.context_id,founder_id:context.founder_id,venture_id:null,bmr_id:null,
-    score_type:'founder_readiness',canonical_score:score.payload.overall_score,canonical_dimensions:score.payload.dimension_scores||vitals.payload.dimension_scores||{},
+    score_type:'founder_readiness',canonical_score:deterministic.canonical_score,canonical_dimensions:deterministic.canonical_dimensions,
     projection,generation_source:generationSource,validation_status:validationStatus,validation_errors:validationErrors,
-    prompt_version:AI_PROMPT_VERSION,schema_version:AI_SCHEMA_VERSION,evidence_refs:[...new Set(evidenceRefs)],
-    deterministic_truth_immutable:true,route:'SPUR Pre-Founder',provider_metadata:providerMeta
+    prompt_version:AI_PROMPT_VERSION,schema_version:AI_SCHEMA_VERSION,rules_version:score.rules_version,protocol_version:score.protocol_version,
+    evidence_refs:[...new Set([...supportingEvidence,...contradictoryEvidence])],
+    supporting_evidence_refs:supportingEvidence,contradictory_evidence_refs:contradictoryEvidence,
+    evidence_bundle_hash:evidenceBundleHash,deterministic_context_hash:deterministicContextHash,
+    deterministic_truth_immutable:true,route:'SPUR Pre-Founder',canonical_result_ids:canonicalResultIds,
+    model_config:modelConfig,provider_metadata:providerMeta
   });
 }
 
@@ -184,7 +243,7 @@ export async function handleDay7ReleaseRoute(request,env,ctx,path){
 
   if(request.method==='GET'&&path==='/api/v1/day7/readiness'){
     const data=await membershipReadiness(env);
-    return success(ctx,{...data,prefounder_ai:{qa_synthetic_projection:true,server_side_provider:true,structured_output:true,deterministic_score_immutable:true,production_synthetic_route:false}});
+    return success(ctx,{...data,prefounder_ai:{qa_synthetic_projection:true,server_side_provider:true,structured_output:true,deterministic_score_immutable:true,production_synthetic_route:false,canonical_generation_ledger:true}});
   }
   if(request.method==='POST'&&path==='/api/v1/day7/prefounder/readiness-interpretation'){
     const input=await jsonBody(request);
