@@ -25,9 +25,7 @@ for(const item of req.t01_t60){
 
 test('Day 7 membership migration is additive and preserves canonical record authority',()=>{
   const sql=read('migrations/day1/0700_day7_release_membership.sql');
-  for(const table of ['gv1_memberships','gv1_membership_events','gv1_membership_checkins','gv1_membership_reassessment_queue']){
-    assert.match(sql,new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
-  }
+  for(const table of ['gv1_memberships','gv1_membership_events','gv1_membership_checkins','gv1_membership_reassessment_queue']) assert.match(sql,new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   assert.match(sql,/D7A1/);
   assert.match(sql,/ux_gv1_memberships_one_active_bmr/);
   assert.doesNotMatch(sql,/\b(DROP|DELETE FROM|ALTER TABLE|TRUNCATE)\b/i);
@@ -51,6 +49,22 @@ test('Business Health Membership is server governed, treatment-plan bound and hu
   assert.match(svc,/idempotent_replay/);
   assert.match(route,/\/api\/v1\/day7\/memberships/);
   assert.doesNotMatch(svc,/api\.openai\.com|OPENAI_API_KEY|STRIPE_SECRET_KEY/);
+});
+
+test('Pre-Founder AI projection is server-side, evidence-bound, replay-safe and cannot overwrite Founder Readiness',()=>{
+  const route=read('worker/routes/day7-release.js');
+  const customer=read('day1-prefounder-customer.js');
+  assert.match(route,/\/api\/v1\/day7\/prefounder\/readiness-interpretation/);
+  assert.match(route,/deterministic_truth_immutable:true/);
+  assert.match(route,/record_mode!=='principal_only'/);
+  assert.match(route,/venture_id!==null\|\|row\.bmr_id!==null/);
+  assert.match(route,/gv1_audit_log/);
+  assert.match(route,/gv1_idempotency_keys/);
+  assert.match(route,/text:\{format:\{type:'json_schema'/);
+  assert.match(route,/generationSource='openai_governed'/);
+  assert.match(route,/rules_fallback/);
+  assert.match(route,/production_synthetic_route:false/);
+  assert.doesNotMatch(customer,/api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}/);
 });
 
 test('Day 7 QA config reuses exact QA Worker and canonical QA D1 with D7 additive schema',()=>{

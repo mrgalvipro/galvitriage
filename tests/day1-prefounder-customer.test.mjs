@@ -58,6 +58,16 @@ test('P0-02 renders Founder Readiness and SPUR evidence, not Business Health res
   assert.match(source,/Venture \/ BHR:/);
 });
 
+test('P0-06 adds customer-friendly governed AI interpretation without replacing deterministic truth',()=>{
+  const source=read('day1-prefounder-customer.js');
+  assert.match(source,/\/api\/v1\/day7\/prefounder\/readiness-interpretation/);
+  assert.match(source,/GALVIGUIDE™ \| FOUNDER READINESS INTERPRETATION/);
+  assert.match(source,/What Your Readiness Signals Mean/);
+  assert.match(source,/generation_source/);
+  assert.match(source,/approved fallback/i);
+  assert.doesNotMatch(source,/api\.openai\.com|OPENAI_API_KEY/);
+});
+
 test('default customer source contains no QA control panel while QA adapter retains H3-H14',()=>{
   const customer=read('day1-prefounder-customer.js');
   const qa=read('day1-prefounder-qa.js');
