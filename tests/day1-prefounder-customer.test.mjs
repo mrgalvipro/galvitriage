@@ -31,12 +31,23 @@ test('Idea stage never fabricates a venture and canonical P0-02 is principal-onl
   assert.match(source,/No real venture exists yet/);
 });
 
-test('P0-02 Human E2E preserves its marker across internal navigation',()=>{
+test('human_e2e is QA diagnostics only and never selects or rewrites the customer URL',()=>{
   const source=read('day1-prefounder-customer.js');
   assert.match(source,/galvicare_human_e2e_active_v1/);
   assert.match(source,/sessionStorage\.setItem\(HUMAN_KEY,'1'\)/);
-  assert.match(source,/u\.searchParams\.set\('human_e2e','1'\)/);
-  assert.match(source,/history\.replaceState/);
+  assert.match(source,/dataset\.galvicareHumanE2e/);
+  assert.doesNotMatch(source,/searchParams\.set\('human_e2e'/);
+  assert.doesNotMatch(source,/history\.replaceState/);
+});
+
+test('same canonical GalviTriage front door branches by lifecycle, not by query parameter',()=>{
+  const source=read('day1-prefounder-customer.js');
+  assert.match(source,/async function submit\(e\)\{if\(submitting\|\|!idea\(\)\)return/);
+  assert.doesNotMatch(source,/!human\(\)\|\|!idea\(\)/);
+  assert.match(source,/rp\?\.classList\.toggle\('hidden',!on\)/);
+  assert.match(source,/legacyBusiness\(!on\)/);
+  assert.match(source,/customer_front_door:true/);
+  assert.match(source,/lifecycle:on\?'pre_founder':'operating_venture'/);
 });
 
 test('P0-02 replaces legacy Business Health intake with canonical Founder Readiness APIs',()=>{
@@ -46,7 +57,7 @@ test('P0-02 replaces legacy Business Health intake with canonical Founder Readin
   assert.match(source,/score\.score_type!=='founder_readiness'/);
   assert.match(source,/vitals\.score_type!=='founder_readiness'/);
   assert.match(source,/e\.stopImmediatePropagation\(\)/);
-  assert.match(source,/legacyBusiness\(!\(h&&on\)\)/);
+  assert.match(source,/legacyBusiness\(!on\)/);
 });
 
 test('P0-02 renders Founder Readiness and SPUR evidence, not Business Health result',()=>{
@@ -68,7 +79,7 @@ test('P0-06 adds customer-friendly governed AI interpretation without replacing 
   assert.doesNotMatch(source,/api\.openai\.com|OPENAI_API_KEY/);
 });
 
-test('default customer source contains no QA control panel while QA adapter retains H3-H14',()=>{
+test('default root includes customer lifecycle adapter while query gate is limited to QA control panels',()=>{
   const customer=read('day1-prefounder-customer.js');
   const qa=read('day1-prefounder-qa.js');
   const builder=read('scripts/day7b-build-qa-frontend.mjs');
@@ -77,4 +88,7 @@ test('default customer source contains no QA control panel while QA adapter reta
   assert.match(qa,/H14 Runtime Health/);
   assert.match(builder,/DAY1_CUSTOMER='day1-prefounder-customer\.js'/);
   assert.match(builder,/DAY1_HUMAN_E2E='day1-prefounder-qa\.js'/);
+  const customerEmbed=builder.indexOf('${day1Customer}');
+  const diagnosticsGate=builder.indexOf('if(${HUMAN_E2E_GATE})');
+  assert.ok(customerEmbed>=0&&diagnosticsGate>customerEmbed,'customer lifecycle adapter must load before optional QA diagnostic gate');
 });
