@@ -66,14 +66,24 @@ test('human_e2e only exposes the QA physician control and never enables it by de
   assert.doesNotMatch(s,/searchParams\.set\('human_e2e'/);
 });
 
-test('hard refresh restores the canonical Pre-Founder session instead of falling into legacy gt session recovery',()=>{
+test('hard refresh restores the canonical Pre-Founder session before lifecycle code can clear it',()=>{
   const s=read('day1-prefounder-customer.js');
   assert.match(s,/function liveSession\(\)/);
   assert.match(s,/function suppressLegacyRestore\(\)/);
   assert.match(s,/function resumeExisting\(\)/);
   assert.match(s,/Canonical Pre-Founder record restored/);
-  assert.match(s,/if\(liveSession\(\)\)setTimeout\(resumeExisting,50\)/);
+  assert.match(s,/const restoring=liveSession\(\)/);
+  assert.match(s,/if\(restoring&&text\(stage\.value\)!==IDEA_STAGE\)stage\.value=IDEA_STAGE/);
+  assert.match(s,/if\(restoring\)setTimeout\(resumeExisting,50\)/);
   assert.match(s,/localStorage\.removeItem\(key\);sessionStorage\.removeItem\(key\)/);
+});
+
+test('presenting-context inputs travel with the canonical Pre-Founder journey without silently changing readiness dimensions',()=>{
+  const s=read('day1-prefounder-customer.js');
+  for(const field of ['highest_impact_area','biggest_challenge','one_30_day_problem','growth_blocker','feels_broken','keeps_up_at_night']) assert.ok(s.includes(field),field);
+  assert.match(s,/presenting_context:presenting/);
+  assert.match(s,/payload\.presenting_context=s\.presenting_context\|\|presentingContext\(\)/);
+  assert.match(s,/const identity=customerIdentity\(\),dims=dimensions\(\),presenting=presentingContext\(\)/);
 });
 
 test('Green zero acuity explains urgency versus Founder Readiness in customer-safe copy',()=>{
