@@ -5,6 +5,13 @@
  * - no QA/test controls
  * - customer language uses Pre-Founder only
  * - Idea-stage patients are never forced to invent a company/venture name
+ *
+ * Day 7 P0-02 release remediation:
+ * - preserve the QA Human-E2E marker in sessionStorage so internal navigation that
+ *   drops the query string cannot silently remove the already-proven Day 6 SPUR
+ *   evidence surface during the same browser test run.
+ * - this does not expose QA controls in production source; the QA builder remains
+ *   the only place the Human-E2E adapter is injected.
  */
 (()=>{
   'use strict';
@@ -13,7 +20,23 @@
   const PANEL_ID='prefounder-customer-pathway';
   const STAGE_SELECTOR='select[name="organization_stage"]';
   const VENTURE_INPUT_SELECTOR='input[name="venture_name"]';
+  const HUMAN_E2E_KEY='galvicare_human_e2e_active_v1';
   let tracked=false;
+
+  function preserveHumanE2EContext(){
+    try{
+      const url=new URL(window.location.href);
+      const explicit=url.searchParams.get('human_e2e')==='1';
+      if(explicit)sessionStorage.setItem(HUMAN_E2E_KEY,'1');
+      const active=explicit||sessionStorage.getItem(HUMAN_E2E_KEY)==='1';
+      if(active&&!explicit){
+        url.searchParams.set('human_e2e','1');
+        history.replaceState(history.state,'',url.pathname+url.search+url.hash);
+      }
+      document.documentElement.dataset.galvicareHumanE2e=active?'true':'false';
+      return active;
+    }catch{return false;}
+  }
 
   function findVentureLabel(input){
     if(!input)return null;
@@ -66,11 +89,13 @@
   }
 
   function update(stageSelect,panel){
+    preserveHumanE2EContext();
     const isIdea=String(stageSelect.value||'').trim()===IDEA_STAGE;
     panel.classList.toggle('hidden',!isIdea);
     panel.setAttribute('aria-hidden',isIdea?'false':'true');
     document.body.dataset.galvicareLifecycle=isIdea?'pre_founder':'operating_venture';
     updateVentureField(isIdea);
+    window.dispatchEvent(new CustomEvent('galvicare:lifecycle-change',{detail:{lifecycle:isIdea?'pre_founder':'operating_venture'}}));
     if(isIdea&&!tracked){
       tracked=true;
       try{
@@ -80,11 +105,14 @@
   }
 
   function mount(){
+    preserveHumanE2EContext();
     const stageSelect=document.querySelector(STAGE_SELECTOR);
     if(!stageSelect)return;
     const panel=ensurePanel(stageSelect);
     update(stageSelect,panel);
     stageSelect.addEventListener('change',()=>update(stageSelect,panel));
+    window.addEventListener('pageshow',preserveHumanE2EContext);
+    window.addEventListener('hashchange',preserveHumanE2EContext);
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
