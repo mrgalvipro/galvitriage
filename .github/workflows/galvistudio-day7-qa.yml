@@ -9,10 +9,12 @@ on:
       - migrations/**
       - tests/**
       - scripts/**
+      - clinician-portal/**
       - docs/GalviStudio_1_0_GalviCare_1_0_Day_4_Builder_Guide_CODEX_Implementation_Engineer_Edition_v1_0.md
       - docs/GalviStudio_1_0_GalviCare_1_0_Day_7_Builder_Guide_CODEX_Implementation_Engineer_Edition_v1_0.md
       - docs/GalviStudio_1_0_GalviCare_1_0_Seven_Day_Implementation_Guide_AUTHORITATIVE_v1_0.md
       - release-evidence/day7/**
+      - release-evidence/day8/qa-deployment-current.json
       - package.json
       - wrangler.day6.json
       - wrangler.day7.json
@@ -42,6 +44,7 @@ env:
   DAY7_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
   DAY6_QA_URL: https://galvivault-p0-day1-qa.mrgalvipro.workers.dev
   QA_FRONTEND_URL: https://galvicare-0-5-qa.mrgalvipro.workers.dev
+  DAY8_CLINICIAN_SOURCE_SHA: dd2a33492c543f5a873dee0c9d2131365a22f706
 
 jobs:
   day7-qa-release-gate:
@@ -64,12 +67,20 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git cat-file -e "$DAY6_RUNTIME_CANDIDATE^{commit}"
           git merge-base --is-ancestor "$DAY6_RUNTIME_CANDIDATE" "$GITHUB_SHA"
+          git cat-file -e "$DAY8_CLINICIAN_SOURCE_SHA^{commit}"
+          git merge-base --is-ancestor "$DAY8_CLINICIAN_SOURCE_SHA" "$GITHUB_SHA"
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const p='release-evidence/day8/qa-deployment-current.json';
+          const d=JSON.parse(fs.readFileSync(p,'utf8'));
+          if(d.branch!=='qa-revamped-galvicare-0-5'||d.source_sha!==process.env.DAY8_CLINICIAN_SOURCE_SHA||d.deploy!=='success'||d.d1!=='success'||d.galvicare_smoke!=='success') throw new Error('Day8 clinician deployment evidence is not the approved Day7 P1 handoff.');
+          NODE
           git diff --name-only "$DAY6_RUNTIME_CANDIDATE..$GITHUB_SHA" | tee day7-entry-delta.txt
           unexpected=0
           while IFS= read -r path; do
             [ -z "$path" ] && continue
             case "$path" in
-              docs/*|release-evidence/day7/*|scripts/day7-codex-bootstrap.sh|scripts/day7-deployed-release-e2e.mjs|tests/day7-branchless-release-gate.test.mjs|tests/day7-release-critical.test.mjs|tests/day1-prefounder-customer.test.mjs|day1-prefounder-customer.js|worker/day7-entry.js|worker/routes/day7-release.js|worker/domain/day7-membership-service.js|migrations/day1/0700_day7_release_membership.sql|wrangler.day7.json|.github/workflows/galvistudio-day7-qa.yml)
+              docs/*|release-evidence/day7/*|release-evidence/day8/qa-deployment-current.json|clinician-portal/day7-prefounder-queue.js|clinician-portal/index.html|scripts/day7-codex-bootstrap.sh|scripts/day7-deployed-release-e2e.mjs|tests/day7-branchless-release-gate.test.mjs|tests/day7-release-critical.test.mjs|tests/day1-prefounder-customer.test.mjs|day1-prefounder-customer.js|worker/day7-entry.js|worker/routes/day7-release.js|worker/routes/operator-workspace.js|worker/domain/day7-membership-service.js|migrations/day1/0700_day7_release_membership.sql|wrangler.day7.json|.github/workflows/galvistudio-day7-qa.yml)
                 ;;
               *) echo "STOP: unapproved Day 7 delta: $path"; unexpected=1 ;;
             esac
@@ -91,9 +102,11 @@ jobs:
         run: |
           set -euo pipefail
           node --check day1-prefounder-customer.js
+          node --check clinician-portal/day7-prefounder-queue.js
           node --check worker/day7-entry.js
           node --check worker/domain/day7-membership-service.js
           node --check worker/routes/day7-release.js
+          node --check worker/routes/operator-workspace.js
           node --check scripts/day7-deployed-release-e2e.mjs
           node --test tests/day1-prefounder-customer.test.mjs
           node --test tests/day7-branchless-release-gate.test.mjs
@@ -139,7 +152,7 @@ jobs:
           grep -Fq 'SPUR™ Pre-Founder Route' dist-qa/index.html
           grep -Fq 'PRE-FOUNDER CLOSED LOOP' dist-qa/index.html
           ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
-          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}' day1-prefounder-customer.js day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-score-metadata.js day5-customer-care-routing.js day5-customer-active-care.js worker/day7-entry.js worker/routes/day7-release.js worker/domain/day7-membership-service.js
+          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}' day1-prefounder-customer.js day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-score-metadata.js day5-customer-care-routing.js day5-customer-active-care.js clinician-portal/day7-prefounder-queue.js worker/day7-entry.js worker/routes/day7-release.js worker/routes/operator-workspace.js worker/domain/day7-membership-service.js
 
       - name: Prove exact QA Worker and canonical D1 binding
         shell: bash
@@ -163,8 +176,6 @@ jobs:
           sha256sum migrations/day1/*.sql | sort > day7-migration-manifest.txt
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --command "SELECT migration_id,name FROM gv1_schema_migrations WHERE name IN ('day6_studio_vdm_v1','day7_business_health_membership_beta_v1') ORDER BY migration_id;" | tee day7-migration-before.txt
           if ! grep -q 'day6_studio_vdm_v1' day7-migration-before.txt; then npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --file migrations/day1/0600_day6_studio_vdm.sql; fi
-          # Day 7 migration is cumulative and fully idempotent. Always re-apply the signed file so
-          # release-closing additive objects are present even when D7A1 was applied by an earlier candidate.
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --file migrations/day1/0700_day7_release_membership.sql
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --command "SELECT migration_id,name,checksum FROM gv1_schema_migrations WHERE name IN ('day6_studio_vdm_v1','day7_business_health_membership_beta_v1') ORDER BY migration_id; SELECT name FROM sqlite_master WHERE type='table' AND name IN ('gv1_memberships','gv1_membership_events','gv1_membership_checkins','gv1_membership_reassessment_queue','gv1_prefounder_sessions','gv1_prefounder_care_events') ORDER BY name;" | tee day7-schema.txt
           grep -q 'D6A1' day7-schema.txt
@@ -289,12 +300,14 @@ jobs:
           echo '- New branch created: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Work ref pushed: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA Worker/D1/frontend reused: YES' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Day 8 clinician queue handoff SHA/evidence verified before allowlisting: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- Full inherited Day 1-6 regression + Day7D integration gate: executed' >> "$GITHUB_STEP_SUMMARY"
           echo '- Pre-Founder normal customer email + principal-only Founder Readiness: enabled' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Pre-Founder submitted intake rehydration on authenticated refresh: enabled' >> "$GITHUB_STEP_SUMMARY"
           echo '- Pre-Founder Shot -> Chart -> Sight -> Path -> Clinic -> acknowledgement -> monitoring/reassessment lineage: enabled for Human E2E' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 6 deployed E2E: re-proven against exact candidate' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 7 Membership beta start/check-in/cancel/replay: executed' >> "$GITHUB_STEP_SUMMARY"
           echo "- Rollback rehearsal: ${{ steps.rollback.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo '- Additive Day 7 schema retained through prior-runtime rollback: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production/main modified: NO' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Next mandatory gate: comprehensive Pre-Founder + Founder Human E2E, Golden A-I + P0-01..P0-16, security/accessibility + three formal release gates' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Next mandatory gate: comprehensive Golden A-I + P0-01..P0-16, security/accessibility + three formal release gates' >> "$GITHUB_STEP_SUMMARY"

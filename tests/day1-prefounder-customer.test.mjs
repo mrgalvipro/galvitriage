@@ -71,11 +71,22 @@ test('hard refresh restores the canonical Pre-Founder session before lifecycle c
   assert.match(s,/function liveSession\(\)/);
   assert.match(s,/function suppressLegacyRestore\(\)/);
   assert.match(s,/function resumeExisting\(\)/);
-  assert.match(s,/Canonical Pre-Founder record restored/);
+  assert.match(s,/Canonical Pre-Founder record restored with submitted intake/);
   assert.match(s,/const restoring=liveSession\(\)/);
   assert.match(s,/if\(restoring&&text\(stage\.value\)!==IDEA_STAGE\)stage\.value=IDEA_STAGE/);
   assert.match(s,/if\(restoring\)setTimeout\(resumeExisting,50\)/);
   assert.match(s,/localStorage\.removeItem\(key\);sessionStorage\.removeItem\(key\)/);
+});
+
+test('refresh rehydrates submitted About You, GalviScore metadata and Founder Readiness inputs',()=>{
+  const s=read('day1-prefounder-customer.js');
+  assert.match(s,/const INTAKE_FIELDS=/);
+  for(const field of ['first_name','last_name','email','organization_stage','organization_type','industry','team_size','revenue_range','highest_impact_area','biggest_challenge']) assert.ok(s.includes(field),field);
+  assert.match(s,/function intakeSnapshot\(\)/);
+  assert.match(s,/function restoreIntake\(snapshot=\{\},projectionData=null\)/);
+  assert.match(s,/intake_snapshot:snapshot/);
+  assert.match(s,/restoreIntake\(s\.intake_snapshot,p\)/);
+  assert.match(s,/Math\.round\(numeric\/25\)\+1/);
 });
 
 test('presenting-context inputs travel with the canonical Pre-Founder journey without silently changing readiness dimensions',()=>{
@@ -83,7 +94,7 @@ test('presenting-context inputs travel with the canonical Pre-Founder journey wi
   for(const field of ['highest_impact_area','biggest_challenge','one_30_day_problem','growth_blocker','feels_broken','keeps_up_at_night']) assert.ok(s.includes(field),field);
   assert.match(s,/presenting_context:presenting/);
   assert.match(s,/payload\.presenting_context=s\.presenting_context\|\|presentingContext\(\)/);
-  assert.match(s,/const identity=customerIdentity\(\),dims=dimensions\(\),presenting=presentingContext\(\)/);
+  assert.match(s,/const identity=customerIdentity\(\),dims=dimensions\(\),presenting=presentingContext\(\),snapshot=intakeSnapshot\(\)/);
 });
 
 test('Green zero acuity explains urgency versus Founder Readiness in customer-safe copy',()=>{
