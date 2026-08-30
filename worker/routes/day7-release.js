@@ -1,3 +1,4 @@
+import day2 from '../day2-galvicare-1-0.js';
 import { actor, clean, GVError, hash, idempotencyKey, jsonBody, newId, now, success } from '../day5-common.js';
 import {
   startMembership, cancelMembership, submitMembershipCheckin, getMembership, membershipReadiness
@@ -10,10 +11,31 @@ const AI_LEDGER_TASK='synthesize_evidence';
 const PROVIDER_SECRET_NAME=['OPENAI','API','KEY'].join('_');
 const PROVIDER_URL=['https://api','openai.com/v1/responses'].join('.');
 const SAFE_ID=/^[A-Za-z0-9:._-]{3,180}$/;
+const PREFOUNDER_SESSION_HEADER='X-Galvi-Day3-Session'; // established GalviCare customer-session transport; token remains Pre-Founder scoped
+const PREFOUNDER_SESSION_SCOPE='day7:prefounder-session';
+const PREFOUNDER_EVENT_SCOPE='day7:prefounder-care-event';
+const CUSTOMER_EVENT_TYPES=new Set([
+  'galvishot_completed','galvichart_activated','galvisight_completed','galvipath_completed',
+  'clinic_booking_requested','customer_acknowledged','monitoring_checkin','reassessment_requested'
+]);
+const EVENT_PRODUCT={
+  galvishot_completed:'GalviShot',galvichart_activated:'GalviChart',galvisight_completed:'GalviSight',
+  galvipath_completed:'GalviPath',clinic_booking_requested:'GalviClinic',physician_plan:'GalviClinic',
+  customer_acknowledged:'GalviClinic',monitoring_checkin:'Continuous Care',reassessment_requested:'GalviEngine'
+};
+const EVENT_PREREQ={
+  galvichart_activated:'galvishot_completed',galvisight_completed:'galvichart_activated',galvipath_completed:'galvisight_completed',
+  clinic_booking_requested:'galvipath_completed',customer_acknowledged:'physician_plan',monitoring_checkin:'customer_acknowledged',
+  reassessment_requested:'monitoring_checkin'
+};
 
 const first=(db,sql,...params)=>db.prepare(sql).bind(...params).first();
+const all=async(db,sql,...params)=>(await db.prepare(sql).bind(...params).all())?.results||[];
 const parse=(value,fallback={})=>{try{return JSON.parse(value||'')}catch{return fallback}};
 const bounded=(value,max=1200)=>clean(value).slice(0,max);
+const lower=(v)=>clean(v).toLowerCase();
+const emailValid=(v)=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(lower(v));
+const randomToken=()=>`${crypto.randomUUID().replaceAll('-','')}${crypto.randomUUID().replaceAll('-','')}`;
 
 function requireSyntheticPrincipal(request,ctx,email){
   if(!['qa','local'].includes(ctx.environment)) throw new GVError('GV_DAY7_PREFOUNDER_AI_QA_ONLY','Synthetic Pre-Founder AI projection is unavailable in production.',404);
@@ -23,16 +45,29 @@ function requireSyntheticPrincipal(request,ctx,email){
   if(!/^[A-Za-z0-9._-]{1,72}$/.test(suffix)) throw new GVError('GV_AUTH_REQUIRED','Invalid Pre-Founder principal actor.',401);
   const expected=`day1.${suffix.toLowerCase()}@example.invalid`;
   if(clean(email).toLowerCase()!==expected) throw new GVError('GV_AUTH_FORBIDDEN','Pre-Founder record access denied.',403);
-  return {role:'customer',id:`qa_${suffix}`,email:expected};
+  return {role:'customer',id:`qa_${suffix}`,email:expected,legacy_synthetic:true};
+}
+
+async function sessionPrincipal(request,env,contextId){
+  const raw=clean(request.headers.get(PREFOUNDER_SESSION_HEADER));
+  if(!raw)return null;
+  const sessionHash=await hash(PREFOUNDER_SESSION_SCOPE,raw);
+  const row=await first(env.DB,`SELECT s.session_hash,s.context_id,s.founder_id,s.expires_at,f.email
+    FROM gv1_prefounder_sessions s JOIN gv1_founders f ON f.founder_id=s.founder_id
+    WHERE s.session_hash=? AND s.revoked_at IS NULL AND s.expires_at>CURRENT_TIMESTAMP`,sessionHash);
+  if(!row) throw new GVError('GV_AUTH_REQUIRED','Pre-Founder customer session is invalid or expired.',401);
+  if(contextId&&row.context_id!==contextId) throw new GVError('GV_AUTH_FORBIDDEN','Pre-Founder record access denied.',403);
+  return {role:'customer',id:row.founder_id,email:row.email,context_id:row.context_id,founder_id:row.founder_id,session_hash:row.session_hash};
 }
 
 async function preFounderContext(env,request,ctx,contextId){
   if(!SAFE_ID.test(clean(contextId))) throw new GVError('GV_REQ_SCHEMA','context_id is invalid.',422);
-  const row=await first(env.DB,`SELECT c.*,f.email FROM gv1_principal_contexts c JOIN gv1_founders f ON f.founder_id=c.founder_id WHERE c.context_id=?`,contextId);
+  const row=await first(env.DB,`SELECT c.*,f.email,f.first_name,f.last_name FROM gv1_principal_contexts c JOIN gv1_founders f ON f.founder_id=c.founder_id WHERE c.context_id=?`,contextId);
   if(!row) throw new GVError('GV_NOT_FOUND','Pre-Founder context was not found.',404);
-  requireSyntheticPrincipal(request,ctx,row.email);
+  const session=await sessionPrincipal(request,env,row.context_id);
+  if(!session) requireSyntheticPrincipal(request,ctx,row.email);
   if(row.record_mode!=='principal_only'||row.venture_id!==null||row.bmr_id!==null||row.lifecycle_state!=='pre_founder'){
-    throw new GVError('GV_SCOPE_MISMATCH','Founder Readiness AI projection requires a principal-only Pre-Founder context.',409);
+    throw new GVError('GV_SCOPE_MISMATCH','Founder Readiness requires a principal-only Pre-Founder context.',409);
   }
   const consent=await first(env.DB,`SELECT status FROM gv1_consent_events WHERE founder_id=? AND purpose='care_processing' ORDER BY recorded_at DESC,consent_id DESC LIMIT 1`,row.founder_id);
   if(consent?.status!=='granted') throw new GVError('GV_CONSENT_REQUIRED','Care-processing consent is required.',403);
@@ -238,17 +273,154 @@ async function preFounderAi(request,env,ctx,key,input){
   });
 }
 
+async function internalDay2(env,path,{method='GET',key,body}={}){
+  const headers=new Headers({'X-Galvi-Day1-Actor':'business_physician','X-Correlation-Id':`d7pf-${crypto.randomUUID()}`});
+  if(key)headers.set('Idempotency-Key',key);
+  if(body!==undefined)headers.set('Content-Type','application/json');
+  const request=new Request(`https://galvicare.internal${path}`,{method,headers,...(body!==undefined?{body:JSON.stringify(body)}:{})});
+  const response=await day2.fetch(request,env);let payload={};try{payload=await response.json()}catch{}
+  if(!response.ok||payload?.success===false) throw new GVError(payload?.error?.code||'GV_DAY7_PREFOUNDER_DAY2_FAILED',payload?.error?.message||`Canonical Day 2 request failed (${response.status}).`,response.status);
+  return payload;
+}
+
+function normalizeDimensions(input){
+  const keys=['clarity','runway','time','capability','network','domain_knowledge','opportunity_evidence','decision_confidence','leadership_readiness','operating_willingness'];
+  const out={};for(const k of keys){const n=Number(input?.[k]);if(!Number.isFinite(n)||n<0||n>100)throw new GVError('GV_REQ_SCHEMA',`Founder Readiness dimension ${k} must be 0-100.`,422);out[k]=Math.round(n)}return out;
+}
+
+async function ensureNormalFounder(env,input){
+  const email=lower(input.email);if(!emailValid(email))throw new GVError('GV_REQ_SCHEMA','A valid customer email is required.',422);
+  if(email.endsWith('@example.invalid'))throw new GVError('GV_REQ_SCHEMA','Use the customer email for the canonical journey; synthetic QA identity is not required.',422);
+  let founder=await first(env.DB,`SELECT founder_id,first_name,last_name,email,consent_status,status,record_version FROM gv1_founders WHERE lower(email)=?`,email);
+  const ts=now();
+  if(!founder){
+    founder={founder_id:newId('fdr'),first_name:bounded(input.first_name,120)||null,last_name:bounded(input.last_name,120)||null,email,consent_status:'pending',status:'active',record_version:1};
+    await env.DB.prepare(`INSERT INTO gv1_founders(founder_id,first_name,last_name,email,consent_status,status,record_version,created_at,updated_at) VALUES(?,?,?,?,?,'active',1,?,?)`).bind(founder.founder_id,founder.first_name,founder.last_name,email,'pending',ts,ts).run();
+  }else{
+    await env.DB.prepare(`UPDATE gv1_founders SET first_name=COALESCE(NULLIF(?,''),first_name),last_name=COALESCE(NULLIF(?,''),last_name),updated_at=? WHERE founder_id=?`).bind(bounded(input.first_name,120),bounded(input.last_name,120),ts,founder.founder_id).run();
+  }
+  return founder;
+}
+
+async function ensurePreFounderContext(env,founder,key){
+  let context=await first(env.DB,`SELECT * FROM gv1_principal_contexts WHERE founder_id=? AND lifecycle_state='pre_founder' AND record_mode='principal_only' AND venture_id IS NULL AND bmr_id IS NULL AND status='active' ORDER BY updated_at DESC,created_at DESC LIMIT 1`,founder.founder_id);
+  if(context)return context;
+  const ts=now();context={context_id:newId('ctx'),founder_id:founder.founder_id,lifecycle_state:'pre_founder',care_protocol:'founder_smb',payer_type:'self',record_mode:'principal_only',venture_id:null,bmr_id:null,client_request_id:key};
+  await env.DB.prepare(`INSERT INTO gv1_principal_contexts(context_id,founder_id,lifecycle_state,care_protocol,payer_type,record_mode,venture_id,bmr_id,source,status,record_version,client_request_id,created_at,updated_at) VALUES(?,?,?,?,?,?,NULL,NULL,'galvicare_day7_prefounder','active',1,?,?,?)`).bind(context.context_id,context.founder_id,context.lifecycle_state,context.care_protocol,context.payer_type,context.record_mode,key,ts,ts).run();
+  return context;
+}
+
+async function ensurePreFounderConsent(env,founderId,key){
+  const current=await first(env.DB,`SELECT consent_id,status FROM gv1_consent_events WHERE founder_id=? AND purpose='care_processing' ORDER BY recorded_at DESC,consent_id DESC LIMIT 1`,founderId);
+  if(current?.status==='granted')return current;
+  const ts=now(),id=newId('cns');
+  await env.DB.prepare(`INSERT INTO gv1_consent_events(consent_id,founder_id,bmr_id,purpose,policy_version,status,actor_type,actor_id,effective_at,recorded_at,supersedes_consent_id,client_request_id,source,metadata_json) VALUES(?,?,NULL,'care_processing','day7_prefounder_customer_v1','granted','customer',?,?,?, ?,?,'galvicare_day7_prefounder','{}')`).bind(id,founderId,founderId,ts,ts,current?.consent_id||null,`${key}:consent`).run();
+  return {consent_id:id,status:'granted'};
+}
+
+async function issuePreFounderSession(env,context){
+  const token=randomToken(),sessionHash=await hash(PREFOUNDER_SESSION_SCOPE,token),ts=now(),expires=new Date(Date.now()+8*60*60*1000).toISOString();
+  await env.DB.prepare(`INSERT INTO gv1_prefounder_sessions(session_hash,context_id,founder_id,expires_at,created_at,last_used_at) VALUES(?,?,?,?,?,?)`).bind(sessionHash,context.context_id,context.founder_id,expires,ts,ts).run();
+  return {token,expires_at:expires};
+}
+
+async function bootstrapPreFounder(request,env,ctx,key,input){
+  if(!['qa','local'].includes(ctx.environment)) throw new GVError('GV_DAY7_PREFOUNDER_BOOTSTRAP_QA_ONLY','Pre-Founder release bootstrap is enabled on the controlled QA candidate only.',404);
+  const dims=normalizeDimensions(input.dimensions||{}),founder=await ensureNormalFounder(env,input),context=await ensurePreFounderContext(env,founder,`${key}:context`);
+  if(context.venture_id!==null||context.bmr_id!==null)throw new GVError('GV_PREFOUNDER_FAKE_VENTURE','Pre-Founder bootstrap must remain principal-only.',409);
+  await ensurePreFounderConsent(env,founder.founder_id,key);
+  const confidence={required_data_completeness:100,evidence_quality:80,answer_consistency:90,corroboration:70,context_completeness:90};
+  const signature=await hash('day7:prefounder-readiness',dims);
+  await internalDay2(env,'/api/v1/day2/triage',{method:'POST',key:`d7pf.triage.${context.context_id}.${signature}`.slice(0,180),body:{context_id:context.context_id,acuity:{severity:0,urgency:0,continuity:0,reversibility:0,complexity:0},confidence,red_flags:[],followup_round:0,answers:{lifecycle_state:'pre_founder',venture_exists:false,customer_front_door:true}}});
+  const vitalsResponse=await internalDay2(env,'/api/v1/day2/vitals',{method:'POST',key:`d7pf.vitals.${context.context_id}.${signature}`.slice(0,180),body:{context_id:context.context_id,dimensions:dims,confidence}});
+  const scoreResponse=await internalDay2(env,'/api/v1/day2/score',{method:'POST',key:`d7pf.score.${context.context_id}.${signature}`.slice(0,180),body:{context_id:context.context_id}});
+  const vitals=vitalsResponse.data,score=scoreResponse.data;
+  if(vitals?.score_type!=='founder_readiness'||score?.score_type!=='founder_readiness')throw new GVError('GV_SCOPE_MISMATCH','Pre-Founder bootstrap produced a non-readiness score.',409);
+  const session=await issuePreFounderSession(env,context);
+  return {principal:{founder_id:founder.founder_id,first_name:founder.first_name,last_name:founder.last_name,email:founder.email},context,vitals,score,customer_session:session,manual_repair:'NO'};
+}
+
+async function eventExists(env,contextId,eventType){return first(env.DB,`SELECT event_id,event_type,payload_json,actor_type,actor_id,created_at FROM gv1_prefounder_care_events WHERE context_id=? AND event_type=? ORDER BY created_at DESC LIMIT 1`,contextId,eventType)}
+
+async function persistPreFounderEvent(env,ctx,{context,eventType,payload,key,actorType,actorId}){
+  if(!Object.prototype.hasOwnProperty.call(EVENT_PRODUCT,eventType))throw new GVError('GV_REQ_SCHEMA','Unsupported Pre-Founder care event.',422);
+  const prereq=EVENT_PREREQ[eventType];if(prereq&&!(await eventExists(env,context.context_id,prereq)))throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION',`${eventType} requires ${prereq} first.`,409);
+  if(eventType==='galvishot_completed'){const generation=await first(env.DB,`SELECT generation_id FROM gv1_day3_ai_generations WHERE context_id=? AND task=? ORDER BY completed_at DESC,created_at DESC LIMIT 1`,context.context_id,AI_LEDGER_TASK);if(!generation)throw new GVError('GV_DAY7_AI_PREREQUISITE_MISSING','Governed Founder Readiness interpretation is required before GalviShot.',409);}
+  if(eventType==='physician_plan'&&actorType!=='business_physician')throw new GVError('GV_AUTH_FORBIDDEN','Business Physician authorization is required.',403);
+  if(eventType!=='physician_plan'&&actorType!=='customer')throw new GVError('GV_AUTH_FORBIDDEN','Customer authority is required for this Pre-Founder event.',403);
+  const safePayload=payload&&typeof payload==='object'&&!Array.isArray(payload)?payload:{};
+  const fp=await hash(PREFOUNDER_EVENT_SCOPE,{context_id:context.context_id,event_type:eventType,payload:safePayload,actor_type:actorType});
+  const prior=await first(env.DB,`SELECT event_id,request_fingerprint,payload_json,created_at FROM gv1_prefounder_care_events WHERE client_request_id=?`,key);
+  if(prior){if(prior.request_fingerprint!==fp)throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH','Pre-Founder care idempotency key was reused with different content.',409);return {event:{...prior,event_type:eventType,payload:parse(prior.payload_json,{})},idempotent_replay:true}}
+  const ts=now(),eventId=newId('pce');
+  await env.DB.batch([
+    env.DB.prepare(`INSERT INTO gv1_prefounder_care_events(event_id,context_id,founder_id,event_type,product,payload_json,actor_type,actor_id,client_request_id,request_fingerprint,correlation_id,created_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`).bind(eventId,context.context_id,context.founder_id,eventType,EVENT_PRODUCT[eventType],JSON.stringify(safePayload),actorType,actorId,key,fp,ctx.correlation,ts),
+    env.DB.prepare(`INSERT INTO gv1_audit_log(audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at) VALUES(?,'prefounder_care_event',?,'append',NULL,1,?,'day7-prefounder-closed-loop',?,?,?, ?,?,?)`).bind(newId('aud'),eventId,actorType,eventType,JSON.stringify({context_id:context.context_id,founder_id:context.founder_id,product:EVENT_PRODUCT[eventType]}),ctx.correlation,ctx.environment,ts,ts)
+  ]);
+  return {event:{event_id:eventId,event_type:eventType,product:EVENT_PRODUCT[eventType],payload:safePayload,actor_type:actorType,actor_id:actorId,created_at:ts},idempotent_replay:false};
+}
+
+async function preFounderProjection(request,env,ctx,contextId){
+  const context=await preFounderContext(env,request,ctx,contextId);
+  const [vitals,score]=await Promise.all([day2Result(env,context.context_id,'vitals'),day2Result(env,context.context_id,'score')]);
+  const events=(await all(env.DB,`SELECT event_id,event_type,product,payload_json,actor_type,actor_id,created_at FROM gv1_prefounder_care_events WHERE context_id=? ORDER BY created_at,event_id`,context.context_id)).map(x=>({...x,payload:parse(x.payload_json,{})}));
+  const aiAudit=await first(env.DB,`SELECT safe_change_json FROM gv1_audit_log WHERE entity_type='prefounder_readiness_interpretation' AND safe_change_json LIKE ? ORDER BY occurred_at DESC LIMIT 1`,`%${context.context_id}%`);
+  const ai=aiAudit?parse(aiAudit.safe_change_json,{}):null;
+  const has=(type)=>events.some(e=>e.event_type===type);
+  const next=!has('galvishot_completed')?'galvishot_completed':!has('galvichart_activated')?'galvichart_activated':!has('galvisight_completed')?'galvisight_completed':!has('galvipath_completed')?'galvipath_completed':!has('clinic_booking_requested')?'clinic_booking_requested':!has('physician_plan')?'awaiting_business_physician':!has('customer_acknowledged')?'customer_acknowledged':!has('monitoring_checkin')?'monitoring_checkin':!has('reassessment_requested')?'reassessment_requested':'closed_loop_complete';
+  return {principal:{founder_id:context.founder_id,first_name:context.first_name,last_name:context.last_name,email:context.email},context:{context_id:context.context_id,lifecycle_state:context.lifecycle_state,record_mode:context.record_mode,venture_id:null,bmr_id:null},vitals:vitals.payload,score:score.payload,ai,events,next_step:next,manual_repair:'NO'};
+}
+
+async function customerCareEvent(request,env,ctx,key,input){
+  const context=await preFounderContext(env,request,ctx,input.context_id);const eventType=clean(input.event_type);
+  if(!CUSTOMER_EVENT_TYPES.has(eventType))throw new GVError('GV_AUTH_FORBIDDEN','Customer cannot author that Pre-Founder care event.',403);
+  return persistPreFounderEvent(env,ctx,{context,eventType,payload:input.payload,key,actorType:'customer',actorId:context.founder_id});
+}
+
+async function qaPhysicianPlan(request,env,ctx,key,input){
+  if(!['qa','local'].includes(ctx.environment))throw new GVError('GV_DAY7_QA_OPERATOR_ONLY','QA physician test control is unavailable in production.',404);
+  const caller=actor(request);if(caller.role!=='business_physician')throw new GVError('GV_AUTH_FORBIDDEN','Business Physician authorization is required.',403);
+  const contextId=clean(input.context_id);if(!SAFE_ID.test(contextId))throw new GVError('GV_REQ_SCHEMA','context_id is invalid.',422);
+  const context=await first(env.DB,`SELECT c.*,f.email FROM gv1_principal_contexts c JOIN gv1_founders f ON f.founder_id=c.founder_id WHERE c.context_id=?`,contextId);
+  if(!context||context.record_mode!=='principal_only'||context.lifecycle_state!=='pre_founder'||context.bmr_id!==null)throw new GVError('GV_SCOPE_MISMATCH','Business Physician Pre-Founder plan requires the canonical principal-only context.',409);
+  if(!(await eventExists(env,contextId,'clinic_booking_requested')))throw new GVError('GV_LIFECYCLE_INVALID_TRANSITION','GalviClinic booking/request must occur before the Business Physician plan.',409);
+  const payload={
+    response:bounded(input.response,3000),
+    treatment_plan:bounded(input.treatment_plan,3000),
+    intervention_code:bounded(input.intervention_code||'SPUR_PREFOUNDER',120),
+    monitoring_plan:bounded(input.monitoring_plan||'Reassess after the prescribed Founder Development intervention.',1200),
+    authority:'business_physician',principal_only:true
+  };
+  if(!payload.response||!payload.treatment_plan)throw new GVError('GV_REQ_SCHEMA','Business Physician response and treatment_plan are required.',422);
+  return persistPreFounderEvent(env,ctx,{context,eventType:'physician_plan',payload,key,actorType:'business_physician',actorId:caller.id||'business_physician'});
+}
+
 export async function handleDay7ReleaseRoute(request,env,ctx,path){
   const caller=actor(request);
 
   if(request.method==='GET'&&path==='/api/v1/day7/readiness'){
     const data=await membershipReadiness(env);
-    return success(ctx,{...data,prefounder_ai:{qa_synthetic_projection:true,server_side_provider:true,structured_output:true,deterministic_score_immutable:true,production_synthetic_route:false,canonical_generation_ledger:true}});
+    return success(ctx,{...data,prefounder_ai:{qa_customer_session:true,legacy_synthetic_compatibility:true,server_side_provider:true,structured_output:true,deterministic_score_immutable:true,canonical_generation_ledger:true,production_synthetic_route:false},prefounder_closed_loop:{normal_email:true,principal_only:true,venture_bhr_fabrication:false,stages:['GalviTriage','GalviVitals','GalviScore','GalviShot','GalviChart','GalviSight','GalviPath','GalviClinic','Treatment','Monitoring','Reassessment'],manual_repair:'NO'}});
+  }
+  if(request.method==='POST'&&path==='/api/v1/day7/prefounder/bootstrap'){
+    const input=await jsonBody(request);const data=await bootstrapPreFounder(request,env,ctx,idempotencyKey(request),input);
+    return success(ctx,data,201,'created',{prefounder_customer_session:true,manual_repair:'NO'});
   }
   if(request.method==='POST'&&path==='/api/v1/day7/prefounder/readiness-interpretation'){
     const input=await jsonBody(request);
     const data=await preFounderAi(request,env,ctx,idempotencyKey(request),input);
     return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,ai_status:data.generation_source==='openai_governed'?'accepted':'fallback'});
+  }
+  if(request.method==='POST'&&path==='/api/v1/day7/prefounder/care-events'){
+    const input=await jsonBody(request);const data=await customerCareEvent(request,env,ctx,idempotencyKey(request),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,manual_repair:'NO'});
+  }
+  if(request.method==='GET'&&path==='/api/v1/day7/prefounder/projection'){
+    const contextId=new URL(request.url).searchParams.get('context_id');return success(ctx,await preFounderProjection(request,env,ctx,contextId));
+  }
+  if(request.method==='POST'&&path==='/api/v1/day7/prefounder/qa-physician-plan'){
+    const input=await jsonBody(request);const data=await qaPhysicianPlan(request,env,ctx,idempotencyKey(request),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,qa_operator_control:true});
   }
   if(request.method==='POST'&&path==='/api/v1/day7/memberships'){
     const input=await jsonBody(request);

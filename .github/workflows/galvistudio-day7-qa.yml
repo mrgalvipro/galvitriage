@@ -137,6 +137,7 @@ jobs:
           grep -Fq 'GALVICARE QA / TEST ENVIRONMENT' dist-qa/index.html
           grep -Fq 'GalviScore™ | Founder Readiness' dist-qa/index.html
           grep -Fq 'SPUR™ Pre-Founder Route' dist-qa/index.html
+          grep -Fq 'PRE-FOUNDER CLOSED LOOP' dist-qa/index.html
           ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
           ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}' day1-prefounder-customer.js day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-score-metadata.js day5-customer-care-routing.js day5-customer-active-care.js worker/day7-entry.js worker/routes/day7-release.js worker/domain/day7-membership-service.js
 
@@ -162,11 +163,14 @@ jobs:
           sha256sum migrations/day1/*.sql | sort > day7-migration-manifest.txt
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --command "SELECT migration_id,name FROM gv1_schema_migrations WHERE name IN ('day6_studio_vdm_v1','day7_business_health_membership_beta_v1') ORDER BY migration_id;" | tee day7-migration-before.txt
           if ! grep -q 'day6_studio_vdm_v1' day7-migration-before.txt; then npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --file migrations/day1/0600_day6_studio_vdm.sql; fi
-          if ! grep -q 'day7_business_health_membership_beta_v1' day7-migration-before.txt; then npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --file migrations/day1/0700_day7_release_membership.sql; fi
-          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --command "SELECT migration_id,name FROM gv1_schema_migrations WHERE name IN ('day6_studio_vdm_v1','day7_business_health_membership_beta_v1') ORDER BY migration_id; SELECT name FROM sqlite_master WHERE type='table' AND name IN ('gv1_memberships','gv1_membership_events','gv1_membership_checkins','gv1_membership_reassessment_queue') ORDER BY name;" | tee day7-schema.txt
+          # Day 7 migration is cumulative and fully idempotent. Always re-apply the signed file so
+          # release-closing additive objects are present even when D7A1 was applied by an earlier candidate.
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --file migrations/day1/0700_day7_release_membership.sql
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --command "SELECT migration_id,name,checksum FROM gv1_schema_migrations WHERE name IN ('day6_studio_vdm_v1','day7_business_health_membership_beta_v1') ORDER BY migration_id; SELECT name FROM sqlite_master WHERE type='table' AND name IN ('gv1_memberships','gv1_membership_events','gv1_membership_checkins','gv1_membership_reassessment_queue','gv1_prefounder_sessions','gv1_prefounder_care_events') ORDER BY name;" | tee day7-schema.txt
           grep -q 'D6A1' day7-schema.txt
           grep -q 'D7A1' day7-schema.txt
-          for t in gv1_memberships gv1_membership_events gv1_membership_checkins gv1_membership_reassessment_queue; do grep -q "$t" day7-schema.txt; done
+          grep -q 'gv1-d7a1-membership-prefounder-closed-loop-v2' day7-schema.txt
+          for t in gv1_memberships gv1_membership_events gv1_membership_checkins gv1_membership_reassessment_queue gv1_prefounder_sessions gv1_prefounder_care_events; do grep -q "$t" day7-schema.txt; done
 
       - name: Deploy exact Day 7 candidate to existing QA Worker
         shell: bash
@@ -188,6 +192,7 @@ jobs:
           if(d5?.success!==true||d5?.data?.ready!==true) throw new Error('Day5 readiness failed.');
           if(d6?.success!==true||d6?.data?.ready!==true) throw new Error('Day6 readiness failed.');
           if(d7?.success!==true||d7?.data?.ready!==true||d7?.data?.current_schema_version!=='D7A1') throw new Error('Day7 readiness failed.');
+          if(d7?.data?.prefounder_closed_loop?.normal_email!==true||d7?.data?.prefounder_closed_loop?.manual_repair!=='NO') throw new Error('Pre-Founder closed-loop readiness failed.');
           NODE
           node scripts/day6-deployed-e2e.mjs | tee day7-day6-deployed-e2e.json
           node scripts/day7-deployed-release-e2e.mjs | tee day7-release-deployed-e2e.json
@@ -213,7 +218,7 @@ jobs:
           if(h?.success!==true||h?.data?.commit_sha!==process.env.DAY6_RUNTIME_CANDIDATE) throw new Error('Rollback identity failed.');
           if(d?.success!==true||d?.data?.ready!==true) throw new Error('Prior runtime incompatible with additive schema.');
           NODE
-          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --command "SELECT migration_id,name FROM gv1_schema_migrations WHERE name='day7_business_health_membership_beta_v1'; SELECT COUNT(*) AS memberships FROM gv1_memberships;" | tee day7-rollback-d1.txt
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --command "SELECT migration_id,name FROM gv1_schema_migrations WHERE name='day7_business_health_membership_beta_v1'; SELECT COUNT(*) AS memberships FROM gv1_memberships; SELECT COUNT(*) AS prefounder_events FROM gv1_prefounder_care_events;" | tee day7-rollback-d1.txt
           grep -q 'day7_business_health_membership_beta_v1' day7-rollback-d1.txt
           git worktree remove --force "$R"
 
@@ -251,7 +256,7 @@ jobs:
           for attempt in $(seq 1 30); do
             curl -fsS "$QA_FRONTEND_URL/health?day7=$GITHUB_SHA-$attempt" -o day7-frontend-health.json || true
             curl -fsS "$QA_FRONTEND_URL/?day7=$GITHUB_SHA-$attempt" -o day7-runtime.html || true
-            if grep -Fq '"environment":"qa"' day7-frontend-health.json 2>/dev/null && grep -Fq '"stripe_mode":"test"' day7-frontend-health.json 2>/dev/null && grep -Fq 'GALVICARE QA / TEST ENVIRONMENT' day7-runtime.html 2>/dev/null; then ready=1; break; fi
+            if grep -Fq '"environment":"qa"' day7-frontend-health.json 2>/dev/null && grep -Fq '"stripe_mode":"test"' day7-frontend-health.json 2>/dev/null && grep -Fq 'GALVICARE QA / TEST ENVIRONMENT' day7-runtime.html 2>/dev/null && grep -Fq 'PRE-FOUNDER CLOSED LOOP' day7-runtime.html 2>/dev/null; then ready=1; break; fi
             sleep 3
           done
           test "$ready" = 1
@@ -285,10 +290,11 @@ jobs:
           echo '- Work ref pushed: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA Worker/D1/frontend reused: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- Full inherited Day 1-6 regression + Day7D integration gate: executed' >> "$GITHUB_STEP_SUMMARY"
-          echo '- P0-02 principal-only Founder Readiness + SPUR contract: re-proven' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Pre-Founder normal customer email + principal-only Founder Readiness: enabled' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Pre-Founder Shot -> Chart -> Sight -> Path -> Clinic -> acknowledgement -> monitoring/reassessment lineage: enabled for Human E2E' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 6 deployed E2E: re-proven against exact candidate' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 7 Membership beta start/check-in/cancel/replay: executed' >> "$GITHUB_STEP_SUMMARY"
           echo "- Rollback rehearsal: ${{ steps.rollback.outcome }}" >> "$GITHUB_STEP_SUMMARY"
           echo '- Additive Day 7 schema retained through prior-runtime rollback: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production/main modified: NO' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Next mandatory gate: Golden A-I + P0-01..P0-16 Human E2E + security/accessibility + three formal release gates' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Next mandatory gate: comprehensive Pre-Founder + Founder Human E2E, Golden A-I + P0-01..P0-16, security/accessibility + three formal release gates' >> "$GITHUB_STEP_SUMMARY"

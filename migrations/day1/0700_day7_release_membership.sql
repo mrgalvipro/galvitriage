@@ -79,8 +79,54 @@ CREATE TABLE IF NOT EXISTS gv1_membership_reassessment_queue (
 CREATE INDEX IF NOT EXISTS idx_gv1_membership_reassessment_pending
   ON gv1_membership_reassessment_queue(status,created_at);
 
+-- Day 7 P1: customer-facing Pre-Founder identity/session and principal-only care lineage.
+-- Pre-Founder is a real principal with no fabricated venture/BHR. These tables provide
+-- the longitudinal care envelope until canonical venture creation is evidence-supported.
+CREATE TABLE IF NOT EXISTS gv1_prefounder_sessions (
+  session_hash TEXT PRIMARY KEY,
+  context_id TEXT NOT NULL REFERENCES gv1_principal_contexts(context_id),
+  founder_id TEXT NOT NULL REFERENCES gv1_founders(founder_id),
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gv1_prefounder_sessions_context
+  ON gv1_prefounder_sessions(context_id,expires_at);
+CREATE INDEX IF NOT EXISTS idx_gv1_prefounder_sessions_founder
+  ON gv1_prefounder_sessions(founder_id,expires_at);
+
+CREATE TABLE IF NOT EXISTS gv1_prefounder_care_events (
+  event_id TEXT PRIMARY KEY,
+  context_id TEXT NOT NULL REFERENCES gv1_principal_contexts(context_id),
+  founder_id TEXT NOT NULL REFERENCES gv1_founders(founder_id),
+  event_type TEXT NOT NULL CHECK (event_type IN (
+    'galvishot_completed','galvichart_activated','galvisight_completed','galvipath_completed',
+    'clinic_booking_requested','physician_plan','customer_acknowledged','monitoring_checkin',
+    'reassessment_requested'
+  )),
+  product TEXT NOT NULL,
+  payload_json TEXT NOT NULL DEFAULT '{}',
+  actor_type TEXT NOT NULL CHECK (actor_type IN ('customer','business_physician')),
+  actor_id TEXT NOT NULL,
+  client_request_id TEXT NOT NULL UNIQUE,
+  request_fingerprint TEXT NOT NULL,
+  correlation_id TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gv1_prefounder_care_context
+  ON gv1_prefounder_care_events(context_id,created_at,event_id);
+CREATE INDEX IF NOT EXISTS idx_gv1_prefounder_care_founder
+  ON gv1_prefounder_care_events(founder_id,created_at,event_id);
+
 INSERT OR IGNORE INTO gv1_schema_migrations
   (migration_id,name,environment,checksum,applied_at)
 VALUES
   ('D7A1','day7_business_health_membership_beta_v1','qa',
    'gv1-d7a1-membership-beta-v1',CURRENT_TIMESTAMP);
+
+-- The Day 7 release migration is intentionally cumulative. Preserve the original
+-- migration identity while making its checksum describe the signed final schema.
+UPDATE gv1_schema_migrations
+SET checksum='gv1-d7a1-membership-prefounder-closed-loop-v2'
+WHERE migration_id='D7A1' AND name='day7_business_health_membership_beta_v1';

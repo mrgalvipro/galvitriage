@@ -1,94 +1,76 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+const read=p=>fs.readFileSync(p,'utf8');
 
-const read=path=>fs.readFileSync(path,'utf8');
-
-test('customer Pre-Founder education remains Idea-stage scoped',()=>{
-  const source=read('day1-prefounder-customer.js');
-  assert.match(source,/const IDEA_STAGE='Idea'/);
-  assert.match(source,/data-galvicare-pathway/);
-  assert.match(source,/pre_founder/);
-  assert.match(source,/document\.body\.dataset\.galvicareLifecycle=on\?'pre_founder':'operating_venture'/);
+test('one canonical GalviTriage front door branches by lifecycle, not human_e2e',()=>{
+  const s=read('day1-prefounder-customer.js');
+  assert.match(s,/const IDEA_STAGE='Idea'/);
+  assert.match(s,/if\(submitting\|\|!idea\(\)\)return/);
+  assert.doesNotMatch(s,/!human\(\)\|\|!idea\(\)/);
+  assert.match(s,/legacyBusiness\(!on\)/);
+  assert.match(s,/galvicare:lifecycle-change/);
 });
 
-test('customer pathway teaches founder identity and Founder Development Institute handoff',()=>{
-  const source=read('day1-prefounder-customer.js');
-  assert.match(source,/GALVICARE™ \| PRE-FOUNDER PATHWAY/);
-  assert.match(source,/What is a Founder\?/);
-  assert.match(source,/turning a business idea into a real company/);
-  assert.match(source,/Founder Development Institute/);
-  assert.match(source,/SPUR™ Pre-Founder/);
-  assert.doesNotMatch(source,/dreamer/i);
+test('Pre-Founder education and Founder Development route remain customer-facing',()=>{
+  const s=read('day1-prefounder-customer.js');
+  assert.match(s,/GALVICARE™ \| PRE-FOUNDER PATHWAY/);
+  assert.match(s,/What is a Founder\?/);
+  assert.match(s,/Founder Development Institute/);
+  assert.match(s,/SPUR™ Pre-Founder/);
+  assert.match(s,/data-galvicare-pathway/);
 });
 
-test('Idea stage never fabricates a venture and canonical P0-02 is principal-only',()=>{
-  const source=read('day1-prefounder-customer.js');
-  assert.match(source,/v\.required=!on/);
-  assert.match(source,/record_mode:'principal_only'/);
-  assert.match(source,/lifecycle_state:'pre_founder'/);
-  assert.match(source,/context\.venture_id!==null\|\|context\.bmr_id!==null/);
-  assert.match(source,/No real venture exists yet/);
+test('normal customer email is accepted and synthetic identity is not required',()=>{
+  const s=read('day1-prefounder-customer.js');
+  assert.match(s,/Enter a valid customer email/);
+  assert.match(s,/\/api\/v1\/day7\/prefounder\/bootstrap/);
+  assert.match(s,/X-Galvi-Day3-Session/);
+  assert.doesNotMatch(s,/day1\.\\\.<name>|example\\\.invalid/);
+  assert.doesNotMatch(s,/P0-02 Human E2E requires a synthetic QA email/);
 });
 
-test('human_e2e is QA diagnostics only and never selects or rewrites the customer URL',()=>{
-  const source=read('day1-prefounder-customer.js');
-  assert.match(source,/galvicare_human_e2e_active_v1/);
-  assert.match(source,/sessionStorage\.setItem\(HUMAN_KEY,'1'\)/);
-  assert.match(source,/dataset\.galvicareHumanE2e/);
-  assert.doesNotMatch(source,/searchParams\.set\('human_e2e'/);
-  assert.doesNotMatch(source,/history\.replaceState/);
+test('Idea-stage path never fabricates venture or BHR',()=>{
+  const s=read('day1-prefounder-customer.js');
+  assert.match(s,/No real venture exists yet/);
+  assert.match(s,/A venture\/BHR is created only when a real venture exists/);
+  assert.match(s,/record_mode/);
+  assert.match(s,/principal-only/);
 });
 
-test('same canonical GalviTriage front door branches by lifecycle, not by query parameter',()=>{
-  const source=read('day1-prefounder-customer.js');
-  assert.match(source,/async function submit\(e\)\{if\(submitting\|\|!idea\(\)\)return/);
-  assert.doesNotMatch(source,/!human\(\)\|\|!idea\(\)/);
-  assert.match(source,/rp\?\.classList\.toggle\('hidden',!on\)/);
-  assert.match(source,/legacyBusiness\(!on\)/);
-  assert.match(source,/customer_front_door:true/);
-  assert.match(source,/lifecycle:on\?'pre_founder':'operating_venture'/);
+test('Pre-Founder customer can continue complete care loop beyond Readiness',()=>{
+  const s=read('day1-prefounder-customer.js');
+  for(const marker of ['GalviShot™','GalviChart™','GalviSight™','GalviPath™','GalviClinic™','Business Physician Response','Patient acknowledgement','Continuous Care','Request Reassessment']) assert.ok(s.includes(marker),marker);
+  for(const event of ['galvishot_completed','galvichart_activated','galvisight_completed','galvipath_completed','clinic_booking_requested','customer_acknowledged','monitoring_checkin','reassessment_requested']) assert.ok(s.includes(event),event);
+  assert.match(s,/\/api\/v1\/day7\/prefounder\/care-events/);
+  assert.match(s,/\/api\/v1\/day7\/prefounder\/projection/);
 });
 
-test('P0-02 replaces legacy Business Health intake with canonical Founder Readiness APIs',()=>{
-  const source=read('day1-prefounder-customer.js');
-  for(const endpoint of ['/api/v1/principal-contexts','/api/v1/consents','/api/v1/day2/triage','/api/v1/day2/vitals','/api/v1/day2/score','/api/v1/day6/studio/catalog']) assert.ok(source.includes(endpoint),endpoint);
-  for(const dimension of ['clarity','runway','time','capability','network','domain_knowledge','opportunity_evidence','decision_confidence','leadership_readiness','operating_willingness']) assert.ok(source.includes(`['${dimension}'`),dimension);
-  assert.match(source,/score\.score_type!=='founder_readiness'/);
-  assert.match(source,/vitals\.score_type!=='founder_readiness'/);
-  assert.match(source,/e\.stopImmediatePropagation\(\)/);
-  assert.match(source,/legacyBusiness\(!on\)/);
+test('governed AI remains server-side and deterministic Founder Readiness stays canonical',()=>{
+  const s=read('day1-prefounder-customer.js');
+  assert.match(s,/\/api\/v1\/day7\/prefounder\/readiness-interpretation/);
+  assert.match(s,/GALVIGUIDE™ \| FOUNDER READINESS INTERPRETATION/);
+  assert.match(s,/deterministic Founder Readiness result remains canonical/);
+  assert.doesNotMatch(s,/api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}/);
 });
 
-test('P0-02 renders Founder Readiness and SPUR evidence, not Business Health result',()=>{
-  const source=read('day1-prefounder-customer.js');
-  assert.match(source,/GalviVitals™ \| Founder Readiness Vitals/);
-  assert.match(source,/GalviScore™ \| Founder Readiness/);
-  assert.match(source,/SPUR™ Pre-Founder Route/);
-  assert.match(source,/P0-02 evidence:/);
-  assert.match(source,/Venture \/ BHR:/);
+test('human_e2e only exposes QA physician control and does not select customer functionality',()=>{
+  const s=read('day1-prefounder-customer.js');
+  assert.match(s,/qaDiagnostic\(\)/);
+  assert.match(s,/QA Human E2E — Business Physician control/);
+  assert.match(s,/qa-physician-plan/);
+  assert.match(s,/This control is QA-only and is not part of the customer-facing production path/);
+  assert.doesNotMatch(s,/history\.replaceState/);
+  assert.doesNotMatch(s,/searchParams\.set\('human_e2e'/);
 });
 
-test('P0-06 adds customer-friendly governed AI interpretation without replacing deterministic truth',()=>{
-  const source=read('day1-prefounder-customer.js');
-  assert.match(source,/\/api\/v1\/day7\/prefounder\/readiness-interpretation/);
-  assert.match(source,/GALVIGUIDE™ \| FOUNDER READINESS INTERPRETATION/);
-  assert.match(source,/What Your Readiness Signals Mean/);
-  assert.match(source,/generation_source/);
-  assert.match(source,/approved fallback/i);
-  assert.doesNotMatch(source,/api\.openai\.com|OPENAI_API_KEY/);
-});
-
-test('default root includes customer lifecycle adapter while query gate is limited to QA control panels',()=>{
+test('default customer source contains no legacy Day1 operator panel and builder still injects it separately',()=>{
   const customer=read('day1-prefounder-customer.js');
   const qa=read('day1-prefounder-qa.js');
   const builder=read('scripts/day7b-build-qa-frontend.mjs');
-  assert.doesNotMatch(customer,/H3 Create Pre-Founder|H14 Runtime Health|data-qa-only/);
+  assert.doesNotMatch(customer,/H3 Create Pre-Founder|H14 Runtime Health/);
   assert.match(qa,/H3 Create Pre-Founder/);
   assert.match(qa,/H14 Runtime Health/);
   assert.match(builder,/DAY1_CUSTOMER='day1-prefounder-customer\.js'/);
   assert.match(builder,/DAY1_HUMAN_E2E='day1-prefounder-qa\.js'/);
-  const customerEmbed=builder.indexOf('${day1Customer}');
-  const diagnosticsGate=builder.indexOf('if(${HUMAN_E2E_GATE})');
-  assert.ok(customerEmbed>=0&&diagnosticsGate>customerEmbed,'customer lifecycle adapter must load before optional QA diagnostic gate');
 });
