@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-const originalFetch=window.fetch.bind(window),text=v=>String(v??'').trim(),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+const originalFetch=window.fetch.bind(window),text=v=>String(v??'').trim(),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let shared=null,autoRender=false;
 function list(items){const a=(Array.isArray(items)?items:[]).filter(x=>text(x?.statement||x?.reasoning_summary||x));return a.length?`<ul>${a.map(x=>`<li>${esc(text(x?.statement||x?.reasoning_summary||x))}${text(x?.reasoning_summary)?`<br><span class="muted">${esc(x.reasoning_summary)}</span>`:''}${text(x?.next_step)?`<br><strong>Next Step:</strong> ${esc(x.next_step)}`:''}</li>`).join('')}</ul>`:'<p class="muted">No additional governed items are recorded yet.</p>'}
 function metric(label,value){return `<div class="card"><strong>${esc(label)}</strong><p>${esc(value??'—')}</p></div>`}
