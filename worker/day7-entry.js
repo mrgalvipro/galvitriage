@@ -1,7 +1,8 @@
 import day6Worker from './day6-entry.js';
 import { clinicalFile } from './day7d-engine.js';
-import { GVError, context, failure, headers, requireRuntime, hash, idempotencyKey, success } from './day5-common.js';
+import { GVError, context, failure, headers, requireRuntime, hash, idempotencyKey, jsonBody, success } from './day5-common.js';
 import { handleDay7ReleaseRoute } from './routes/day7-release.js';
+import { getCustomerMembershipOffer, presentCustomerMembershipOffer, resolvePaidMembershipActivation } from './domain/day7-membership-service.js';
 
 export const DAY7_RELEASE_RUNTIME='galvistudio_galvicare_1_0_day7_release_v1';
 
@@ -15,6 +16,8 @@ const PREFOUNDER_AI_SCHEMA='day7_prefounder_readiness_schema_v1';
 const OPERATING_BOOTSTRAP_PATH='/api/v1/day3/customer-bootstrap';
 const OPERATING_SCORE_RECONCILIATION='day7_p1_authoritative_galviscore';
 const SAFE_ID=/^[A-Za-z0-9:._-]{3,180}$/;
+const MEMBERSHIP_OFFER_PATH='/api/v1/day7/customer/membership-offer';
+const MEMBERSHIP_PAYMENT_PATH='/api/v1/day7/customer/membership-payment-return';
 
 function wrap(response){
   if(!response)return response;
@@ -29,6 +32,22 @@ function low(value){return text(value).toLowerCase()}
 function safe(value){return text(value).replace(/[^A-Za-z0-9._:-]/g,'_').slice(0,120)}
 function resultId(type){return `d2${type}_d7p1_${crypto.randomUUID().replaceAll('-','')}`}
 function iso(){return new Date().toISOString()}
+
+async function customerMembershipRoute(request,env,ctx,path){
+  if(path===MEMBERSHIP_OFFER_PATH&&request.method==='GET'){
+    const data=await getCustomerMembershipOffer(env,request);
+    return success(ctx,data,200,'ok',{manual_repair:'NO',membership_conversion:'clinical_decision_to_commercial_offer_v1'});
+  }
+  if(path===MEMBERSHIP_OFFER_PATH&&request.method==='POST'){
+    const data=await presentCustomerMembershipOffer(env,ctx,request,idempotencyKey(request));
+    return success(ctx,data,200,data.idempotent_replay?'no_change':'ok',{manual_repair:'NO',commercial_event:'membership_offered',idempotent_replay:data.idempotent_replay});
+  }
+  if(path===MEMBERSHIP_PAYMENT_PATH&&request.method==='POST'){
+    const input=await jsonBody(request),data=await resolvePaidMembershipActivation(env,ctx,request,idempotencyKey(request),input);
+    return success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{manual_repair:'NO',commercial_event:'membership_started',revenue_conversion:true,idempotent_replay:data.idempotent_replay});
+  }
+  return null;
+}
 
 /*
  * Day 7 P1 refresh/recovery bridge.
@@ -200,6 +219,8 @@ export default {async fetch(request,env,executionContext){
     if(ctx.origin&&!ctx.allowedOrigins.includes(ctx.origin)) throw new GVError('GV_CORS_DENIED','The request origin is not allowed.',403);
     const url=new URL(request.url),path=url.pathname.replace(/\/+$/,'')||'/';
     if(request.method==='OPTIONS'&&path.startsWith('/api/v1/day7/')) return new Response(null,{status:204,headers:headers(ctx)});
+    const membershipResponse=await customerMembershipRoute(request,env,ctx,path);
+    if(membershipResponse)return wrap(membershipResponse);
     const stored=await storedPreFounderAiReplay(request,env,ctx,path);
     if(stored)return wrap(stored);
     let response;
