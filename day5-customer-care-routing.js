@@ -4,14 +4,14 @@
  */
 (()=>{
 'use strict';
-const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v3';
+const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v2';
 const INSTALL_KEY='__galvicareDay5RoutingInstalled';
 const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev',SESSION_HEADER='X-Galvi-Day3-Session';
 const FOLLOWUP_PANELS=['galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup'];
 const CARE_NAVIGATION_SCOPE='Ask about your results, priorities, evidence to collect, what changed as new information was added, your next GalviCare™ step, or how to follow your approved care plan. GalviGuide™ can explain and navigate your Business Health record; treatment decisions and licensed advice stay with your Business Physician or qualified professional.';
 const BRANDS=['GalviPrises','GalviTriage','GalviVitals','GalviScore','GalviShot','GalviSight','GalviPath','GalviGuide','GalviClinic','GalviChart','GalviVault','GalviAudit','GalviRx','GalviLab','GalviEngine','GalviStudio','GalviPro','GalviCare','GalviFund','GalviLight','GalviLetter'];
 const BRAND_RE=new RegExp(`\\b(${BRANDS.join('|')})(?!™)\\b`,'g');
-const text=v=>String(v??'').trim(),byId=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
+const text=v=>String(v??'').trim(),byId=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const session=()=>typeof window.getStoredSessionId==='function'?text(window.getStoredSessionId()):text(localStorage.getItem('galvicare_session_id')||localStorage.getItem('galvishot_session_id'));
 let cached=null,inFlight=null,retryTimer=null,retryCount=0,lastGuideResult=null,lastStageKey='',refreshQueued=false;
 
