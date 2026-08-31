@@ -26,7 +26,7 @@ test('Business Physician can issue a patient GalviChart update without activatin
   const wrapper=read('worker/day8-day7-entry.js'),ui=read('clinician-portal/day7-customer-access.js');
   assert.match(wrapper,/requireClinicianIdentity/);assert.match(wrapper,/identity\.role!==\'business_physician\'/);assert.match(wrapper,/customer-access-invite/);assert.match(wrapper,/day8Day6Worker\.fetch/);
   assert.match(ui,/Send \/ Generate Patient Login Link/);assert.match(ui,/customer-access-invite/);assert.match(ui,/GalviVault stores only its hash/);
-  assert.doesNotMatch(ui,/membership_started|membership-payment-return|STRIPE_SECRET_KEY/);
+  assert.doesNotMatch(ui,/membership-payment-return|membership\/start|STRIPE_SECRET_KEY|api\.stripe\.com/);
 });
 
 test('HubSpot notification remains an optional non-blocking adapter',()=>{
