@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvivault-day8-qa",
-  "main": "worker/day8-day6-entry.js",
+  "main": "worker/day8-day7-entry.js",
   "compatibility_date": "2026-08-01",
   "workers_dev": true,
   "preview_urls": false,
@@ -20,6 +20,7 @@
     "MIN_SCHEMA_VERSION": "0006",
     "BUSINESS_PHYSICIAN_EMAIL": "galvipro@outlook.com",
     "BUSINESS_PHYSICIAN_ENROLLMENT_HASH": "yO5Kcg31WykJ3OK30rVmUIwfjwI693_ceZkW_1CpbcA",
+    "GALVICARE_CUSTOMER_URL": "https://galvicare-0-5-qa.mrgalvipro.workers.dev/#galvitriage",
     "ALLOWED_ORIGINS": "https://galvivault-day8-qa.mrgalvipro.workers.dev,https://clinician-qa.galvipro.com,http://localhost:8788"
   },
   "d1_databases": [

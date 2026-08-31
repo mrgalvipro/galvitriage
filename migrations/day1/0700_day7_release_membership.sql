@@ -79,6 +79,63 @@ CREATE TABLE IF NOT EXISTS gv1_membership_reassessment_queue (
 CREATE INDEX IF NOT EXISTS idx_gv1_membership_reassessment_pending
   ON gv1_membership_reassessment_queue(status,created_at);
 
+-- Day 7 P0 returning-customer access. Passwords are never stored. GalviVault stores
+-- PBKDF2-SHA256 verifier material only; invite and login tokens are stored only as hashes.
+-- A returning-login session remains bound to one canonical principal/BHR and the existing
+-- GalviCare session lineage. It does not create a new care event or a shadow BHR.
+CREATE TABLE IF NOT EXISTS gv1_customer_accounts (
+  account_id TEXT PRIMARY KEY,
+  principal_id TEXT NOT NULL UNIQUE REFERENCES gv1_founders(founder_id),
+  email_normalized TEXT NOT NULL UNIQUE,
+  password_salt TEXT NOT NULL,
+  password_hash TEXT NOT NULL,
+  password_iterations INTEGER NOT NULL CHECK (password_iterations >= 100000),
+  password_version INTEGER NOT NULL DEFAULT 1 CHECK (password_version >= 1),
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','locked','disabled')),
+  failed_attempts INTEGER NOT NULL DEFAULT 0 CHECK (failed_attempts >= 0),
+  locked_until TEXT,
+  last_login_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gv1_customer_accounts_email
+  ON gv1_customer_accounts(email_normalized,status);
+
+CREATE TABLE IF NOT EXISTS gv1_customer_login_invites (
+  invite_hash TEXT PRIMARY KEY,
+  principal_id TEXT NOT NULL REFERENCES gv1_founders(founder_id),
+  bmr_id TEXT NOT NULL REFERENCES gv1_business_medical_records(bmr_id),
+  legacy_session_id TEXT NOT NULL,
+  source_type TEXT NOT NULL DEFAULT 'business_health_membership'
+    CHECK (source_type IN ('business_health_membership')),
+  source_entity_id TEXT NOT NULL,
+  client_request_id TEXT NOT NULL UNIQUE,
+  created_by_actor_type TEXT NOT NULL,
+  created_by_actor_id TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  consumed_at TEXT,
+  revoked_at TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gv1_customer_login_invites_principal
+  ON gv1_customer_login_invites(principal_id,bmr_id,expires_at);
+
+CREATE TABLE IF NOT EXISTS gv1_customer_login_sessions (
+  session_hash TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES gv1_customer_accounts(account_id),
+  principal_id TEXT NOT NULL REFERENCES gv1_founders(founder_id),
+  bmr_id TEXT NOT NULL REFERENCES gv1_business_medical_records(bmr_id),
+  legacy_session_id TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  revoked_at TEXT,
+  created_at TEXT NOT NULL,
+  last_used_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_gv1_customer_login_sessions_account
+  ON gv1_customer_login_sessions(account_id,expires_at);
+CREATE INDEX IF NOT EXISTS idx_gv1_customer_login_sessions_bmr
+  ON gv1_customer_login_sessions(bmr_id,expires_at);
+
 -- Day 7 P1: customer-facing Pre-Founder identity/session and principal-only care lineage.
 -- Pre-Founder is a real principal with no fabricated venture/BHR. These tables provide
 -- the longitudinal care envelope until canonical venture creation is evidence-supported.
@@ -125,8 +182,8 @@ VALUES
   ('D7A1','day7_business_health_membership_beta_v1','qa',
    'gv1-d7a1-membership-beta-v1',CURRENT_TIMESTAMP);
 
--- The Day 7 release migration is intentionally cumulative. Preserve the original
--- migration identity while making its checksum describe the signed final schema.
+-- Day 7 is intentionally cumulative. Preserve the migration identity while making
+-- its checksum describe the final signed Membership + returning-customer schema.
 UPDATE gv1_schema_migrations
-SET checksum='gv1-d7a1-membership-prefounder-closed-loop-v2'
+SET checksum='gv1-d7a1-membership-prefounder-customer-access-v3'
 WHERE migration_id='D7A1' AND name='day7_business_health_membership_beta_v1';
