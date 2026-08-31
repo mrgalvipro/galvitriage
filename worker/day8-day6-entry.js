@@ -2,8 +2,10 @@ import day8Worker from './day8-entry.js';
 import { GVError, context, failure, headers, success } from './day5-common.js';
 import { requireClinicianIdentity, asLegacyOperatorHeaders } from './auth/operator-identity.js';
 import { handleDay6StudioRoute } from './routes/day6-studio.js';
+import { startMembership, cancelMembership, submitMembershipCheckin, getMembership } from './domain/day7-membership-service.js';
 
 const isDay6 = (path) => path.startsWith('/api/v1/day6/');
+const isDay7Membership = (path) => path.startsWith('/api/v1/day7/clinician/business-medical-records/');
 const clean = (v) => String(v ?? '').trim();
 const parse = (v,fallback=[]) => { try { return typeof v==='object'&&v!==null?v:JSON.parse(v||''); } catch { return fallback; } };
 
@@ -55,16 +57,76 @@ async function validateEngagementScope(request,env,path){
   if(clean(row.bmr_id)!==bmrId)throw new GVError('GV_AUTH_FORBIDDEN','Cross-record Studio access is prohibited.',403);
 }
 
+function membershipActor(identity){
+  return {role:identity.role==='business_physician'?'business_physician':'galviclinician',id:identity.operator_id};
+}
+function membershipKey(request){
+  const value=clean(request.headers.get('Idempotency-Key'));
+  if(!value)throw new GVError('GV_IDEMPOTENCY_REQUIRED','Idempotency-Key is required.',422);
+  return value;
+}
+async function canonicalMembershipPrincipal(env,bmrId){
+  const row=await env.DB.prepare(`SELECT f.founder_id
+    FROM gv1_business_medical_records b
+    JOIN gv1_founder_venture_roles r ON r.venture_id=b.venture_id AND r.status='active'
+    JOIN gv1_founders f ON f.founder_id=r.founder_id
+    WHERE b.bmr_id=? ORDER BY r.is_primary DESC,r.created_at ASC LIMIT 1`).bind(bmrId).first();
+  if(!row?.founder_id)throw new GVError('GV_LINEAGE_REQUIRED','Business Health Membership requires the canonical principal linked to this BMR.',409);
+  return row.founder_id;
+}
+async function membershipInBmr(env,bmrId,membershipId){
+  const row=await env.DB.prepare(`SELECT membership_id,bmr_id FROM gv1_memberships WHERE membership_id=? LIMIT 1`).bind(membershipId).first();
+  if(!row)throw new GVError('GV_NOT_FOUND','Business Health Membership was not found.',404);
+  if(row.bmr_id!==bmrId)throw new GVError('GV_AUTH_FORBIDDEN','Cross-BMR Membership access is prohibited.',403);
+  return row;
+}
+async function membershipState(env,identity,bmrId){
+  const bmr=await env.DB.prepare(`SELECT bmr_id FROM gv1_business_medical_records WHERE bmr_id=? LIMIT 1`).bind(bmrId).first();
+  if(!bmr)throw new GVError('GV_NOT_FOUND','Business Medical Record was not found.',404);
+  const latest=await env.DB.prepare(`SELECT membership_id FROM gv1_memberships WHERE bmr_id=?
+    ORDER BY CASE WHEN status='active' THEN 0 ELSE 1 END,updated_at DESC,created_at DESC LIMIT 1`).bind(bmrId).first();
+  if(!latest)return {membership:null,events:[],reassessment_queue:[],manual_repair:'NO'};
+  return {...await getMembership(env,membershipActor(identity),latest.membership_id),manual_repair:'NO'};
+}
+async function handleClinicianMembership(request,env,ctx,path,identity){
+  const base=path.match(/^\/api\/v1\/day7\/clinician\/business-medical-records\/([^/]+)\/membership$/);
+  if(request.method==='GET'&&base){
+    return success(ctx,await membershipState(env,identity,decodeURIComponent(base[1])),200,'ok',{manual_repair:'NO',clinician_membership_bridge:'v1'});
+  }
+  const start=path.match(/^\/api\/v1\/day7\/clinician\/business-medical-records\/([^/]+)\/membership\/start$/);
+  if(request.method==='POST'&&start){
+    const bmrId=decodeURIComponent(start[1]),body=await request.clone().json().catch(()=>({})),principalId=await canonicalMembershipPrincipal(env,bmrId);
+    const data=await startMembership(env,ctx,membershipActor(identity),membershipKey(request),{bmr_id:bmrId,principal_id:principalId,treatment_plan_id:clean(body.treatment_plan_id)});
+    return success(ctx,{...data,manual_repair:'NO'},data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,clinician_membership_bridge:'v1'});
+  }
+  const checkin=path.match(/^\/api\/v1\/day7\/clinician\/business-medical-records\/([^/]+)\/memberships\/([^/]+)\/checkins$/);
+  if(request.method==='POST'&&checkin){
+    const bmrId=decodeURIComponent(checkin[1]),membershipId=decodeURIComponent(checkin[2]),body=await request.clone().json().catch(()=>({}));
+    await membershipInBmr(env,bmrId,membershipId);
+    const data=await submitMembershipCheckin(env,ctx,membershipActor(identity),membershipKey(request),membershipId,body);
+    return success(ctx,{...data,manual_repair:'NO'},data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,clinician_membership_bridge:'v1'});
+  }
+  const cancel=path.match(/^\/api\/v1\/day7\/clinician\/business-medical-records\/([^/]+)\/memberships\/([^/]+)\/cancel$/);
+  if(request.method==='POST'&&cancel){
+    const bmrId=decodeURIComponent(cancel[1]),membershipId=decodeURIComponent(cancel[2]);
+    await membershipInBmr(env,bmrId,membershipId);
+    const data=await cancelMembership(env,ctx,membershipActor(identity),membershipKey(request),membershipId);
+    return success(ctx,{...data,manual_repair:'NO'},200,data.idempotent_replay?'no_change':'ok',{idempotent_replay:data.idempotent_replay,clinician_membership_bridge:'v1'});
+  }
+  throw new GVError('GV_NOT_FOUND','Clinician Business Health Membership route was not found.',404);
+}
+
 const worker = {
   async fetch(request, env, executionContext) {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/+$/, '') || '/';
-    if (!isDay6(path)) return day8Worker.fetch(request, env, executionContext);
+    if (!isDay6(path) && !isDay7Membership(path)) return day8Worker.fetch(request, env, executionContext);
     const ctx = context(request, env);
     try {
       if (ctx.origin && ctx.origin !== url.origin && !ctx.allowedOrigins.includes(ctx.origin)) throw new GVError('GV_CORS_DENIED', 'The request origin is not allowed.', 403);
       if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: headers(ctx) });
       const identity = await requireClinicianIdentity(request, env);
+      if(isDay7Membership(path))return handleClinicianMembership(request,env,ctx,path,identity);
       const contextMatch = path.match(/^\/api\/v1\/day6\/clinician-context\/([^/]+)$/);
       if (request.method === 'GET' && contextMatch) return clinicianStudioContext(env,ctx,identity,decodeURIComponent(contextMatch[1]));
       const proofMatch=path.match(/^\/api\/v1\/day6\/venture-proof\/([^/]+)$/);
