@@ -77,7 +77,7 @@ jobs:
           while IFS= read -r path; do
             [ -z "$path" ] && continue
             case "$path" in
-              docs/*|release-evidence/day7/*|release-evidence/day8/qa-deployment-current.json|clinician-portal/day7-prefounder-queue.js|clinician-portal/index.html|scripts/day7-codex-bootstrap.sh|scripts/day7-deployed-release-e2e.mjs|tests/day7-branchless-release-gate.test.mjs|tests/day7-release-critical.test.mjs|tests/day1-prefounder-customer.test.mjs|day1-prefounder-customer.js|qa-frontend-worker.js|worker/day7-entry.js|worker/routes/day7-release.js|worker/routes/operator-workspace.js|worker/domain/day7-membership-service.js|migrations/day1/0700_day7_release_membership.sql|wrangler.day7.json|.github/workflows/galvistudio-day7-qa.yml|.github/workflows/galvivault-day8-qa.yml)
+              docs/*|release-evidence/day7/*|release-evidence/day8/qa-deployment-current.json|clinician-portal/day7-prefounder-queue.js|clinician-portal/index.html|scripts/day7-codex-bootstrap.sh|scripts/day7-deployed-release-e2e.mjs|tests/day7-branchless-release-gate.test.mjs|tests/day7-release-critical.test.mjs|tests/day1-prefounder-customer.test.mjs|day1-prefounder-customer.js|day5-customer-care-routing.js|qa-frontend-worker.js|worker/day7-entry.js|worker/routes/day7-release.js|worker/routes/operator-workspace.js|worker/domain/day7-membership-service.js|migrations/day1/0700_day7_release_membership.sql|wrangler.day7.json|.github/workflows/galvistudio-day7-qa.yml|.github/workflows/galvivault-day8-qa.yml)
                 ;;
               *) echo "STOP: unapproved Day 7 delta: $path"; unexpected=1 ;;
             esac
@@ -206,8 +206,12 @@ jobs:
           node scripts/day6-deployed-e2e.mjs | tee day7-day6-deployed-e2e.json
           node scripts/day7-deployed-release-e2e.mjs | tee day7-release-deployed-e2e.json
 
+      # Keep the shared Human-E2E QA Worker stable on ordinary push validation.
+      # The destructive-in-time runtime swap is reserved for the explicit manual
+      # release rehearsal immediately before production cutover.
       - name: Rehearse non-destructive prior-runtime rollback
         id: rollback
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -232,7 +236,7 @@ jobs:
           git worktree remove --force "$R"
 
       - name: Restore exact Day 7 candidate after rollback rehearsal
-        if: always()
+        if: always() && github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -298,6 +302,7 @@ jobs:
           echo '- New branch created: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Work ref pushed: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Existing QA Worker/D1/frontend reused: YES' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Push-triggered QA validation keeps the shared Day 7 runtime stable; rollback runtime swap is manual-release-only: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 8 clinician navigator baseline is an ancestor; current exact Day 8 run must also be green before sign-off: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- Full inherited Day 1-6 regression + Day7D integration gate: executed' >> "$GITHUB_STEP_SUMMARY"
           echo '- Pre-Founder normal customer email + principal-only Founder Readiness: enabled' >> "$GITHUB_STEP_SUMMARY"
@@ -308,6 +313,5 @@ jobs:
           echo '- Day 6 deployed E2E: re-proven against exact candidate' >> "$GITHUB_STEP_SUMMARY"
           echo '- Day 7 Membership beta start/check-in/cancel/replay: executed' >> "$GITHUB_STEP_SUMMARY"
           echo "- Rollback rehearsal: ${{ steps.rollback.outcome }}" >> "$GITHUB_STEP_SUMMARY"
-          echo '- Additive Day 7 schema retained through prior-runtime rollback: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production/main modified: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Next mandatory gate: comprehensive Golden A-I + P0-01..P0-16, security/accessibility + three formal release gates' >> "$GITHUB_STEP_SUMMARY"

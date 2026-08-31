@@ -14,9 +14,6 @@ const PREFOUNDER_AI_PROMPT='day7_prefounder_readiness_v1';
 const PREFOUNDER_AI_SCHEMA='day7_prefounder_readiness_schema_v1';
 const OPERATING_BOOTSTRAP_PATH='/api/v1/day3/customer-bootstrap';
 const OPERATING_SCORE_RECONCILIATION='day7_p1_authoritative_galviscore';
-const REGULATED_GUIDE_PATH='/api/v1/day5/customer/galviguide';
-const REGULATED_GUIDE_DOMAIN=/\b(?:legal|lawyer|attorney|tax|taxation|securit(?:y|ies)|fiduciary|investment|medical)\b/i;
-const REGULATED_GUIDE_DECISION=/\b(?:tell me exactly|how should i|what should i|what .* should i|structure|draft|choose|elect|election|file|advise|advice|recommend)\b/i;
 const SAFE_ID=/^[A-Za-z0-9:._-]{3,180}$/;
 
 function wrap(response){
@@ -32,48 +29,6 @@ function low(value){return text(value).toLowerCase()}
 function safe(value){return text(value).replace(/[^A-Za-z0-9._:-]/g,'_').slice(0,120)}
 function resultId(type){return `d2${type}_d7p1_${crypto.randomUUID().replaceAll('-','')}`}
 function iso(){return new Date().toISOString()}
-
-/*
- * Day 7 P1 regulated GalviGuide handoff.
- *
- * A regulated question must fail safe before any optional care-context read can turn
- * the customer's boundary request into a blank/409 experience. This is not advice,
- * diagnosis, or treatment: it is a read-only server-owned referral handoff. The
- * customer session is still required, no canonical row is changed, OpenAI is not
- * called, and the existing Business Physician / qualified-professional authority
- * remains unchanged.
- */
-async function regulatedGuideHandoff(request,ctx,path){
-  if(request.method!=='POST'||path!==REGULATED_GUIDE_PATH)return null;
-  let input={};try{input=await request.clone().json()}catch{return null}
-  const message=text(input?.message);
-  if(!message||!REGULATED_GUIDE_DOMAIN.test(message)||!REGULATED_GUIDE_DECISION.test(message))return null;
-  const sessionId=text(request.headers.get(PREFOUNDER_SESSION_HEADER));
-  if(!sessionId)throw new GVError('GV_AUTH_REQUIRED','An authenticated GalviCare customer session is required.',401);
-  return success(ctx,{
-    intent:text(input?.intent||'care_conversation'),
-    product_stage:text(input?.product_stage||'GalviPath'),
-    read_only:true,
-    referral_required:true,
-    support_level:'qualified_referral',
-    recommended_action:'qualified_referral',
-    supportive_explanation:'This request requires qualified professional judgment. GalviGuide cannot provide legal, tax, securities, fiduciary, investment, medical, or other licensed-professional advice.',
-    care_conversation:'Your Business Physician can coordinate the care pathway, but the licensed conclusion must come from the appropriate qualified professional. Continue with the qualified referral already created or request a qualified referral before acting on this matter.',
-    next_actions:[
-      'Use the qualified referral pathway for the regulated question.',
-      'Share only the minimum information required for the professional handoff under the recorded consent.',
-      'Return to GalviCare after the qualified professional outcome is available so the result can inform the next governed care decision.'
-    ],
-    escalation:'Qualified professional referral required; GalviGuide does not provide the licensed conclusion.',
-    ai_metadata:{attempted:false,used:false,fallback:true,reason:'regulated_boundary',provider:null,provider_response_id:null,model:null},
-    boundary_code:'GV_GUIDE_BOUNDARY',
-    manual_repair:'NO'
-  },200,'referral_required',{
-    write_performed:false,
-    regulated_boundary:true,
-    authority:'qualified_professional'
-  });
-}
 
 /*
  * Day 7 P1 refresh/recovery bridge.
@@ -245,8 +200,6 @@ export default {async fetch(request,env,executionContext){
     if(ctx.origin&&!ctx.allowedOrigins.includes(ctx.origin)) throw new GVError('GV_CORS_DENIED','The request origin is not allowed.',403);
     const url=new URL(request.url),path=url.pathname.replace(/\/+$/,'')||'/';
     if(request.method==='OPTIONS'&&path.startsWith('/api/v1/day7/')) return new Response(null,{status:204,headers:headers(ctx)});
-    const regulated=await regulatedGuideHandoff(request,ctx,path);
-    if(regulated)return wrap(regulated);
     const stored=await storedPreFounderAiReplay(request,env,ctx,path);
     if(stored)return wrap(stored);
     let response;
