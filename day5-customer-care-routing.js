@@ -4,15 +4,16 @@
  */
 (()=>{
 'use strict';
-const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v2';
+const SIGNATURE='GalviCare Day 5 customer care routing + GalviGuide v3';
+const INSTALL_KEY='__galvicareDay5RoutingInstalled';
 const BASE='https://galvivault-p0-day1-qa.mrgalvipro.workers.dev',SESSION_HEADER='X-Galvi-Day3-Session';
 const FOLLOWUP_PANELS=['galviscore-followup','galvishot-followup','galvisight-followup','galvipath-followup'];
 const CARE_NAVIGATION_SCOPE='Ask about your results, priorities, evidence to collect, what changed as new information was added, your next GalviCare™ step, or how to follow your approved care plan. GalviGuide™ can explain and navigate your Business Health record; treatment decisions and licensed advice stay with your Business Physician or qualified professional.';
 const BRANDS=['GalviPrises','GalviTriage','GalviVitals','GalviScore','GalviShot','GalviSight','GalviPath','GalviGuide','GalviClinic','GalviChart','GalviVault','GalviAudit','GalviRx','GalviLab','GalviEngine','GalviStudio','GalviPro','GalviCare','GalviFund','GalviLight','GalviLetter'];
 const BRAND_RE=new RegExp(`\\b(${BRANDS.join('|')})(?!™)\\b`,'g');
-const text=v=>String(v??'').trim(),byId=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const text=v=>String(v??'').trim(),byId=id=>document.getElementById(id),esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 const session=()=>typeof window.getStoredSessionId==='function'?text(window.getStoredSessionId()):text(localStorage.getItem('galvicare_session_id')||localStorage.getItem('galvishot_session_id'));
-let cached=null,inFlight=null,retryTimer=null,retryCount=0,lastGuideResult=null;
+let cached=null,inFlight=null,retryTimer=null,retryCount=0,lastGuideResult=null,lastStageKey='',refreshQueued=false;
 
 function trademarkTextNode(node){
   if(!node||node.nodeType!==Node.TEXT_NODE||!node.nodeValue)return false;
@@ -68,12 +69,33 @@ function followupActive(){return FOLLOWUP_PANELS.some(id=>{const p=byId(id);retu
 function firstVisibleHost(...ids){const hosts=ids.map(byId).filter(h=>h?.isConnected);return hosts.find(visible)||hosts[0]||null}
 function stageHosts(){return [byId('galviscore-result'),byId('galvishot-result'),firstVisibleHost('galvisight-result-panel','galvisight-handoff'),firstVisibleHost('galvipath-result-panel','galvipath-result')].filter((h,i,a)=>h?.isConnected&&a.indexOf(h)===i)}
 function resultReady(){return !followupActive()&&stageHosts().some(visible)}
+function visibleStageKey(){return stageHosts().filter(visible).map(h=>h.id).join('|')}
 function routeFingerprint(r){return JSON.stringify([text(r?.source_result_id),Number(r?.source_record_version||0),r?.overall_score??null,r?.acuity_score??null,text(r?.acuity_band),r?.clinical_confidence??null,text(r?.disposition),text(r?.support_level),Boolean(r?.clinic_recommended),Boolean(r?.referral_required)])}
 function insertPanelSafely(host,panel){if(!host?.isConnected||!panel)return false;const row=host.querySelector('.button-row');if(row?.isConnected&&host.contains(row)){try{row.insertAdjacentElement('beforebegin',panel);return true}catch(error){if(error?.name!=='NotFoundError')throw error}}if(host.isConnected){host.appendChild(panel);return true}return false}
 function render(r){if(followupActive())return;installStyle();const fp=routeFingerprint(r);for(const host of stageHosts()){if(!visible(host))continue;const id=host.id,existing=host.querySelector(`[data-day5-care-routing="${id}"]`);if(existing?.dataset?.day5CareFingerprint===fp)continue;if(existing)existing.remove();const holder=document.createElement('div');holder.innerHTML=markup(r,id);const panel=holder.firstElementChild;if(!panel)continue;panel.dataset.day5CareFingerprint=fp;if(insertPanelSafely(host,panel))bind(panel)}}
 function scheduleRetry(){if(followupActive()||retryTimer||retryCount>=8)return;retryCount++;retryTimer=setTimeout(()=>{retryTimer=null;if(followupActive()){cached=null;return}refresh(true).catch(()=>{})},1500)}
 function settleUi(){return new Promise(resolve=>{const raf=window.requestAnimationFrame||((callback)=>setTimeout(callback,16));raf(()=>raf(resolve))})}
-async function refresh(force=false){if(followupActive()){cached=null;return null}if(inFlight)return inFlight;if(cached&&!force){render(cached);return cached}inFlight=(async()=>{await settleUi();if(followupActive()||!resultReady()){cached=null;return null}const route=await api('explain_route');if(followupActive()){cached=null;return null}cached=route;retryCount=0;render(route);return route})();try{return await inFlight}catch(e){if(!followupActive()&&(e?.code==='GV_DAY5_CARE_ROUTE_NOT_READY'||e?.status===404||e?.status===409))scheduleRetry();else if(!followupActive())console.warn(SIGNATURE,e?.code||'',e?.message||e);throw e}finally{inFlight=null}}
-function install(){installStyle();installTrademarking();const observer=new MutationObserver(()=>{if(followupActive()){cached=null;return}if(resultReady())queueMicrotask(()=>refresh(false).catch(()=>{}))});observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});for(const event of ['pageshow','hashchange','popstate','focus'])window.addEventListener(event,()=>{if(resultReady())refresh(true).catch(()=>{})});if(resultReady())refresh(false).catch(()=>{});window.GalviCareDay5Routing=Object.freeze({refresh,getRoute:()=>refresh(true),explain:()=>api('explain_route'),supportive:()=>api('supportive_explanation'),reminder:()=>api('reminder'),requestEvidence:()=>api('request_evidence'),clinicPrep:()=>api('clinic_prep'),conversation:message=>api('care_conversation',message),testBoundary:()=>api('change_score'),lastGuide:()=>lastGuideResult,applyPathEvidenceGuidance,stageForHost,trademarkTree,signature:SIGNATURE});console.info(SIGNATURE,'active')}
+async function refresh(force=false){if(followupActive()){cached=null;return null}if(inFlight)return inFlight;if(cached&&!force){render(cached);return cached}inFlight=(async()=>{await settleUi();if(followupActive()||!resultReady()){cached=null;return null}const route=await api('explain_route');if(followupActive()){cached=null;return null}cached=route;retryCount=0;lastStageKey=visibleStageKey();render(route);return route})();try{return await inFlight}catch(e){if(!followupActive()&&(e?.code==='GV_DAY5_CARE_ROUTE_NOT_READY'||e?.status===404||e?.status===409))scheduleRetry();else if(!followupActive())console.warn(SIGNATURE,e?.code||'',e?.message||e);throw e}finally{inFlight=null}}
+function queueStageRefresh(force=false){
+  if(followupActive()){cached=null;return}
+  const key=visibleStageKey();
+  if(!key)return;
+  if(key!==lastStageKey){lastStageKey=key;cached=null;retryCount=0}
+  if(cached&&!force){render(cached);return}
+  if(refreshQueued)return;
+  refreshQueued=true;
+  queueMicrotask(()=>{refreshQueued=false;refresh(force).catch(()=>{})});
+}
+function install(){
+  if(window[INSTALL_KEY]){console.info(SIGNATURE,'singleton already active');return}
+  window[INSTALL_KEY]=true;
+  installStyle();installTrademarking();
+  const observer=new MutationObserver(()=>queueStageRefresh(false));
+  observer.observe(document.body,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});
+  window.addEventListener('pageshow',event=>{if(event.persisted){cached=null;lastStageKey='';queueStageRefresh(false)}});
+  for(const event of ['hashchange','popstate'])window.addEventListener(event,()=>{cached=null;lastStageKey='';queueStageRefresh(false)});
+  if(resultReady())queueStageRefresh(false);
+  window.GalviCareDay5Routing=Object.freeze({refresh,getRoute:()=>refresh(true),explain:()=>api('explain_route'),supportive:()=>api('supportive_explanation'),reminder:()=>api('reminder'),requestEvidence:()=>api('request_evidence'),clinicPrep:()=>api('clinic_prep'),conversation:message=>api('care_conversation',message),testBoundary:()=>api('change_score'),lastGuide:()=>lastGuideResult,applyPathEvidenceGuidance,stageForHost,trademarkTree,signature:SIGNATURE});console.info(SIGNATURE,'active')
+}
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
