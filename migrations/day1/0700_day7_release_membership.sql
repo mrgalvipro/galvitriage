@@ -188,7 +188,7 @@ UPDATE gv1_schema_migrations
 SET checksum='gv1-d7a1-membership-prefounder-customer-access-v3'
 WHERE migration_id='D7A1' AND name='day7_business_health_membership_beta_v1';
 
--- Release migrations must never rewrite a named Human-E2E patient's identity to make a
--- test pass. Returning-login identity is established by the normal GalviTriage -> canonical
--- principal bridge and verified at runtime. QA fixture-specific proof belongs in release
--- evidence, not in the additive production-target schema migration. manual_repair=NO.
+-- Release migrations must never rewrite a named Human-E2E patient's identity to make a test pass.
+-- Returning-login identity is established by the normal GalviTriage -> canonical principal bridge.
+-- QA fixture-specific proof belongs in release evidence; it does not belong in the additive
+-- production-target schema migration. manual_repair=NO.
