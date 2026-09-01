@@ -17,6 +17,8 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
   const PRIMARY_MARKER='day3-governed-primary';
   const inflight=new Map();
   const rendered=new Map();
+  const terminalPreconditions=new Map();
+  const TERMINAL_PRECONDITION_CODES=new Set(['GV_DAY3_LEGACY_SCORE_CONTRACT','GV_DAY3_SESSION_REQUIRED']);
   let canonicalPromise=null;
   const q=(selector)=>document.querySelector(selector);
   const byId=(id)=>document.getElementById(id);
@@ -112,7 +114,7 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
   function fillPrimaryList(id,items,generationId){const host=byId(id);if(!host)return false;const values=unique(items);if(!values.length)return false;host.innerHTML='';host.dataset.day3GovernedGeneration=generationId||'accepted';values.forEach(value=>{const li=document.createElement('li');li.className=PRIMARY_MARKER;li.textContent=value;host.appendChild(li)});return true}
   function resultHost(product){return product==='GalviShot'?byId('galvishot-result'):product==='GalviSight'?(byId('galvisight-result-panel')||byId('galvisight-handoff')):(byId('galvipath-result-panel')||byId('galvipath-result'))}
   function card(product,title,lead){style();const id='day3-ai-'+product.toLowerCase();byId(id)?.remove();const host=resultHost(product);if(!host)return null;byId('day3-ai-failure-'+product.toLowerCase())?.remove();const node=document.createElement('section');node.id=id;node.className='day3-ai-card '+PRIMARY_MARKER;addText(node,'div','GALVIENGINE™ | GOVERNED BUSINESS HEALTH INTELLIGENCE','day3-ai-eyebrow');addText(node,'h2',title);addText(node,'p',lead,'day3-ai-lead');host.insertBefore(node,host.firstChild);return node}
-  function projectionFailure(product,error){style();const host=resultHost(product);if(!host)return;const id='day3-ai-failure-'+product.toLowerCase();byId(id)?.remove();const node=document.createElement('div');node.id=id;node.className='day3-ai-failure';node.textContent='QA GOVERNED-AI GATE: '+product+' deterministic fallback remains available, but governed intelligence was not projected in this run. Day 3 Human E2E must not be marked PASS. '+text(error?.code||'')+' '+text(error?.message||error);host.insertBefore(node,host.firstChild)}
+  function projectionFailure(product,error){style();const host=resultHost(product);if(!host)return false;const id='day3-ai-failure-'+product.toLowerCase();const message='QA GOVERNED-AI GATE: '+product+' deterministic fallback remains available, but governed intelligence was not projected in this run. Day 3 Human E2E must not be marked PASS. '+text(error?.code||'')+' '+text(error?.message||error);const existing=byId(id);if(existing&&existing.textContent===message)return false;if(existing){existing.textContent=message;return true}const node=document.createElement('div');node.id=id;node.className='day3-ai-failure';node.textContent=message;host.insertBefore(node,host.firstChild);return true}
   function metaLine(node,response){const meta=response?.meta||{};const p=document.createElement('p');p.className='day3-ai-meta';p.textContent='Evidence-grounded • '+(response?.data?.generation_source==='stored'?'Longitudinal result restored':'New governed analysis')+' • '+text(meta.model||'GalviEngine model')+' • '+text(meta.prompt_version||'versioned prompt');node.appendChild(p)}
   function generationId(response){return text(response?.data?.generation_id||response?.data?.artifact_id||response?.meta?.provider_response_id||'accepted')}
   function invalidProjection(code,message){const error=new Error(message);error.code=code;throw error}
@@ -195,13 +197,15 @@ const DAY3_CUSTOMER_BRIDGE_SOURCE = String.raw`(()=>{
   async function enrich(product){
     const legacy=scoreResult();const key=product+':'+session()+':'+JSON.stringify({score:legacy?.galviscore_score,confidence:legacy?.galviscore_confidence,dimensions:legacy?.category_scores});
     if(rendered.get(product)===key&&primaryProjectionPresent(product))return;
+    if(terminalPreconditions.get(product)===key)return;
     if(inflight.has(key))return;
-    const op=(async()=>{try{const ref=await ensureCanonicalContext();await ensureCanonicalDay2(ref);const response=await reason(product,ref);render(product,response);rendered.set(product,key);console.info(SIGNATURE,product,'primary governed projection',response?.data?.generation_source,response?.meta?.ai_status||'',ref.identity_source)}catch(error){projectionFailure(product,error);console.warn(SIGNATURE,product,'not projected:',error?.code||'',error?.message||error)}})();
+    const op=(async()=>{try{const ref=await ensureCanonicalContext();await ensureCanonicalDay2(ref);const response=await reason(product,ref);render(product,response);terminalPreconditions.delete(product);rendered.set(product,key);console.info(SIGNATURE,product,'primary governed projection',response?.data?.generation_source,response?.meta?.ai_status||'',ref.identity_source)}catch(error){const code=text(error?.code);if(TERMINAL_PRECONDITION_CODES.has(code))terminalPreconditions.set(product,key);projectionFailure(product,error);if(TERMINAL_PRECONDITION_CODES.has(code))console.info(SIGNATURE,product,'projection deferred until browser preconditions change:',code);else console.warn(SIGNATURE,product,'not projected:',code,error?.message||error)}})();
     inflight.set(key,op);try{await op}finally{inflight.delete(key)}
   }
 
   function visible(node){if(!node)return false;const s=getComputedStyle(node);return !node.classList.contains('hidden')&&s.display!=='none'&&s.visibility!=='hidden'}
-  function scan(){patchLegacyScoreAction();if(visible(byId('galvishot-result')))enrich('GalviShot');if(visible(byId('galvisight-result-panel')))enrich('GalviSight');if(visible(byId('galvipath-result-panel')))enrich('GalviPath')}
+  function chartProjectionActive(){return visible(byId('galvichart-day4'))}
+  function scan(){patchLegacyScoreAction();if(chartProjectionActive())return;if(visible(byId('galvishot-result')))enrich('GalviShot');if(visible(byId('galvisight-result-panel')))enrich('GalviSight');if(visible(byId('galvipath-result-panel')))enrich('GalviPath')}
   function init(){patchLegacyScoreAction();scan();const observer=new MutationObserver(()=>queueMicrotask(scan));observer.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style']});let count=0;const timer=setInterval(()=>{scan();if(++count>240)clearInterval(timer)},500)}
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init,{once:true});else init();
   window.GalviCareDay3GovernedAI={enrich,ensureCanonicalContext,ensureCanonicalDay2,patchLegacyScoreAction,assertLegacyScoreContract,assertPrimaryProjection,renderShotPrimary,renderPathPrimary,primaryProjectionPresent,signature:SIGNATURE,sessionHeader:SESSION_HEADER};

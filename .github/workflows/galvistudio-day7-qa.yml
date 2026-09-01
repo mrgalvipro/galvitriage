@@ -76,7 +76,7 @@ jobs:
           while IFS= read -r path; do
             [ -z "$path" ] && continue
             case "$path" in
-              docs/*|release-evidence/day7/*|release-evidence/day8/qa-deployment-current.json|clinician-portal/day7-prefounder-queue.js|clinician-portal/day7-membership.js|clinician-portal/day7-customer-access.js|clinician-portal/index.html|scripts/day7-codex-bootstrap.sh|scripts/day7-deployed-release-e2e.mjs|tests/day7-branchless-release-gate.test.mjs|tests/day7-release-critical.test.mjs|tests/day7-customer-access.test.mjs|tests/day8-clinician-workspace.test.mjs|tests/day1-prefounder-customer.test.mjs|day1-prefounder-customer.js|day5-customer-care-routing.js|qa-frontend-worker.js|worker/day7-entry.js|worker/day7-customer-entry.js|worker/day8-day6-entry.js|worker/day8-day7-entry.js|worker/routes/day7-release.js|worker/routes/operator-workspace.js|worker/domain/day7-membership-service.js|worker/domain/day7-customer-access-service.js|migrations/day1/0700_day7_release_membership.sql|wrangler.day7.json|wrangler.day8.json|.github/workflows/galvistudio-day7-qa.yml|.github/workflows/galvivault-day8-qa.yml)
+              docs/*|release-evidence/day7/*|release-evidence/day8/qa-deployment-current.json|clinician-portal/day7-prefounder-queue.js|clinician-portal/day7-membership.js|clinician-portal/day7-customer-access.js|clinician-portal/index.html|scripts/day7-codex-bootstrap.sh|scripts/day7-deployed-release-e2e.mjs|tests/day7-branchless-release-gate.test.mjs|tests/day7-release-critical.test.mjs|tests/day7-customer-access.test.mjs|tests/day8-clinician-workspace.test.mjs|tests/day1-prefounder-customer.test.mjs|day1-prefounder-customer.js|day3-governed-ai-customer-bridge.mjs|day5-customer-care-routing.js|qa-frontend-worker.js|worker/day7-entry.js|worker/day7-customer-entry.js|worker/day8-day6-entry.js|worker/day8-day7-entry.js|worker/routes/day7-release.js|worker/routes/operator-workspace.js|worker/domain/day7-membership-service.js|worker/domain/day7-customer-access-service.js|migrations/day1/0700_day7_release_membership.sql|wrangler.day7.json|wrangler.day8.json|.github/workflows/galvistudio-day7-qa.yml|.github/workflows/galvivault-day8-qa.yml)
                 ;;
               *) echo "STOP: unapproved Day 7 delta: $path"; unexpected=1 ;;
             esac
@@ -98,6 +98,7 @@ jobs:
         run: |
           set -euo pipefail
           node --check day1-prefounder-customer.js
+          node --check day3-governed-ai-customer-bridge.mjs
           node --check qa-frontend-worker.js
           node --check clinician-portal/day7-prefounder-queue.js
           node --check clinician-portal/day7-membership.js
@@ -158,7 +159,7 @@ jobs:
           grep -Fq 'PRE-FOUNDER CLOSED LOOP' dist-qa/index.html
           grep -Fq 'Returning Patient? Log in to GalviCare' qa-frontend-worker.js
           ! grep -Fq 'https://galvicare-0-5-production.mrgalvipro.workers.dev' dist-qa/index.html
-          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}' day1-prefounder-customer.js qa-frontend-worker.js day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-score-metadata.js day5-customer-care-routing.js day5-customer-active-care.js clinician-portal/day7-prefounder-queue.js clinician-portal/day7-membership.js clinician-portal/day7-customer-access.js worker/day7-entry.js worker/day7-customer-entry.js worker/day8-day6-entry.js worker/day8-day7-entry.js worker/routes/day7-release.js worker/routes/operator-workspace.js worker/domain/day7-membership-service.js worker/domain/day7-customer-access-service.js
+          ! grep -RniE 'api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}' day1-prefounder-customer.js day3-governed-ai-customer-bridge.mjs qa-frontend-worker.js day4-galvichart-browser.js day4-customer-experience-hardening.js day4-single-current-governed-product.js day5-score-metadata.js day5-customer-care-routing.js day5-customer-active-care.js clinician-portal/day7-prefounder-queue.js clinician-portal/day7-membership.js clinician-portal/day7-customer-access.js worker/day7-entry.js worker/day7-customer-entry.js worker/day8-day6-entry.js worker/day8-day7-entry.js worker/routes/day7-release.js worker/routes/operator-workspace.js worker/domain/day7-membership-service.js worker/domain/day7-customer-access-service.js
 
       - name: Prove exact QA Worker and canonical D1 binding
         shell: bash
