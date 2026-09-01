@@ -29,6 +29,16 @@ test('Business Physician can issue a patient GalviChart update without activatin
   assert.doesNotMatch(ui,/membership-payment-return|membership\/start|STRIPE_SECRET_KEY|api\.stripe\.com/);
 });
 
+test('Membership clinician surface is Care Plan only and loads the patient-access action',()=>{
+  const ui=read('clinician-portal/day7-membership.js');
+  assert.match(ui,/data-day7-membership-surface="care-plan-only"/);
+  assert.match(ui,/\^Current Care\$/);
+  assert.match(ui,/carePlanContext/);
+  assert.match(ui,/ensureCustomerAccessScript/);
+  assert.match(ui,/day7-customer-access\.js/);
+  assert.doesNotMatch(ui,/treatmentForm=panel\.querySelector\('#treatment_event,#plan'\)/);
+});
+
 test('HubSpot notification remains an optional non-blocking adapter',()=>{
   const svc=read('worker/domain/day7-customer-access-service.js');
   assert.match(svc,/HUBSPOT_PRIVATE_APP_TOKEN/);assert.match(svc,/HUBSPOT_TRANSACTIONAL_EMAIL_ID/);assert.match(svc,/marketing\/v3\/transactional\/single-email\/send/);assert.match(svc,/skipped_not_configured/);
