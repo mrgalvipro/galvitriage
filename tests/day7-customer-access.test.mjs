@@ -15,6 +15,12 @@ test('returning customer access is additive, hashed, queue-scoped, and same-reco
   assert.doesNotMatch(svc,/localStorage|document\.|window\./);
 });
 
+test('customer access audit SQL has exact gv1_audit_log value arity',()=>{
+  const svc=read('worker/domain/day7-customer-access-service.js');
+  assert.match(svc,/VALUES \(\?,\?,\?,\?,NULL,NULL,\?,'day7-customer-access',\?,\?,\?,\?,\?,\?\)/);
+  assert.doesNotMatch(svc,/VALUES \(\?,\?,\?,\?,NULL,NULL,\?,'day7-customer-access',\?,\?,\?,\?,\?,\?,\?\)/);
+});
+
 test('GalviCare QA exposes login beneath intake without turning login into a new GalviTriage event',()=>{
   const ui=read('qa-frontend-worker.js');
   for(const marker of ['Returning Patient? Log in to GalviCare','Log in & View GalviChart','customer-access/login','customer-access/activate','persistSessionId','GalviChartDay4.open','If no care item is waiting, begin a new GalviTriage visit below'])assert.ok(ui.includes(marker),marker);
