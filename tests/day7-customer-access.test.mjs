@@ -35,6 +35,16 @@ test('returning patient invite hash is parsed without consuming the GalviTriage 
   assert.doesNotMatch(ui,/new URLSearchParams\(raw\.replace\(\/\^galvitriage&\?\//);
 });
 
+test('customer activation commits account invite session and audit in one D1 batch and fails closed',()=>{
+  const svc=read('worker/domain/day7-customer-access-service.js');
+  for(const marker of ['activationAccountState','prepareSession','GV_CUSTOMER_ACCOUNT_IDENTITY_CONFLICT','GV_CUSTOMER_ACTIVATION_WRITE_FAILED','activation_transaction'])assert.ok(svc.includes(marker),marker);
+  assert.match(svc,/if\(accountState\.insert\)statements\.push\(accountState\.insert\)/);
+  assert.match(svc,/sessionState\.insert/);
+  assert.match(svc,/sessionState\.audit/);
+  assert.match(svc,/await env\.DB\.batch\(statements\)/);
+  assert.doesNotMatch(svc,/await env\.DB\.prepare\(`INSERT INTO gv1_customer_accounts[\s\S]*?\.run\(\);account=/);
+});
+
 test('Business Physician can issue a patient GalviChart update without activating Membership',()=>{
   const wrapper=read('worker/day8-day7-entry.js'),ui=read('clinician-portal/day7-customer-access.js');
   assert.match(wrapper,/requireClinicianIdentity/);assert.match(wrapper,/identity\.role!==\'business_physician\'/);assert.match(wrapper,/customer-access-invite/);assert.match(wrapper,/day8Day6Worker\.fetch/);
