@@ -57,7 +57,7 @@ test('customer activation is retry-safe and fail-closed across staged D1 commit 
     'GV_CUSTOMER_ACCOUNT_BOOTSTRAP_FAILED','GV_CUSTOMER_PASSWORD_DERIVATION_FAILED',
     'GV_CUSTOMER_SESSION_LINEAGE_LOOKUP_FAILED','GV_CUSTOMER_ACTIVATION_PREPARE_FAILED',
     'GV_CUSTOMER_ACTIVATION_WRITE_FAILED','activation_session_commit','activation_finalize',
-    'automatic_compensation','staged_fail_closed_session_then_atomic_invite_audit_with_compensation'
+    'automatic_compensation','staged_fail_closed_session_then_atomic_credential_invite_audit_with_compensation'
   ])assert.ok(svc.includes(marker),marker);
   assert.match(svc,/await env\.DB\.prepare\(`INSERT INTO gv1_customer_accounts[\s\S]*?\.run\(\)/);
   assert.match(svc,/const raced=await resolveAccount/);
@@ -67,6 +67,15 @@ test('customer activation is retry-safe and fail-closed across staged D1 commit 
   assert.match(svc,/Your invitation remains retryable/);
   assert.match(svc,/manual_repair:'NO'/);
   assert.doesNotMatch(svc,/if\(accountState\.insert\)statements\.push\(accountState\.insert\)/);
+});
+
+test('secure invitation establishes the verifier used by later plain-URL returning login even when the canonical account already exists',()=>{
+  const svc=read('worker/domain/day7-customer-access-service.js');
+  assert.match(svc,/if\(state\.account\)\{[\s\S]*?const credential=await encodePassword\(password\);[\s\S]*?credential_refresh:credential/);
+  assert.match(svc,/UPDATE gv1_customer_accounts SET password_salt=\?,password_hash=\?,password_iterations=\?,password_version=\?/);
+  assert.match(svc,/credential_established:true/);
+  assert.match(svc,/const ok=await verifyPassword\(password,account\)/);
+  assert.match(svc,/activation_write_contract:'staged_fail_closed_session_then_atomic_credential_invite_audit_with_compensation'/);
 });
 
 test('Business Physician can issue a patient GalviChart update without activating Membership',()=>{
@@ -103,21 +112,13 @@ test('normal GalviTriage email is the canonical returning-login identity',()=>{
   assert.match(svc,/email_normalized=\?/);
 });
 
-test('Maya Ellis Day 7 synthetic BMR fixture is reconciled source-controlled, primary, idempotent, and manual_repair NO',()=>{
-  const fixture=read('migrations/day1/0700_day7_release_membership.sql');
-  assert.match(fixture,/bmr_0d72e878cc634917ae2ac8430a73331f/);
-  assert.match(fixture,/maya\.ellis\.day7\.e2e@example\.com/);
-  assert.match(fixture,/UPDATE founders/);
-  assert.match(fixture,/UPDATE gv1_founders/);
-  assert.match(fixture,/UPDATE gv1_customer_accounts/);
-  assert.match(fixture,/is_primary=1/);
-  assert.match(fixture,/qa_fixture_identity_reconciled/);
-  assert.match(fixture,/manual_repair/);
-  assert.match(fixture,/"NO"/);
-  assert.match(fixture,/D7MAYA1/);
-  assert.match(fixture,/invalid_fixture_identity/);
-  assert.match(fixture,/Postcondition guard/);
-  assert.doesNotMatch(fixture,/DELETE FROM|DROP TABLE|DROP COLUMN|ALTER TABLE .* RENAME/i);
+test('Day 7 production-target migration never hardcodes or rewrites a named Human-E2E patient identity',()=>{
+  const migration=read('migrations/day1/0700_day7_release_membership.sql');
+  assert.match(migration,/QA fixture-specific proof belongs in release evidence/);
+  assert.match(migration,/manual_repair=NO/);
+  assert.doesNotMatch(migration,/Maya Ellis|maya\.ellis|Brightline Growth Studio|bmr_0d72e878cc634917ae2ac8430a73331f/i);
+  assert.doesNotMatch(migration,/UPDATE founders\s+SET email|UPDATE gv1_founders\s+SET email|UPDATE gv1_customer_accounts\s+SET email_normalized/i);
+  assert.doesNotMatch(migration,/DELETE FROM|DROP TABLE|DROP COLUMN|ALTER TABLE .* RENAME/i);
 });
 
 test('Membership clinician surface is Care Plan only and loads the patient-access action',()=>{
