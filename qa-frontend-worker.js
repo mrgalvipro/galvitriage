@@ -55,7 +55,7 @@ const CUSTOMER_ACCESS_PATCH=`(()=>{
   const text=v=>String(v??'').trim();
   const esc=v=>String(v??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
   let working=false;
-  function inviteToken(){try{const raw=text(location.hash).replace(/^#/,'');const p=new URLSearchParams(raw.replace(/^galvitriage&?/,'galvitriage='));return text(p.get('galviaccess'));}catch{return''}}
+  function inviteToken(){try{const raw=text(location.hash).replace(/^#/,'');const match=raw.match(/(?:^|&)galviaccess=([^&]+)/);return text(match?.[1]?decodeURIComponent(match[1]):'');}catch{return''}}
   function cleanInvite(){try{const raw=text(location.hash).replace(/^#/,'');const pieces=raw.split('&').filter(x=>!x.startsWith('galviaccess='));history.replaceState(null,'',location.pathname+location.search+'#'+(pieces.join('&')||'galvitriage'));}catch{}}
   async function api(path,body){const r=await fetch(BASE+path,{method:'POST',cache:'no-store',headers:{Accept:'application/json','Content-Type':'application/json','Cache-Control':'no-cache','X-Correlation-Id':'day7-return-'+crypto.randomUUID()},body:JSON.stringify(body||{})});let p={};try{p=await r.json()}catch{}if(!r.ok||p?.success===false){const e=new Error(p?.error?.message||'Unable to access your GalviCare record.');e.code=p?.error?.code||'';e.status=r.status;throw e}return p.data||{}}
   function persistLegacy(sid){if(typeof window.persistSessionId!=='function')throw new Error('GalviCare session continuity is unavailable.');window.persistSessionId(sid);localStorage.setItem('galvitriage_session_submitted','true');}
