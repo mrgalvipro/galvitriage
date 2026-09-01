@@ -21,6 +21,8 @@
     "BUSINESS_PHYSICIAN_EMAIL": "galvipro@outlook.com",
     "BUSINESS_PHYSICIAN_ENROLLMENT_HASH": "yO5Kcg31WykJ3OK30rVmUIwfjwI693_ceZkW_1CpbcA",
     "GALVICARE_CUSTOMER_URL": "https://galvicare-0-5-qa.mrgalvipro.workers.dev/#galvitriage",
+    "DAY7_BUSINESS_HEALTH_MEMBERSHIP": "server_governed_beta_v1",
+    "DAY7_CUSTOMER_ACCESS": "business_physician_queue_only_v1",
     "ALLOWED_ORIGINS": "https://galvivault-day8-qa.mrgalvipro.workers.dev,https://clinician-qa.galvipro.com,http://localhost:8788"
   },
   "d1_databases": [
