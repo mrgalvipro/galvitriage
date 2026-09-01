@@ -76,6 +76,21 @@ test('Business Physician can issue a patient GalviChart update without activatin
   assert.doesNotMatch(ui,/membership-payment-return|membership\/start|STRIPE_SECRET_KEY|api\.stripe\.com/);
 });
 
+test('clinician invite response exposes the canonical returning-patient login email only to the authenticated Business Physician workflow',()=>{
+  const svc=read('worker/domain/day7-customer-access-service.js'),ui=read('clinician-portal/day7-customer-access.js'),wrapper=read('worker/day8-day7-entry.js');
+  assert.match(svc,/const loginEmail=lower\(queue\.canonical\.email\)/);
+  assert.match(svc,/GV_CUSTOMER_LOGIN_EMAIL_MISSING/);
+  assert.match(svc,/login_email:loginEmail/);
+  assert.match(svc,/email:loginEmail\.replace/);
+  assert.match(ui,/Returning-patient login email:/);
+  assert.match(ui,/data\.login_email/);
+  assert.match(ui,/Copy Login Email/);
+  assert.match(ui,/same canonical email shown above with the password created during first-login activation/);
+  assert.match(wrapper,/requireClinicianIdentity/);
+  assert.match(wrapper,/identity\.role!==\'business_physician\'/);
+  assert.doesNotMatch(read('qa-frontend-worker.js'),/login_email/);
+});
+
 test('Membership clinician surface is Care Plan only and loads the patient-access action',()=>{
   const ui=read('clinician-portal/day7-membership.js');
   assert.match(ui,/data-day7-membership-surface="care-plan-only"/);

@@ -179,6 +179,7 @@ async function hubSpotNotification(env,email,activationUrl){
 export async function issueCustomerAccessInvite(env,ctx,identity,bmrId,key){
   if(identity?.role!=='business_physician')throw new GVError('GV_AUTH_FORBIDDEN','Business Physician authorization is required to issue customer record access.',403);
   const queue=await queueStateForBmr(env.DB,bmrId);if(!queue.eligible)throw new GVError('GV_CUSTOMER_ACCESS_NOT_QUEUED','Customer GalviChart access opens only when Business Physician care is waiting or Continuous Care is active.',409);
+  const loginEmail=lower(queue.canonical.email);if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(loginEmail))throw new GVError('GV_CUSTOMER_LOGIN_EMAIL_MISSING','The canonical customer record does not contain a usable login email. Correct the governed identity record before issuing access.',409);
   const legacySessionId=await legacySessionFor(env.DB,queue.canonical),fp=await hash(INVITE_SCOPE,{principal_id:queue.canonical.founder_id,bmr_id:queue.canonical.bmr_id,source_entity_id:queue.source_entity_id});
   const receipt=await first(env.DB,`SELECT request_fingerprint FROM gv1_idempotency_keys WHERE scope=? AND idempotency_key=? LIMIT 1`,INVITE_SCOPE,key);
   if(receipt&&receipt.request_fingerprint!==fp)throw new GVError('GV_IDEMPOTENCY_REUSE_MISMATCH','Idempotency key was reused for different customer access.',409);
@@ -190,8 +191,8 @@ export async function issueCustomerAccessInvite(env,ctx,identity,bmrId,key){
     env.DB.prepare(`INSERT INTO gv1_idempotency_keys(idempotency_id,scope,idempotency_key,request_fingerprint,response_status,response_entity_type,response_entity_id,created_at) VALUES(?,?,?,?,201,'customer_access_invite',?,?)`).bind(newId('idem'),INVITE_SCOPE,key,fp,inviteHash,ts),
     audit(env.DB,ctx,'business_physician','customer_access_invite',inviteHash,'issue',{principal_id:queue.canonical.founder_id,bmr_id:queue.canonical.bmr_id,source_entity_id:queue.source_entity_id,queue_reason:queue.reason,manual_repair:'NO'},'galvichart_update_available')
   ]);
-  const hubspot=await hubSpotNotification(env,queue.canonical.email,activationUrl);
-  return {activation_url:activationUrl,expires_at:expires,email:queue.canonical.email.replace(/^(.).+(@.*)$/,'$1***$2'),bmr_id:queue.canonical.bmr_id,queue_reason:queue.reason,hubspot,manual_repair:'NO'};
+  const hubspot=await hubSpotNotification(env,loginEmail,activationUrl);
+  return {activation_url:activationUrl,expires_at:expires,login_email:loginEmail,email:loginEmail.replace(/^(.).+(@.*)$/,'$1***$2'),bmr_id:queue.canonical.bmr_id,queue_reason:queue.reason,hubspot,manual_repair:'NO'};
 }
 
 export async function activateCustomerAccess(env,ctx,input){
