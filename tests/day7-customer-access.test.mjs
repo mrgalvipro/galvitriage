@@ -104,7 +104,7 @@ test('normal GalviTriage email is the canonical returning-login identity',()=>{
 });
 
 test('Maya Ellis Day 7 synthetic BMR fixture is reconciled source-controlled, primary, idempotent, and manual_repair NO',()=>{
-  const fixture=read('migrations/day8/0007_second_galviclinician_invitation.sql');
+  const fixture=read('migrations/day1/0700_day7_release_membership.sql');
   assert.match(fixture,/bmr_0d72e878cc634917ae2ac8430a73331f/);
   assert.match(fixture,/maya\.ellis\.day7\.e2e@example\.com/);
   assert.match(fixture,/UPDATE founders/);
@@ -115,7 +115,7 @@ test('Maya Ellis Day 7 synthetic BMR fixture is reconciled source-controlled, pr
   assert.match(fixture,/manual_repair/);
   assert.match(fixture,/"NO"/);
   assert.match(fixture,/D7MAYA1/);
-  assert.match(fixture,/Precondition guard/);
+  assert.match(fixture,/invalid_fixture_identity/);
   assert.match(fixture,/Postcondition guard/);
   assert.doesNotMatch(fixture,/DELETE FROM|DROP TABLE|DROP COLUMN|ALTER TABLE .* RENAME/i);
 });
