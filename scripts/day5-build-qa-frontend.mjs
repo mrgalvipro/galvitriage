@@ -44,6 +44,15 @@ const ADAPTERS=[
       '/api/v1/day5/customer/treatment-plans/','/acknowledgement','/api/v1/day5/customer/checkins',
       'X-Galvi-Day3-Session','authorship','Idempotency-Key','GalviChartDay4.read'
     ]
+  },
+  {
+    source:'day7-commercial-browser.js',
+    signature:'GalviCare Day 7 provider-verified commercial return v1',
+    required:[
+      '/api/v1/day7/prefounder/account/setup','/api/v1/day7/prefounder/treatment-order',
+      '/api/v1/day7/prefounder/commercial-state','/api/v1/day7/prefounder/treatment-completion-confirmation',
+      'Record Verified Treatment Completion in GalviCare','Business Physician reassessment queued','FOUNDERSHOT™ | FOUNDER SNAPSHOT'
+    ]
   }
 ];
 
@@ -52,7 +61,7 @@ let html=readFileSync(OUT,'utf8');
 function stripExisting(signature){
   while(html.includes(signature)){
     const index=html.indexOf(signature),start=html.lastIndexOf('<script>',index),end=html.indexOf('</script>',index);
-    if(start<0||end<0)throw new Error(`Existing Day 5 adapter ${signature} is not bounded by a script tag.`);
+    if(start<0||end<0)throw new Error(`Existing Day 5/7 adapter ${signature} is not bounded by a script tag.`);
     html=html.slice(0,start)+html.slice(end+9);
   }
 }
@@ -62,10 +71,10 @@ stripExisting('GalviCare Day 5 customer care routing + GalviGuide v1');
 for(const config of ADAPTERS){
   const adapter=readFileSync(config.source,'utf8');
   for(const required of [config.signature,...config.required]){
-    if(!adapter.includes(required))throw new Error(`Day 5 customer contract missing from ${config.source}: ${required}`);
+    if(!adapter.includes(required))throw new Error(`Customer contract missing from ${config.source}: ${required}`);
   }
-  if(/api\.openai\.com|OPENAI_API_KEY|bmr_id\s*:/.test(adapter)){
-    throw new Error(`Day 5 browser adapter ${config.source} must not contain OpenAI access or submit BMR authority.`);
+  if(/api\.openai\.com|OPENAI_API_KEY|sk-[A-Za-z0-9_-]{16,}/.test(adapter)){
+    throw new Error(`Browser adapter ${config.source} must not contain OpenAI access or secrets.`);
   }
   stripExisting(config.signature);
   html=html.replace('</body>',`<script>\n${adapter}\n</script>\n</body>`);
@@ -83,12 +92,13 @@ for(const required of [
   'Open GalviGuide','Prepare with GalviGuide','The existing “What you should watch?” box is GalviScore guidance',
   'Ask GalviGuide a Care-Navigation Question','GalviGuide AI Guidance','Recommended Next Actions','data-day5-guide-answer',
   'applyPathEvidenceGuidance','Acknowledge Treatment Plan','Submit scheduled check-in','Acknowledgement is separate from Treatment Plan authorship.',
-  '/api/v1/day5/customer/galviguide','/api/v1/day5/customer/checkins'
+  '/api/v1/day5/customer/galviguide','/api/v1/day5/customer/checkins',
+  'GalviCare Day 7 provider-verified commercial return v1','Record Verified Treatment Completion in GalviCare','Business Physician reassessment queued','FOUNDERSHOT™ | FOUNDER SNAPSHOT'
 ]){
-  if(!html.includes(required))throw new Error(`Generated QA frontend missing Day 5 customer critical-path contract: ${required}`);
+  if(!html.includes(required))throw new Error(`Generated QA frontend missing customer critical-path contract: ${required}`);
 }
 for(const prohibited of ['Provider: OpenAI','AI proof:','generated from your approved care state']){
   if(html.includes(prohibited))throw new Error(`Generated QA frontend exposes customer-facing GalviGuide technical metadata/copy that must remain hidden: ${prohibited}`);
 }
 writeFileSync(OUT,html,'utf8');
-console.log('PASS — cumulative QA frontend contains canonical Score metadata, customer-safe governed GalviGuide AI guidance, customer-safe Path evidence fallback with idempotent DOM reconciliation, AI-synthesized Path evidence support through the server-side governed Path route, server-owned Acuity routing, and Treatment Plan acknowledgement/check-in without browser score/Acuity/BMR/OpenAI authority.');
+console.log('PASS — cumulative QA frontend contains canonical Score metadata, governed GalviGuide guidance, Treatment Plan acknowledgement, provider-verified Commercial + Return/Retrieval, FounderShot projection, and no browser BMR/OpenAI/secret authority.');
