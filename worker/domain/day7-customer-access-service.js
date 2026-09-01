@@ -18,6 +18,17 @@ const randomToken=prefix=>`${prefix}${crypto.randomUUID().replaceAll('-','')}${c
 const bytesToB64url=bytes=>btoa(String.fromCharCode(...bytes)).replaceAll('+','-').replaceAll('/','_').replace(/=+$/,'');
 const b64urlToBytes=value=>{const raw=clean(value).replaceAll('-','+').replaceAll('_','/');const padded=raw+'='.repeat((4-raw.length%4)%4);return Uint8Array.from(atob(padded),c=>c.charCodeAt(0));};
 const safeEqual=(a,b)=>{if(a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a[i]^b[i];return diff===0;};
+function classifyD1Failure(error){
+  const m=clean(error?.message).toLowerCase();
+  const target=m.includes('gv1_customer_login_sessions')?'session':m.includes('gv1_customer_login_invites')?'invite':m.includes('gv1_customer_accounts')?'account':m.includes('gv1_audit_log')?'audit':'unknown';
+  if(m.includes('foreign key'))return {code:'GV_CUSTOMER_ACTIVATION_FOREIGN_KEY_FAILED',kind:'foreign_key',target};
+  if(m.includes('unique constraint')||m.includes('constraint failed')&&m.includes('unique'))return {code:'GV_CUSTOMER_ACTIVATION_UNIQUE_FAILED',kind:'unique',target};
+  if(m.includes('not null'))return {code:'GV_CUSTOMER_ACTIVATION_NOT_NULL_FAILED',kind:'not_null',target};
+  if(m.includes('check constraint'))return {code:'GV_CUSTOMER_ACTIVATION_CHECK_FAILED',kind:'check',target};
+  if(m.includes('bind')||m.includes('parameter'))return {code:'GV_CUSTOMER_ACTIVATION_BIND_FAILED',kind:'bind',target};
+  if(m.includes('d1_error')||m.includes('d1'))return {code:'GV_CUSTOMER_ACTIVATION_D1_FAILED',kind:'d1',target};
+  return {code:'GV_CUSTOMER_ACTIVATION_WRITE_FAILED',kind:'unknown',target};
+}
 
 async function passwordDigest(password,salt,iterations=PASSWORD_ITERATIONS){
   const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
@@ -196,7 +207,8 @@ export async function activateCustomerAccess(env,ctx,input){
       ]);
     }catch(error){
       if(error instanceof GVError)throw error;
-      throw new GVError('GV_CUSTOMER_ACTIVATION_WRITE_FAILED','Secure GalviCare activation could not be completed. Your invitation remains retryable.',503,{stage:'activation_transaction',manual_repair:'NO'},true);
+      const failure=classifyD1Failure(error);
+      throw new GVError(failure.code,'Secure GalviCare activation could not be completed. Your invitation remains retryable.',503,{stage:'activation_transaction',db_failure_class:failure.kind,db_target:failure.target,manual_repair:'NO'},true);
     }
     return {...sessionState.data,account_created:accountState.created};
   }catch(error){
