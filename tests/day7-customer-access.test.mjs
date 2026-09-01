@@ -35,21 +35,23 @@ test('returning patient invite hash is parsed without consuming the GalviTriage 
   assert.doesNotMatch(ui,/new URLSearchParams\(raw\.replace\(\/\^galvitriage&\?\//);
 });
 
-test('customer activation is retry-safe across D1 account bootstrap and atomically consumes invite with session',()=>{
+test('customer activation is retry-safe and fail-closed across staged D1 commit with automatic compensation',()=>{
   const svc=read('worker/domain/day7-customer-access-service.js');
   for(const marker of [
-    'resolveAccount','ensureActivationAccount','prepareSession',
+    'resolveAccount','ensureActivationAccount','prepareSession','revokeUnreturnedSession',
     'GV_CUSTOMER_ACCOUNT_IDENTITY_CONFLICT','GV_CUSTOMER_ACCOUNT_LOOKUP_FAILED',
     'GV_CUSTOMER_ACCOUNT_BOOTSTRAP_FAILED','GV_CUSTOMER_PASSWORD_DERIVATION_FAILED',
     'GV_CUSTOMER_SESSION_LINEAGE_LOOKUP_FAILED','GV_CUSTOMER_ACTIVATION_PREPARE_FAILED',
-    'GV_CUSTOMER_ACTIVATION_WRITE_FAILED','activation_transaction','activation_write_contract'
+    'GV_CUSTOMER_ACTIVATION_WRITE_FAILED','activation_session_commit','activation_finalize',
+    'automatic_compensation','staged_fail_closed_session_then_atomic_invite_audit_with_compensation'
   ])assert.ok(svc.includes(marker),marker);
   assert.match(svc,/await env\.DB\.prepare\(`INSERT INTO gv1_customer_accounts[\s\S]*?\.run\(\)/);
   assert.match(svc,/const raced=await resolveAccount/);
-  assert.match(svc,/await env\.DB\.batch\(\[/);
-  assert.match(svc,/sessionState\.insert/);
-  assert.match(svc,/sessionState\.audit/);
+  assert.match(svc,/await env\.DB\.batch\(\[sessionState\.insert,sessionState\.audit\]\)/);
+  assert.match(svc,/UPDATE gv1_customer_login_invites SET consumed_at=\?/);
+  assert.match(svc,/const compensated=await revokeUnreturnedSession/);
   assert.match(svc,/Your invitation remains retryable/);
+  assert.match(svc,/manual_repair:'NO'/);
   assert.doesNotMatch(svc,/if\(accountState\.insert\)statements\.push\(accountState\.insert\)/);
 });
 
