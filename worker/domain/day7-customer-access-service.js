@@ -2,7 +2,9 @@ import { GVError, clean, hash, newId, now, requireId } from '../day5-common.js';
 
 const INVITE_SCOPE='day7:customer-access:invite';
 const SESSION_SCOPE='day7:customer-access:session';
-const PASSWORD_ITERATIONS=210000;
+const WORKER_PBKDF2_MAX_ITERATIONS=100000;
+const PASSWORD_ITERATIONS=100000;
+const PASSWORD_VERSION=2;
 const INVITE_TTL_MS=24*60*60*1000;
 const SESSION_TTL_MS=12*60*60*1000;
 const MAX_FAILED_ATTEMPTS=5;
@@ -10,6 +12,9 @@ const LOCK_MS=15*60*1000;
 const PRODUCT='business_health_membership';
 const MEMBER_ALIASES=new Set(['business_health_membership','business_health_membership_beta','business-health-membership']);
 
+// Historical Day 7 defect marker: PASSWORD_ITERATIONS=210000 exceeded the
+// Cloudflare Workers WebCrypto PBKDF2 per-call maximum and caused deployed
+// activation to fail at password_derivation before any D1 account write.
 const first=(db,sql,...params)=>db.prepare(sql).bind(...params).first();
 const all=async(db,sql,...params)=>(await db.prepare(sql).bind(...params).all())?.results||[];
 const lower=v=>clean(v).toLowerCase();
@@ -31,8 +36,10 @@ function classifyD1Failure(error){
 }
 
 async function passwordDigest(password,salt,iterations=PASSWORD_ITERATIONS){
+  const count=Number(iterations)||PASSWORD_ITERATIONS;
+  if(!Number.isInteger(count)||count<100000||count>WORKER_PBKDF2_MAX_ITERATIONS)throw new Error('Unsupported Cloudflare Workers PBKDF2 iteration count.');
   const key=await crypto.subtle.importKey('raw',new TextEncoder().encode(password),'PBKDF2',false,['deriveBits']);
-  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations},key,256);
+  const bits=await crypto.subtle.deriveBits({name:'PBKDF2',hash:'SHA-256',salt,iterations:count},key,256);
   return new Uint8Array(bits);
 }
 async function encodePassword(password){
@@ -41,16 +48,25 @@ async function encodePassword(password){
   try{
     const salt=crypto.getRandomValues(new Uint8Array(24));
     const digest=await passwordDigest(value,salt);
-    return {salt:bytesToB64url(salt),digest:bytesToB64url(digest),iterations:PASSWORD_ITERATIONS};
+    return {salt:bytesToB64url(salt),digest:bytesToB64url(digest),iterations:PASSWORD_ITERATIONS,version:PASSWORD_VERSION};
   }catch(error){
     if(error instanceof GVError)throw error;
-    throw new GVError('GV_CUSTOMER_PASSWORD_DERIVATION_FAILED','Secure GalviCare credentials could not be established. Please retry.',503,{stage:'password_derivation',manual_repair:'NO'},true);
+    throw new GVError('GV_CUSTOMER_PASSWORD_DERIVATION_FAILED','Secure GalviCare credentials could not be established. Please retry.',503,{stage:'password_derivation',password_kdf_version:PASSWORD_VERSION,password_iterations:PASSWORD_ITERATIONS,worker_pbkdf2_max_iterations:WORKER_PBKDF2_MAX_ITERATIONS,manual_repair:'NO'},true);
   }
 }
 async function verifyPassword(password,row){
   const supplied=clean(password);if(!supplied)return false;
   let salt,stored;try{salt=b64urlToBytes(row.password_salt);stored=b64urlToBytes(row.password_hash);}catch{return false;}
-  try{return safeEqual(await passwordDigest(supplied,salt,Number(row.password_iterations)||PASSWORD_ITERATIONS),stored);}catch{return false;}
+  const iterations=Number(row.password_iterations)||PASSWORD_ITERATIONS;
+  if(iterations>WORKER_PBKDF2_MAX_ITERATIONS)return false;
+  try{return safeEqual(await passwordDigest(supplied,salt,iterations),stored);}catch{return false;}
+}
+async function passwordKdfSelfTest(){
+  try{
+    const salt=new Uint8Array(24);for(let i=0;i<salt.length;i++)salt[i]=i+1;
+    const digest=await passwordDigest('GalviCare-Day7-KDF-Probe!',salt,PASSWORD_ITERATIONS);
+    return digest.length===32;
+  }catch{return false;}
 }
 function audit(db,ctx,actorType,entityType,entityId,operation,change,reasonCode){
   const ts=now();
@@ -114,7 +130,7 @@ async function ensureActivationAccount(env,ctx,invite,canonical,password){
   if(state.account)return state;
   const encoded=await encodePassword(password),accountId=newId('gca'),ts=now(),email=lower(canonical.email);
   try{
-    await env.DB.prepare(`INSERT INTO gv1_customer_accounts(account_id,principal_id,email_normalized,password_salt,password_hash,password_iterations,password_version,status,failed_attempts,locked_until,last_login_at,created_at,updated_at) VALUES(?,?,?,?,?,?,1,'active',0,NULL,NULL,?,?)`).bind(accountId,invite.principal_id,email,encoded.salt,encoded.digest,encoded.iterations,ts,ts).run();
+    await env.DB.prepare(`INSERT INTO gv1_customer_accounts(account_id,principal_id,email_normalized,password_salt,password_hash,password_iterations,password_version,status,failed_attempts,locked_until,last_login_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'active',0,NULL,NULL,?,?)`).bind(accountId,invite.principal_id,email,encoded.salt,encoded.digest,encoded.iterations,encoded.version,ts,ts).run();
   }catch(error){
     try{const raced=await resolveAccount(env.DB,invite,canonical);if(raced.account)return raced;}catch(inner){if(inner instanceof GVError)throw inner;}
     throw new GVError('GV_CUSTOMER_ACCOUNT_BOOTSTRAP_FAILED','Secure GalviCare account initialization could not be completed. Please retry.',503,{stage:'account_bootstrap',manual_repair:'NO'},true);
@@ -232,7 +248,8 @@ export async function loginCustomerAccess(env,ctx,input){
 
 export async function customerAccessReadiness(env){
   const tables=await all(env.DB,`SELECT name FROM sqlite_master WHERE type='table' AND name IN ('gv1_customer_accounts','gv1_customer_login_invites','gv1_customer_login_sessions') ORDER BY name`);
-  return {ready:tables.length===3,password_storage:'pbkdf2_sha256_salted_hash_only',password_iterations:PASSWORD_ITERATIONS,queue_scope:'business_health_membership_release_critical',hubspot_transactional_email_configured:Boolean(clean(env.HUBSPOT_PRIVATE_APP_TOKEN)&&clean(env.HUBSPOT_TRANSACTIONAL_EMAIL_ID)),tables:tables.map(x=>x.name),activation_write_contract:'staged_fail_closed_session_then_atomic_invite_audit_with_compensation',manual_repair:'NO'};
+  const kdfRuntimeReady=await passwordKdfSelfTest();
+  return {ready:tables.length===3&&kdfRuntimeReady,password_storage:'pbkdf2_sha256_salted_hash_only',password_kdf_version:PASSWORD_VERSION,password_iterations:PASSWORD_ITERATIONS,worker_pbkdf2_max_iterations:WORKER_PBKDF2_MAX_ITERATIONS,kdf_runtime_ready:kdfRuntimeReady,queue_scope:'business_health_membership_release_critical',hubspot_transactional_email_configured:Boolean(clean(env.HUBSPOT_PRIVATE_APP_TOKEN)&&clean(env.HUBSPOT_TRANSACTIONAL_EMAIL_ID)),tables:tables.map(x=>x.name),activation_write_contract:'staged_fail_closed_session_then_atomic_invite_audit_with_compensation',manual_repair:'NO'};
 }
 
 export const CUSTOMER_ACCESS_HEADER='X-Galvi-Customer-Access';

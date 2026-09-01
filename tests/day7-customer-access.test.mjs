@@ -8,11 +8,25 @@ test('returning customer access is additive, hashed, queue-scoped, and same-reco
   const svc=read('worker/domain/day7-customer-access-service.js');
   for(const table of ['gv1_customer_accounts','gv1_customer_login_invites','gv1_customer_login_sessions'])assert.match(sql,new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`));
   assert.match(sql,/password_salt TEXT NOT NULL/);assert.match(sql,/password_hash TEXT NOT NULL/);assert.doesNotMatch(sql,/password TEXT|plaintext_password/i);
-  for(const marker of ['PBKDF2','SHA-256','PASSWORD_ITERATIONS=210000','MAX_FAILED_ATTEMPTS=5','membership_recommended','active_membership','membership_reassessment','GalviShot','legacy_session_id','manual_repair:\'NO\''])assert.ok(svc.includes(marker),marker);
+  for(const marker of ['PBKDF2','SHA-256','WORKER_PBKDF2_MAX_ITERATIONS=100000','PASSWORD_ITERATIONS=100000','PASSWORD_VERSION=2','MAX_FAILED_ATTEMPTS=5','membership_recommended','active_membership','membership_reassessment','GalviShot','legacy_session_id','manual_repair:\'NO\''])assert.ok(svc.includes(marker),marker);
   assert.match(svc,/Customer GalviChart access opens only when Business Physician care is waiting or Continuous Care is active/);
   assert.match(svc,/There is no current Business Physician update waiting\. Complete GalviTriage to begin a new care event/);
   assert.match(svc,/More than one Business Health Record has an active care item/);
   assert.doesNotMatch(svc,/localStorage|document\.|window\./);
+});
+
+test('Cloudflare Worker password KDF stays within the deployed runtime cap and is readiness-probed before Human E2E',()=>{
+  const svc=read('worker/domain/day7-customer-access-service.js');
+  assert.match(svc,/const WORKER_PBKDF2_MAX_ITERATIONS=100000/);
+  assert.match(svc,/const PASSWORD_ITERATIONS=100000/);
+  assert.doesNotMatch(svc,/^const PASSWORD_ITERATIONS=210000;/m);
+  assert.match(svc,/passwordKdfSelfTest/);
+  assert.match(svc,/const kdfRuntimeReady=await passwordKdfSelfTest\(\)/);
+  assert.match(svc,/ready:tables\.length===3&&kdfRuntimeReady/);
+  assert.match(svc,/kdf_runtime_ready:kdfRuntimeReady/);
+  assert.match(svc,/worker_pbkdf2_max_iterations:WORKER_PBKDF2_MAX_ITERATIONS/);
+  assert.match(svc,/password_kdf_version:PASSWORD_VERSION/);
+  assert.match(svc,/encoded\.iterations,encoded\.version/);
 });
 
 test('customer access audit SQL has exact gv1_audit_log value arity',()=>{
