@@ -41,7 +41,7 @@ function audit(db,ctx,actorType,entityType,entityId,operation,change,reasonCode)
   const ts=now();
   return db.prepare(`INSERT INTO gv1_audit_log
     (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
-    VALUES (?,?,?,?,NULL,NULL,?,'day7-customer-access',?,?,?,?,?,?,?)`)
+    VALUES (?,?,?,?,NULL,NULL,?,'day7-customer-access',?,?,?,?,?,?)`)
     .bind(newId('aud'),entityType,entityId,operation,actorType,reasonCode||null,JSON.stringify(change||{}),ctx.correlation,ctx.environment,ts,ts);
 }
 async function canonicalForBmr(db,bmrId){
