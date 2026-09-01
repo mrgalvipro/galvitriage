@@ -31,12 +31,16 @@ test('Day 7 workflow uses existing QA only and owns critical release checks', ()
   const workflow = read('.github/workflows/galvistudio-day7-qa.yml');
   assert.match(workflow, /qa-revamped-galvicare-0-5/);
   assert.match(workflow, /workflow_dispatch/);
-  assert.match(workflow, /scripts\/day7-codex-bootstrap\.sh/);
+  assert.match(workflow, /DAY6_RUNTIME_CANDIDATE/);
+  assert.match(workflow, /day7-remote-branches\.txt/);
   assert.match(workflow, /scripts\/day7b-build-qa-frontend\.mjs/);
   assert.match(workflow, /tests\/day7-branchless-release-gate\.test\.mjs/);
   assert.match(workflow, /npm test/);
   assert.match(workflow, /day5:gate/);
+  assert.match(workflow, /day7d:gate/);
   assert.match(workflow, /tests\/day6-studio\.test\.mjs/);
   assert.match(workflow, /scripts\/day6-deployed-e2e\.mjs/);
+  assert.match(workflow, /0710_day7_commercial_return_foundershot\.sql/);
+  assert.match(workflow, /worker\/day7-commercial-entry\.js/);
   assert.doesNotMatch(workflow, /refs\/heads\/work|branches:\s*\[?work|git push --force/);
 });
