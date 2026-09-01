@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvivault-p0-day1-qa",
-  "main": "worker/day7-customer-entry.js",
+  "main": "worker/day7-commercial-entry.js",
   "compatibility_date": "2026-07-23",
   "workers_dev": true,
   "observability": { "enabled": true },
@@ -33,9 +33,13 @@
     "DAY6_SPUR": "three_track_six_stage_v1",
     "DAY6_GALVIPRO_PRACTICE": "galvipro_business_physician_practice_v1",
     "DAY7_MEMBERSHIP_SCHEMA": "D7A1",
+    "DAY7_COMMERCIAL_SCHEMA": "D7A2",
     "DAY7_BUSINESS_HEALTH_MEMBERSHIP": "server_governed_beta_v1",
     "DAY7_CUSTOMER_ACCESS": "business_physician_queue_only_v1",
+    "DAY7_COMMERCIAL_RETURN": "provider_verified_systeme_v1",
+    "DAY7_FOUNDER_SHOT": "governed_founder_mri_v1",
     "DAY7_QA_DEPLOYMENT_OWNER": "galvistudio_galvicare_release_v1",
+    "SYSTEME_ENFORCE_IP_ALLOWLIST": "false",
     "GALVICARE_CUSTOMER_URL": "https://galvicare-0-5-qa.mrgalvipro.workers.dev/#galvitriage",
     "GALVICLINIC_BOOKING_URL": "https://calendly.com/galvilpro/galviclinic-day7c-qa",
     "ALLOWED_ORIGINS": "https://galvipro.com,https://www.galvipro.com,https://galvicare-0-5-qa.mrgalvipro.workers.dev,http://localhost:8787,http://127.0.0.1:8787"
