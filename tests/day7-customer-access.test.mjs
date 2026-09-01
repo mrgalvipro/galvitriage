@@ -91,6 +91,35 @@ test('clinician invite response exposes the canonical returning-patient login em
   assert.doesNotMatch(read('qa-frontend-worker.js'),/login_email/);
 });
 
+test('normal GalviTriage email is the canonical returning-login identity',()=>{
+  const legacy=read('worker/worker.js'),bridge=read('worker/day3-customer-session.js'),svc=read('worker/domain/day7-customer-access-service.js');
+  assert.match(legacy,/const email = normalizeFounderEmail\(safe\(payload, 'founder\.email'\)\)/);
+  assert.match(legacy,/SELECT founder_id FROM founders[\s\S]*WHERE lower\(email\)=\?/);
+  assert.match(bridge,/FROM founders WHERE session_id=\?/);
+  assert.match(bridge,/const email = low\(legacyFounder\.email\)/);
+  assert.match(bridge,/FROM gv1_founders WHERE lower\(email\)=\?/);
+  assert.match(svc,/SELECT b\.bmr_id,b\.venture_id,b\.status,v\.venture_name,f\.founder_id,f\.email/);
+  assert.match(svc,/const email=lower\(canonical\.email\)/);
+  assert.match(svc,/email_normalized=\?/);
+});
+
+test('Maya Ellis Day 7 synthetic BMR fixture is reconciled source-controlled, primary, idempotent, and manual_repair NO',()=>{
+  const fixture=read('migrations/day8/0007_second_galviclinician_invitation.sql');
+  assert.match(fixture,/bmr_0d72e878cc634917ae2ac8430a73331f/);
+  assert.match(fixture,/maya\.ellis\.day7\.e2e@example\.com/);
+  assert.match(fixture,/UPDATE founders/);
+  assert.match(fixture,/UPDATE gv1_founders/);
+  assert.match(fixture,/UPDATE gv1_customer_accounts/);
+  assert.match(fixture,/is_primary=1/);
+  assert.match(fixture,/qa_fixture_identity_reconciled/);
+  assert.match(fixture,/manual_repair/);
+  assert.match(fixture,/"NO"/);
+  assert.match(fixture,/D7MAYA1/);
+  assert.match(fixture,/Precondition guard/);
+  assert.match(fixture,/Postcondition guard/);
+  assert.doesNotMatch(fixture,/DELETE FROM|DROP TABLE|DROP COLUMN|ALTER TABLE .* RENAME/i);
+});
+
 test('Membership clinician surface is Care Plan only and loads the patient-access action',()=>{
   const ui=read('clinician-portal/day7-membership.js');
   assert.match(ui,/data-day7-membership-surface="care-plan-only"/);
