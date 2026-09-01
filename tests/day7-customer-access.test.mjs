@@ -78,6 +78,20 @@ test('secure invitation establishes the verifier used by later plain-URL returni
   assert.match(svc,/activation_write_contract:'staged_fail_closed_session_then_atomic_credential_invite_audit_with_compensation'/);
 });
 
+test('consumed invitation recovery requires password authentication and exact original principal/BMR scope',()=>{
+  const wrapper=read('worker/day7-customer-entry.js');
+  for(const marker of [
+    'recoverConsumedInvite','GV_CUSTOMER_ACCESS_INVITE_EXPIRED','INVITE_SCOPE',
+    'consumed_at','revoked_at','expires_at','loginCustomerAccess','activation_replay',
+    'consumed_invite_authenticated_recovery',"manual_repair:'NO'"
+  ])assert.ok(wrapper.includes(marker),marker);
+  assert.match(wrapper,/if\(!invite\?\.consumed_at\|\|invite\.revoked_at\|\|!invite\.expires_at\|\|Date\.parse\(invite\.expires_at\)<=Date\.now\(\)\)throw originalError/);
+  assert.match(wrapper,/loginCustomerAccess\(env,ctx,\{email:principal\.email,password:input\?\.password\}\)/);
+  assert.match(wrapper,/data\?\.principal_id!==invite\.principal_id\|\|data\?\.bmr_id!==invite\.bmr_id/);
+  assert.match(wrapper,/GV_CUSTOMER_ACCESS_SCOPE_MISMATCH/);
+  assert.doesNotMatch(wrapper,/UPDATE gv1_customer_login_invites|UPDATE gv1_customer_accounts|DELETE FROM/);
+});
+
 test('Business Physician can issue a patient GalviChart update without activating Membership',()=>{
   const wrapper=read('worker/day8-day7-entry.js'),ui=read('clinician-portal/day7-customer-access.js');
   assert.match(wrapper,/requireClinicianIdentity/);assert.match(wrapper,/identity\.role!==\'business_physician\'/);assert.match(wrapper,/customer-access-invite/);assert.match(wrapper,/day8Day6Worker\.fetch/);
