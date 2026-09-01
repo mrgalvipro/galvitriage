@@ -35,14 +35,22 @@ test('returning patient invite hash is parsed without consuming the GalviTriage 
   assert.doesNotMatch(ui,/new URLSearchParams\(raw\.replace\(\/\^galvitriage&\?\//);
 });
 
-test('customer activation commits account invite session and audit in one D1 batch and fails closed',()=>{
+test('customer activation is retry-safe across D1 account bootstrap and atomically consumes invite with session',()=>{
   const svc=read('worker/domain/day7-customer-access-service.js');
-  for(const marker of ['activationAccountState','prepareSession','GV_CUSTOMER_ACCOUNT_IDENTITY_CONFLICT','GV_CUSTOMER_ACTIVATION_WRITE_FAILED','activation_transaction'])assert.ok(svc.includes(marker),marker);
-  assert.match(svc,/if\(accountState\.insert\)statements\.push\(accountState\.insert\)/);
+  for(const marker of [
+    'resolveAccount','ensureActivationAccount','prepareSession',
+    'GV_CUSTOMER_ACCOUNT_IDENTITY_CONFLICT','GV_CUSTOMER_ACCOUNT_LOOKUP_FAILED',
+    'GV_CUSTOMER_ACCOUNT_BOOTSTRAP_FAILED','GV_CUSTOMER_PASSWORD_DERIVATION_FAILED',
+    'GV_CUSTOMER_SESSION_LINEAGE_LOOKUP_FAILED','GV_CUSTOMER_ACTIVATION_PREPARE_FAILED',
+    'GV_CUSTOMER_ACTIVATION_WRITE_FAILED','activation_transaction','activation_write_contract'
+  ])assert.ok(svc.includes(marker),marker);
+  assert.match(svc,/await env\.DB\.prepare\(`INSERT INTO gv1_customer_accounts[\s\S]*?\.run\(\)/);
+  assert.match(svc,/const raced=await resolveAccount/);
+  assert.match(svc,/await env\.DB\.batch\(\[/);
   assert.match(svc,/sessionState\.insert/);
   assert.match(svc,/sessionState\.audit/);
-  assert.match(svc,/await env\.DB\.batch\(statements\)/);
-  assert.doesNotMatch(svc,/await env\.DB\.prepare\(`INSERT INTO gv1_customer_accounts[\s\S]*?\.run\(\);account=/);
+  assert.match(svc,/Your invitation remains retryable/);
+  assert.doesNotMatch(svc,/if\(accountState\.insert\)statements\.push\(accountState\.insert\)/);
 });
 
 test('Business Physician can issue a patient GalviChart update without activating Membership',()=>{
