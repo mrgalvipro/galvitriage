@@ -19,7 +19,7 @@ const bytesToB64url=bytes=>btoa(String.fromCharCode(...bytes)).replaceAll('+','-
 const b64urlToBytes=value=>{const raw=clean(value).replaceAll('-','+').replaceAll('_','/');const padded=raw+'='.repeat((4-raw.length%4)%4);return Uint8Array.from(atob(padded),c=>c.charCodeAt(0));};
 const safeEqual=(a,b)=>{if(a.length!==b.length)return false;let diff=0;for(let i=0;i<a.length;i++)diff|=a[i]^b[i];return diff===0;};
 function classifyD1Failure(error){
-  const m=clean(error?.message).toLowerCase();
+  const m=[error?.message,error?.cause?.message].map(clean).join(' ').toLowerCase();
   const target=m.includes('gv1_customer_login_sessions')?'session':m.includes('gv1_customer_login_invites')?'invite':m.includes('gv1_customer_accounts')?'account':m.includes('gv1_audit_log')?'audit':'unknown';
   if(m.includes('foreign key'))return {code:'GV_CUSTOMER_ACTIVATION_FOREIGN_KEY_FAILED',kind:'foreign_key',target};
   if(m.includes('unique constraint')||m.includes('constraint failed')&&m.includes('unique'))return {code:'GV_CUSTOMER_ACTIVATION_UNIQUE_FAILED',kind:'unique',target};
@@ -50,10 +50,7 @@ async function encodePassword(password){
 async function verifyPassword(password,row){
   const supplied=clean(password);if(!supplied)return false;
   let salt,stored;try{salt=b64urlToBytes(row.password_salt);stored=b64urlToBytes(row.password_hash);}catch{return false;}
-  try{
-    const digest=await passwordDigest(supplied,salt,Number(row.password_iterations)||PASSWORD_ITERATIONS);
-    return safeEqual(digest,stored);
-  }catch{return false;}
+  try{return safeEqual(await passwordDigest(supplied,salt,Number(row.password_iterations)||PASSWORD_ITERATIONS),stored);}catch{return false;}
 }
 function audit(db,ctx,actorType,entityType,entityId,operation,change,reasonCode){
   const ts=now();
@@ -87,8 +84,7 @@ async function queueStateForBmr(db,bmrId){
   return {eligible:false,reason:'no_physician_queue',canonical,plan};
 }
 async function legacySessionFor(db,canonical){
-  let row=await first(db,`SELECT v.session_id FROM ventures v JOIN founders f ON f.founder_id=v.founder_id
-    WHERE lower(f.email)=? AND lower(trim(v.venture_name))=lower(trim(?)) ORDER BY v.updated_at DESC,v.created_at DESC LIMIT 1`,lower(canonical.email),clean(canonical.venture_name));
+  let row=await first(db,`SELECT v.session_id FROM ventures v JOIN founders f ON f.founder_id=v.founder_id WHERE lower(f.email)=? AND lower(trim(v.venture_name))=lower(trim(?)) ORDER BY v.updated_at DESC,v.created_at DESC LIMIT 1`,lower(canonical.email),clean(canonical.venture_name));
   if(!row?.session_id)row=await first(db,`SELECT session_id FROM founders WHERE lower(email)=? ORDER BY updated_at DESC LIMIT 1`,lower(canonical.email));
   const sessionId=clean(row?.session_id);
   if(!/^gt_[A-Za-z0-9_-]{5,92}$/.test(sessionId))throw new GVError('GV_CUSTOMER_SESSION_LINEAGE_MISSING','The existing GalviCare session for this Business Health Record could not be resolved.',409);
@@ -114,21 +110,13 @@ async function resolveAccount(db,invite,canonical){
 }
 async function ensureActivationAccount(env,ctx,invite,canonical,password){
   let state;
-  try{state=await resolveAccount(env.DB,invite,canonical);}
-  catch(error){
-    if(error instanceof GVError)throw error;
-    throw new GVError('GV_CUSTOMER_ACCOUNT_LOOKUP_FAILED','Secure GalviCare account lookup could not be completed. Please retry.',503,{stage:'account_lookup',manual_repair:'NO'},true);
-  }
+  try{state=await resolveAccount(env.DB,invite,canonical);}catch(error){if(error instanceof GVError)throw error;throw new GVError('GV_CUSTOMER_ACCOUNT_LOOKUP_FAILED','Secure GalviCare account lookup could not be completed. Please retry.',503,{stage:'account_lookup',manual_repair:'NO'},true);}
   if(state.account)return state;
   const encoded=await encodePassword(password),accountId=newId('gca'),ts=now(),email=lower(canonical.email);
   try{
-    await env.DB.prepare(`INSERT INTO gv1_customer_accounts(account_id,principal_id,email_normalized,password_salt,password_hash,password_iterations,password_version,status,failed_attempts,locked_until,last_login_at,created_at,updated_at) VALUES(?,?,?,?,?,?,1,'active',0,NULL,NULL,?,?)`)
-      .bind(accountId,invite.principal_id,email,encoded.salt,encoded.digest,encoded.iterations,ts,ts).run();
+    await env.DB.prepare(`INSERT INTO gv1_customer_accounts(account_id,principal_id,email_normalized,password_salt,password_hash,password_iterations,password_version,status,failed_attempts,locked_until,last_login_at,created_at,updated_at) VALUES(?,?,?,?,?,?,1,'active',0,NULL,NULL,?,?)`).bind(accountId,invite.principal_id,email,encoded.salt,encoded.digest,encoded.iterations,ts,ts).run();
   }catch(error){
-    try{
-      const raced=await resolveAccount(env.DB,invite,canonical);
-      if(raced.account)return raced;
-    }catch(inner){if(inner instanceof GVError)throw inner;}
+    try{const raced=await resolveAccount(env.DB,invite,canonical);if(raced.account)return raced;}catch(inner){if(inner instanceof GVError)throw inner;}
     throw new GVError('GV_CUSTOMER_ACCOUNT_BOOTSTRAP_FAILED','Secure GalviCare account initialization could not be completed. Please retry.',503,{stage:'account_bootstrap',manual_repair:'NO'},true);
   }
   const account=await first(env.DB,`SELECT * FROM gv1_customer_accounts WHERE account_id=? LIMIT 1`,accountId);
@@ -137,8 +125,7 @@ async function ensureActivationAccount(env,ctx,invite,canonical,password){
 }
 async function prepareSession(env,ctx,account,queue){
   let legacySessionId;
-  try{legacySessionId=await legacySessionFor(env.DB,queue.canonical);}
-  catch(error){if(error instanceof GVError)throw error;throw new GVError('GV_CUSTOMER_SESSION_LINEAGE_LOOKUP_FAILED','Existing GalviCare record continuity could not be verified. Please retry.',503,{stage:'legacy_session_lookup',manual_repair:'NO'},true);}
+  try{legacySessionId=await legacySessionFor(env.DB,queue.canonical);}catch(error){if(error instanceof GVError)throw error;throw new GVError('GV_CUSTOMER_SESSION_LINEAGE_LOOKUP_FAILED','Existing GalviCare record continuity could not be verified. Please retry.',503,{stage:'legacy_session_lookup',manual_repair:'NO'},true);}
   const raw=randomToken('gvs1_'),sessionHash=await hash(SESSION_SCOPE,raw),ts=now(),expires=isoAfter(SESSION_TTL_MS);
   return {
     insert:env.DB.prepare(`INSERT INTO gv1_customer_login_sessions(session_hash,account_id,principal_id,bmr_id,legacy_session_id,expires_at,revoked_at,created_at,last_used_at) VALUES(?,?,?,?,?,?,NULL,?,?)`).bind(sessionHash,account.account_id,account.principal_id,queue.canonical.bmr_id,legacySessionId,expires,ts,ts),
@@ -148,12 +135,15 @@ async function prepareSession(env,ctx,account,queue){
 }
 async function issueSession(env,ctx,account,queue){
   const state=await prepareSession(env,ctx,account,queue);
-  try{await env.DB.batch([state.insert,state.audit]);}
-  catch(error){
-    if(error instanceof GVError)throw error;
-    throw new GVError('GV_CUSTOMER_SESSION_WRITE_FAILED','Secure GalviCare access could not be established. Please retry.',503,{stage:'login_session',manual_repair:'NO'},true);
-  }
+  try{await env.DB.batch([state.insert,state.audit]);}catch(error){if(error instanceof GVError)throw error;throw new GVError('GV_CUSTOMER_SESSION_WRITE_FAILED','Secure GalviCare access could not be established. Please retry.',503,{stage:'login_session',manual_repair:'NO'},true);}
   return state.data;
+}
+async function revokeUnreturnedSession(env,accessToken){
+  try{
+    const sessionHash=await hash(SESSION_SCOPE,accessToken),ts=now();
+    await env.DB.prepare(`UPDATE gv1_customer_login_sessions SET revoked_at=?,last_used_at=? WHERE session_hash=? AND revoked_at IS NULL`).bind(ts,ts,sessionHash).run();
+    return true;
+  }catch{return false;}
 }
 function customerUrl(env,token){
   const base=clean(env.GALVICARE_CUSTOMER_URL)||'https://galvicare-0-5-qa.mrgalvipro.workers.dev/#galvitriage';
@@ -196,19 +186,27 @@ export async function activateCustomerAccess(env,ctx,input){
     const queue=await queueStateForBmr(env.DB,invite.bmr_id);if(!queue.eligible||queue.canonical.founder_id!==invite.principal_id)throw new GVError('GV_CUSTOMER_ACCESS_NOT_QUEUED','No current Business Physician care item is available for this record.',403);
     const accountState=await ensureActivationAccount(env,ctx,invite,queue.canonical,input?.password),account=accountState.account;
     if(account.status==='disabled')throw new GVError('GV_CUSTOMER_ACCESS_DISABLED','This GalviCare account is disabled.',403);
+
+    // D1 release-critical staged commit. A single five-write activation batch repeatedly
+    // failed in deployed QA even though each prerequisite succeeded. The customer must
+    // never receive a token until every activation stage is durable. If a later stage
+    // fails, automatically revoke the unreturned session and leave the invite retryable.
     const sessionState=await prepareSession(env,ctx,account,queue),ts=now();
+    try{await env.DB.batch([sessionState.insert,sessionState.audit]);}
+    catch(error){
+      const failure=classifyD1Failure(error);
+      throw new GVError('GV_CUSTOMER_SESSION_WRITE_FAILED','Secure GalviCare access could not be established. Your invitation remains retryable.',503,{stage:'activation_session_commit',db_failure_class:failure.kind,db_target:failure.target,manual_repair:'NO'},true);
+    }
+
     try{
+      await env.DB.prepare(`UPDATE gv1_customer_accounts SET status='active',failed_attempts=0,locked_until=NULL,last_login_at=?,updated_at=? WHERE account_id=?`).bind(ts,ts,account.account_id).run();
       await env.DB.batch([
         env.DB.prepare(`UPDATE gv1_customer_login_invites SET consumed_at=? WHERE invite_hash=? AND consumed_at IS NULL`).bind(ts,inviteHash),
-        env.DB.prepare(`UPDATE gv1_customer_accounts SET status='active',failed_attempts=0,locked_until=NULL,last_login_at=?,updated_at=? WHERE account_id=?`).bind(ts,ts,account.account_id),
-        audit(env.DB,ctx,'customer','customer_account',account.account_id,'activate',{bmr_id:invite.bmr_id,account_created:accountState.created,manual_repair:'NO'},'galvichart_update_access'),
-        sessionState.insert,
-        sessionState.audit
+        audit(env.DB,ctx,'customer','customer_account',account.account_id,'activate',{bmr_id:invite.bmr_id,account_created:accountState.created,manual_repair:'NO'},'galvichart_update_access')
       ]);
     }catch(error){
-      if(error instanceof GVError)throw error;
-      const failure=classifyD1Failure(error);
-      throw new GVError(failure.code,'Secure GalviCare activation could not be completed. Your invitation remains retryable.',503,{stage:'activation_transaction',db_failure_class:failure.kind,db_target:failure.target,manual_repair:'NO'},true);
+      const compensated=await revokeUnreturnedSession(env,sessionState.data.access_token),failure=classifyD1Failure(error);
+      throw new GVError(failure.code,'Secure GalviCare activation could not be completed. Your invitation remains retryable.',503,{stage:'activation_finalize',db_failure_class:failure.kind,db_target:failure.target,automatic_compensation:compensated?'session_revoked':'token_not_returned',manual_repair:'NO'},true);
     }
     return {...sessionState.data,account_created:accountState.created};
   }catch(error){
@@ -234,7 +232,7 @@ export async function loginCustomerAccess(env,ctx,input){
 
 export async function customerAccessReadiness(env){
   const tables=await all(env.DB,`SELECT name FROM sqlite_master WHERE type='table' AND name IN ('gv1_customer_accounts','gv1_customer_login_invites','gv1_customer_login_sessions') ORDER BY name`);
-  return {ready:tables.length===3,password_storage:'pbkdf2_sha256_salted_hash_only',password_iterations:PASSWORD_ITERATIONS,queue_scope:'business_health_membership_release_critical',hubspot_transactional_email_configured:Boolean(clean(env.HUBSPOT_PRIVATE_APP_TOKEN)&&clean(env.HUBSPOT_TRANSACTIONAL_EMAIL_ID)),tables:tables.map(x=>x.name),activation_write_contract:'retry_safe_account_bootstrap_then_atomic_invite_session',manual_repair:'NO'};
+  return {ready:tables.length===3,password_storage:'pbkdf2_sha256_salted_hash_only',password_iterations:PASSWORD_ITERATIONS,queue_scope:'business_health_membership_release_critical',hubspot_transactional_email_configured:Boolean(clean(env.HUBSPOT_PRIVATE_APP_TOKEN)&&clean(env.HUBSPOT_TRANSACTIONAL_EMAIL_ID)),tables:tables.map(x=>x.name),activation_write_contract:'staged_fail_closed_session_then_atomic_invite_audit_with_compensation',manual_repair:'NO'};
 }
 
 export const CUSTOMER_ACCESS_HEADER='X-Galvi-Customer-Access';
