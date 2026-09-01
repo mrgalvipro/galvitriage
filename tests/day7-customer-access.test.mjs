@@ -28,6 +28,13 @@ test('GalviCare QA exposes login beneath intake without turning login into a new
   assert.doesNotMatch(ui,/STRIPE_SECRET_KEY|HUBSPOT_PRIVATE_APP_TOKEN|password_hash|password_salt/);
 });
 
+test('returning patient invite hash is parsed without consuming the GalviTriage fragment marker',()=>{
+  const ui=read('qa-frontend-worker.js');
+  assert.match(ui,/match=raw\.match\(\/\(\?:\^\|&\)galviaccess=\(\[\^&\]\+\)\/\)/);
+  assert.match(ui,/decodeURIComponent\(match\[1\]\)/);
+  assert.doesNotMatch(ui,/new URLSearchParams\(raw\.replace\(\/\^galvitriage&\?\//);
+});
+
 test('Business Physician can issue a patient GalviChart update without activating Membership',()=>{
   const wrapper=read('worker/day8-day7-entry.js'),ui=read('clinician-portal/day7-customer-access.js');
   assert.match(wrapper,/requireClinicianIdentity/);assert.match(wrapper,/identity\.role!==\'business_physician\'/);assert.match(wrapper,/customer-access-invite/);assert.match(wrapper,/day8Day6Worker\.fetch/);
