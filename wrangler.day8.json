@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "galvivault-day8-qa",
-  "main": "worker/day8-day7-entry.js",
+  "main": "worker/day8-commercial-entry.js",
   "compatibility_date": "2026-08-01",
   "workers_dev": true,
   "preview_urls": false,
@@ -23,6 +23,8 @@
     "GALVICARE_CUSTOMER_URL": "https://galvicare-0-5-qa.mrgalvipro.workers.dev/#galvitriage",
     "DAY7_BUSINESS_HEALTH_MEMBERSHIP": "server_governed_beta_v1",
     "DAY7_CUSTOMER_ACCESS": "business_physician_queue_only_v1",
+    "DAY7_COMMERCIAL_SCHEMA": "D7A2",
+    "DAY7_FOUNDER_SHOT": "governed_founder_mri_v1",
     "ALLOWED_ORIGINS": "https://galvivault-day8-qa.mrgalvipro.workers.dev,https://clinician-qa.galvipro.com,http://localhost:8788"
   },
   "d1_databases": [
