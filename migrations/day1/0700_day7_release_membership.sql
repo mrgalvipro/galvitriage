@@ -187,3 +187,106 @@ VALUES
 UPDATE gv1_schema_migrations
 SET checksum='gv1-d7a1-membership-prefounder-customer-access-v3'
 WHERE migration_id='D7A1' AND name='day7_business_health_membership_beta_v1';
+
+-- Day 7 Human-E2E fixture identity reconciliation.
+-- Maya Ellis / Brightline Growth Studio was created through controlled QA fixture setup
+-- instead of the normal GalviTriage write path. Production identities already follow:
+-- GalviTriage founder.email -> legacy founders.email -> canonical gv1_founders.email ->
+-- primary founder/venture role -> gv1_customer_accounts.email_normalized -> returning login.
+-- Email belongs to the canonical principal; it is intentionally NOT duplicated on the BMR.
+-- This exact-BMR correction is source-controlled, idempotent, audited and manual_repair=NO.
+
+INSERT INTO gv1_schema_migrations (migration_id,name,environment,checksum,applied_at)
+SELECT
+  'D7MAYA1',
+  'day7_maya_ellis_primary_identity_fixture',
+  CASE WHEN
+    (SELECT COUNT(*)
+       FROM gv1_business_medical_records b
+       JOIN gv1_founder_venture_roles r ON r.venture_id=b.venture_id AND r.status='active'
+       JOIN gv1_founders f ON f.founder_id=r.founder_id
+      WHERE b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f'
+        AND lower(trim(COALESCE(f.first_name,'')))='maya'
+        AND lower(trim(COALESCE(f.last_name,'')))='ellis')=1
+    AND NOT EXISTS (
+      SELECT 1 FROM gv1_founders f
+       WHERE lower(trim(COALESCE(f.email,'')))='maya.ellis.day7.e2e@example.com'
+         AND f.founder_id<>(SELECT r.founder_id FROM gv1_business_medical_records b JOIN gv1_founder_venture_roles r ON r.venture_id=b.venture_id AND r.status='active' JOIN gv1_founders mf ON mf.founder_id=r.founder_id WHERE b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f' AND lower(trim(COALESCE(mf.first_name,'')))='maya' AND lower(trim(COALESCE(mf.last_name,'')))='ellis' LIMIT 1))
+    AND NOT EXISTS (
+      SELECT 1 FROM gv1_customer_accounts a
+       WHERE lower(trim(a.email_normalized))='maya.ellis.day7.e2e@example.com'
+         AND a.principal_id<>(SELECT r.founder_id FROM gv1_business_medical_records b JOIN gv1_founder_venture_roles r ON r.venture_id=b.venture_id AND r.status='active' JOIN gv1_founders mf ON mf.founder_id=r.founder_id WHERE b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f' AND lower(trim(COALESCE(mf.first_name,'')))='maya' AND lower(trim(COALESCE(mf.last_name,'')))='ellis' LIMIT 1))
+  THEN 'qa' ELSE 'invalid_fixture_identity' END,
+  'day7-maya-primary-identity-v1',CURRENT_TIMESTAMP
+ON CONFLICT(migration_id) DO UPDATE SET environment=excluded.environment,checksum=excluded.checksum,applied_at=excluded.applied_at;
+
+UPDATE founders
+SET email='maya.ellis.day7.e2e@example.com',updated_at=CURRENT_TIMESTAMP
+WHERE founder_id=(
+  SELECT lf.founder_id
+    FROM founders lf
+    JOIN ventures lv ON lv.session_id=lf.session_id
+    JOIN gv1_business_medical_records b ON b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f'
+    JOIN gv1_ventures cv ON cv.venture_id=b.venture_id
+   WHERE lower(trim(COALESCE(lf.first_name,'')))='maya'
+     AND lower(trim(COALESCE(lf.last_name,'')))='ellis'
+     AND lower(trim(COALESCE(lv.venture_name,'')))=lower(trim(COALESCE(cv.venture_name,'')))
+   ORDER BY lf.updated_at DESC,lf.created_at DESC LIMIT 1
+);
+
+UPDATE gv1_customer_accounts
+SET email_normalized='maya.ellis.day7.e2e@example.com',updated_at=CURRENT_TIMESTAMP
+WHERE principal_id=(
+  SELECT r.founder_id
+    FROM gv1_business_medical_records b
+    JOIN gv1_founder_venture_roles r ON r.venture_id=b.venture_id AND r.status='active'
+    JOIN gv1_founders f ON f.founder_id=r.founder_id
+   WHERE b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f'
+     AND lower(trim(COALESCE(f.first_name,'')))='maya'
+     AND lower(trim(COALESCE(f.last_name,'')))='ellis' LIMIT 1
+);
+
+UPDATE gv1_founders
+SET email='maya.ellis.day7.e2e@example.com',updated_at=CURRENT_TIMESTAMP
+WHERE founder_id=(
+  SELECT r.founder_id
+    FROM gv1_business_medical_records b
+    JOIN gv1_founder_venture_roles r ON r.venture_id=b.venture_id AND r.status='active'
+    JOIN gv1_founders f ON f.founder_id=r.founder_id
+   WHERE b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f'
+     AND lower(trim(COALESCE(f.first_name,'')))='maya'
+     AND lower(trim(COALESCE(f.last_name,'')))='ellis' LIMIT 1
+);
+
+UPDATE gv1_founder_venture_roles
+SET is_primary=0,updated_at=CURRENT_TIMESTAMP
+WHERE venture_id=(SELECT venture_id FROM gv1_business_medical_records WHERE bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f') AND status='active';
+
+UPDATE gv1_founder_venture_roles
+SET is_primary=1,updated_at=CURRENT_TIMESTAMP
+WHERE venture_id=(SELECT venture_id FROM gv1_business_medical_records WHERE bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f')
+  AND founder_id=(SELECT r.founder_id FROM gv1_business_medical_records b JOIN gv1_founder_venture_roles r ON r.venture_id=b.venture_id AND r.status='active' JOIN gv1_founders f ON f.founder_id=r.founder_id WHERE b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f' AND lower(trim(COALESCE(f.first_name,'')))='maya' AND lower(trim(COALESCE(f.last_name,'')))='ellis' LIMIT 1)
+  AND status='active';
+
+INSERT OR IGNORE INTO gv1_audit_log
+  (audit_id,entity_type,entity_id,operation,prior_version,new_version,actor_type,source,reason_code,safe_change_json,correlation_id,environment,occurred_at,created_at)
+SELECT 'aud_day7_maya_primary_identity_v1','founder',f.founder_id,'qa_fixture_identity_reconciled',NULL,NULL,'system','day7-release-migration','day7_e2e_synthetic_identity',
+       '{"bmr_id":"bmr_0d72e878cc634917ae2ac8430a73331f","login_email":"maya.ellis.day7.e2e@example.com","primary_identity":true,"manual_repair":"NO"}',
+       'day7-maya-e2e-primary-identity','qa',CURRENT_TIMESTAMP,CURRENT_TIMESTAMP
+  FROM gv1_business_medical_records b
+  JOIN gv1_founder_venture_roles r ON r.venture_id=b.venture_id AND r.status='active' AND r.is_primary=1
+  JOIN gv1_founders f ON f.founder_id=r.founder_id
+ WHERE b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f'
+   AND lower(trim(COALESCE(f.first_name,'')))='maya'
+   AND lower(trim(COALESCE(f.last_name,'')))='ellis'
+   AND lower(trim(COALESCE(f.email,'')))='maya.ellis.day7.e2e@example.com';
+
+-- Postcondition guard: fail the migration rather than silently passing an incomplete fixture.
+UPDATE gv1_schema_migrations
+SET environment=CASE WHEN
+  (SELECT COUNT(*) FROM gv1_business_medical_records b JOIN gv1_founder_venture_roles r ON r.venture_id=b.venture_id AND r.status='active' AND r.is_primary=1 JOIN gv1_founders f ON f.founder_id=r.founder_id WHERE b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f' AND lower(trim(COALESCE(f.first_name,'')))='maya' AND lower(trim(COALESCE(f.last_name,'')))='ellis' AND lower(trim(COALESCE(f.email,'')))='maya.ellis.day7.e2e@example.com')=1
+  AND NOT EXISTS (SELECT 1 FROM gv1_customer_accounts a JOIN gv1_business_medical_records b ON b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f' JOIN gv1_founder_venture_roles r ON r.venture_id=b.venture_id AND r.status='active' AND r.is_primary=1 WHERE a.principal_id=r.founder_id AND lower(trim(a.email_normalized))<>'maya.ellis.day7.e2e@example.com')
+  AND EXISTS (SELECT 1 FROM founders lf JOIN ventures lv ON lv.session_id=lf.session_id JOIN gv1_business_medical_records b ON b.bmr_id='bmr_0d72e878cc634917ae2ac8430a73331f' JOIN gv1_ventures cv ON cv.venture_id=b.venture_id WHERE lower(trim(COALESCE(lf.first_name,'')))='maya' AND lower(trim(COALESCE(lf.last_name,'')))='ellis' AND lower(trim(COALESCE(lf.email,'')))='maya.ellis.day7.e2e@example.com' AND lower(trim(COALESCE(lv.venture_name,'')))=lower(trim(COALESCE(cv.venture_name,''))))
+THEN 'qa' ELSE 'invalid_fixture_identity' END,
+checksum='day7-maya-primary-identity-v1',applied_at=CURRENT_TIMESTAMP
+WHERE migration_id='D7MAYA1';
