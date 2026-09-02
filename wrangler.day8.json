@@ -23,8 +23,12 @@
     "GALVICARE_CUSTOMER_URL": "https://galvicare-0-5-qa.mrgalvipro.workers.dev/#galvitriage",
     "DAY7_BUSINESS_HEALTH_MEMBERSHIP": "server_governed_beta_v1",
     "DAY7_CUSTOMER_ACCESS": "business_physician_queue_only_v1",
-    "DAY7_COMMERCIAL_SCHEMA": "D7A2",
+    "DAY7_COMMERCIAL_SCHEMA": "D7A4",
+    "DAY7_TREATMENT_FULFILLMENT_AUTHORITY": "systeme_public_api_v1",
+    "DAY7_TREATMENT_PLAN_ORCHESTRATOR": "galvivault_multi_sprint_v1",
     "DAY7_FOUNDER_SHOT": "governed_founder_mri_v1",
+    "GALVIBOARD_SCHEMA": "galviboard_1_0_executive_control_tower_v1",
+    "GALVIBOARD_AUTHORITY": "read_only_galvivault_projection_v1",
     "ALLOWED_ORIGINS": "https://galvivault-day8-qa.mrgalvipro.workers.dev,https://clinician-qa.galvipro.com,http://localhost:8788"
   },
   "d1_databases": [
