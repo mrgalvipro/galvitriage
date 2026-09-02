@@ -13,7 +13,8 @@ test('GalviStudio operator navigator separates the three Mr. GalviPro jobs',()=>
 
 test('GalviBoard explains population stewardship and treatment performance without inventing CBE filters',()=>{
   const svc=read('worker/domain/day7-galviboard-enriched-service.js'),ui=read('clinician-portal/day7-galviboard.js');
-  for(const marker of ['COUNT(DISTINCT founder_id)','active_prefounder_context_rows','unique_active_prefounder_principals','cohort_filter','not_yet_instrumented','treatment_performance','business_health_memberships','galvileague_memberships:null','clinic_metrics'])assert.ok(svc.includes(marker),marker);
+  for(const marker of ['COUNT(DISTINCT founder_id)','active_prefounder_context_rows','unique_active_prefounder_principals','cohort_filter','not_yet_instrumented','treatment_performance','business_health_memberships','galvileague_memberships','clinic_metrics'])assert.ok(svc.includes(marker),marker);
+  assert.match(svc,/galvileague_memberships\s*=\s*null/);
   assert.match(ui,/Pre-Founder Board: Scenario A - Clinical \+ Commercial \+ Developmental \+ Longitudinal Loop/);
   assert.match(ui,/Population & Data Stewardship/);
   assert.match(ui,/FDI \/ GalviStudio Treatment Performance/);
