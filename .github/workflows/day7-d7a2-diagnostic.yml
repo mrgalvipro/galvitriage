@@ -1,4 +1,4 @@
-name: Day 7 D7A2 Release Diagnostic
+name: Day 7 D7A3 Release Diagnostic
 on:
   workflow_dispatch:
   push:
@@ -6,14 +6,17 @@ on:
     paths:
       - worker/day7-commercial-entry.js
       - worker/domain/day7-commercial-care-service.js
+      - worker/domain/day7-stripe-systeme-service.js
       - worker/domain/day7-lifecycle-service.js
       - worker/day8-commercial-entry.js
       - day7-commercial-browser.js
       - clinician-portal/day7-prefounder-queue.js
       - migrations/day1/0710_day7_commercial_return_foundershot.sql
+      - migrations/day1/0720_day7_stripe_systeme_treatment_delivery.sql
       - tests/day7-release-critical.test.mjs
       - tests/day7-branchless-release-gate.test.mjs
       - scripts/day5-build-qa-frontend.mjs
+      - wrangler.day7.json
       - .github/workflows/day7-d7a2-diagnostic.yml
 permissions:
   contents: read
@@ -34,29 +37,30 @@ jobs:
         run: |
           node --check worker/day7-commercial-entry.js
           node --check worker/domain/day7-commercial-care-service.js
+          node --check worker/domain/day7-stripe-systeme-service.js
           node --check worker/domain/day7-lifecycle-service.js
           node --check worker/day8-commercial-entry.js
           node --check day7-commercial-browser.js
           node --check clinician-portal/day7-prefounder-queue.js
       - name: Day 5 gate
-        run: npm run day5:gate 2>&1 | tee day7-d7a2-day5.txt
+        run: npm run day5:gate 2>&1 | tee day7-d7a3-day5.txt
       - name: Day 7D gate
-        run: npm run day7d:gate 2>&1 | tee day7-d7a2-day7d.txt
+        run: npm run day7d:gate 2>&1 | tee day7-d7a3-day7d.txt
       - name: Branchless release tests
-        run: node --test tests/day7-branchless-release-gate.test.mjs 2>&1 | tee day7-d7a2-branchless.txt
+        run: node --test tests/day7-branchless-release-gate.test.mjs 2>&1 | tee day7-d7a3-branchless.txt
       - name: Day 7 release tests
-        run: node --test tests/day7-release-critical.test.mjs 2>&1 | tee day7-d7a2-release.txt
+        run: node --test tests/day7-release-critical.test.mjs 2>&1 | tee day7-d7a3-release.txt
       - name: Day 6 Studio regression
-        run: node --test tests/day6-studio.test.mjs 2>&1 | tee day7-d7a2-day6.txt
+        run: node --test tests/day6-studio.test.mjs 2>&1 | tee day7-d7a3-day6.txt
       - name: QA frontend build
         run: |
           node scripts/day7b-build-qa-frontend.mjs
           node scripts/day4-build-qa-frontend.mjs
-          node scripts/day5-build-qa-frontend.mjs 2>&1 | tee day7-d7a2-frontend.txt
-          grep -Fq 'GalviCare Day 7 provider-verified commercial return v1' dist-qa/index.html
+          node scripts/day5-build-qa-frontend.mjs 2>&1 | tee day7-d7a3-frontend.txt
+          grep -Fq 'GalviCare Day 7 Stripe-authoritative commercial return v2' dist-qa/index.html
       - if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: day7-d7a2-diagnostic-${{ github.sha }}
+          name: day7-d7a3-diagnostic-${{ github.sha }}
           if-no-files-found: warn
-          path: day7-d7a2-*.txt
+          path: day7-d7a3-*.txt
