@@ -4,7 +4,7 @@ import { requireClinicianIdentity } from './auth/operator-identity.js';
 import { generateFounderShot, pendingReassessments } from './domain/day7-commercial-care-service.js';
 import { recordPreFounderCommercialReassessment } from './domain/day7-commercial-reassessment-service.js';
 import { applyLifecycleReview, latestFounderShot, pendingLifecycleReviews } from './domain/day7-lifecycle-service.js';
-import { buildGalviBoard } from './domain/day7-galviboard-service.js';
+import { buildGalviBoard } from './domain/day7-galviboard-enriched-service.js';
 
 export const DAY8_COMMERCIAL_RUNTIME='galvivault_day8_commercial_foundershot_v1';
 const SHOT=/^\/api\/v1\/operator\/principal-contexts\/([^/]+)\/founder-shot$/;
