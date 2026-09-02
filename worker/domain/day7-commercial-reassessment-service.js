@@ -5,6 +5,7 @@ const parse=(v,f={})=>{try{return typeof v==='object'&&v!==null?v:JSON.parse(v||
 const text=(v,max=4000)=>String(v??'').trim().slice(0,max);
 const refs=v=>(Array.isArray(v)?v:[]).map(x=>text(x,240)).filter(Boolean).slice(0,20);
 const ALLOWED_DECISIONS=new Set(['remain_pre_founder','continue_founder_development','hold_for_more_evidence']);
+// Scenario C requires separate governed venture-formation evidence and lifecycle review.
 
 export async function recordPreFounderCommercialReassessment(env,ctx,request,identity,queueId,input={}){
   if(identity?.role!=='business_physician') throw new GVError('GV_AUTH_FORBIDDEN','Business Physician authorization is required.',403);
