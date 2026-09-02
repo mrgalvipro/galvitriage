@@ -1,1 +1,37 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Mr. GalviPro's GalviBoard™ | QA</title><link rel="stylesheet" href="./styles.css"></head><body><header><strong>GalviBoard™ | GalviStudio Executive Director</strong><span class="qa">QA — NOT PRODUCTION</span><a href="./">GalviClinic Workspace</a></header><main><section class="card"><div class="queue-heading"><div><h1>Mr. GalviPro's GalviBoard™</h1><p>Executive control tower for passive management of GalviStudio 1.0 across Founder Development, Product Development, Business Development and Corporate Development. GalviBoard is a read-only projection over canonical GalviVault evidence.</p></div><button id="refreshGalviBoard" type="button">Refresh GalviBoard</button></div><p><strong>Operating principle:</strong> manage by exception. Healthy digital flows remain passive; clinical, commercial, lifecycle and Venture Development exceptions become executive attention.</p></section><div id="galviBoard" aria-live="polite"><p>Loading GalviBoard… If your secure Business Physician session has expired, return to the GalviClinic workspace and sign in.</p></div></main><script src="./day7-galviboard.js"></script></body></html>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Mr. GalviPro's GalviBoard™ | QA</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body class="galviboard-page">
+<header class="no-print">
+  <strong>GalviBoard™ | GalviStudio Executive Director</strong>
+  <span class="qa">QA — NOT PRODUCTION</span>
+  <nav class="workspace-links" aria-label="GalviStudio workspace navigation">
+    <a href="./">GalviStudio Navigator</a>
+    <a href="./?view=clinic">GalviClinic</a>
+    <a href="./?view=vault">GalviVault</a>
+  </nav>
+</header>
+<main>
+  <section class="card galviboard-title">
+    <div class="queue-heading">
+      <div>
+        <h1>Mr. GalviPro's GalviBoard™</h1>
+        <p>Executive control tower for passive management of GalviStudio 1.0 across Founder Development, Product Development, Business Development and Corporate Development. GalviBoard is a read-only projection over canonical GalviVault evidence.</p>
+      </div>
+      <div class="board-actions no-print">
+        <button id="refreshGalviBoard" type="button">Refresh GalviBoard</button>
+        <button id="printGalviBoard" type="button">Print GalviBoard</button>
+      </div>
+    </div>
+    <p><strong>Operating principle:</strong> manage by exception. Healthy digital flows remain passive; clinical, commercial, lifecycle and Venture Development exceptions become executive attention.</p>
+  </section>
+  <div id="galviBoard" aria-live="polite"><p>Loading GalviBoard… If your secure Business Physician session has expired, return to the GalviStudio Navigator and sign in.</p></div>
+</main>
+<script src="./day7-galviboard.js"></script>
+</body>
+</html>
