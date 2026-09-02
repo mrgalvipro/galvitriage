@@ -1,1 +1,104 @@
-<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>GalviVault QA Clinician Workspace</title><link rel="stylesheet" href="./styles.css"></head><body><header><strong>GalviVault™ Clinician Workspace</strong><span class="qa">QA — NOT PRODUCTION</span><button id="logout" hidden>Logout</button></header><main><section id="auth"><h1>Business Physician Workspace</h1><p id="status">Checking secure clinician session…</p><div id="authForms" hidden><form id="login" class="action"><h2>Sign in on this approved browser</h2><p>Passwordless sign-in uses a private key stored in this browser profile. There is no password to remember or store. Incognito/private windows do not retain a prior approved-device enrollment.</p><label>Email<input name="email" type="email" autocomplete="username" required></label><button>Sign in securely</button><p class="msg"></p></form><details><summary>First time on this browser or replacing an approved device?</summary><form id="enroll" class="action"><h2>Enroll approved clinician browser</h2><p>Use the one-time enrollment or recovery code issued to you. No password is stored. For ongoing GalviClinic/GalviVault use, enroll a normal browser profile rather than Incognito so the device-bound private key remains available after the window closes.</p><label>Email<input name="email" type="email" autocomplete="username" required></label><label>One-time enrollment code<input name="enrollment_token" type="password" autocomplete="one-time-code" required></label><button>Enroll this browser</button><p class="msg"></p></form></details></div></section><section id="workspace" hidden><section id="clinicQueueSection" class="card"><div class="queue-heading"><div><h2>GalviClinic™ Patient Review Queue</h2><p>Pending cases assigned by canonical care state. Review the patient, why they are being seen, the current GalviScore/acuity, and the evidence that led to the GalviClinic handoff before the encounter.</p></div><button id="refreshClinicQueue" type="button">Refresh queue</button></div><div id="clinicQueue" aria-live="polite"><p>Loading pending GalviClinic reviews…</p></div></section><article id="prefounderChart" class="card" hidden><h2 id="prefounderChartTitle">Pre-Founder GalviChart™</h2><div id="prefounderChartBody"></div></article><hr><form id="search"><label>Customer founder, venture, BHR, or GalviCare session<input id="query" minlength="3" required></label><p><strong>H9 continuity:</strong> Search for the customer whose GalviCare journey is being reviewed — not the Business Physician sign-in email. You may use the customer founder email/name, venture name, canonical BHR ID, or GalviCare session ID from the active journey.</p><p><strong>Pre-Founder workflow:</strong> Principal-only cases awaiting GalviClinic review appear automatically in the patient queue above, so the Business Physician does not need to know the patient email in advance.</p><button>Open customer record</button></form><div id="results" aria-live="polite"></div><article id="chart" hidden><h2 id="chartTitle"></h2><nav id="tabs"></nav><div id="panel"></div></article></section></main><script src="./day6-studio-bridge.js"></script><script src="./day7-prefounder-queue.js"></script><script src="./day7-membership.js"></script><script type="module" src="./app.js"></script><script id="day7-clinic-navigator">(()=>{'use strict';const $=s=>document.querySelector(s);const esc=v=>String(v??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));const BUTTONS=[['#note','Record GalviClinic Note'],['#gov','Record Finding Decision'],['#rec','Create Governed Recommendation'],['#plan','Confirm Treatment Plan'],['#treatment_event','Record Treatment Event'],['#rx','Prescribe GalviRx'],['#audit_order','Order GalviAudit / GalviLab'],['#referral','Create Qualified Referral'],['#reassess','Record Reassessment Decision'],['#outcome','Record Treatment Outcome'],['#audit_result','Record GalviAudit Result'],['#referral_outcome','Record Referral Outcome'],['#feedback','Record Follow-up']];function relabel(){for(const [id,label] of BUTTONS){const b=document.querySelector(`${id} button`);if(b&&b.textContent!==label)b.textContent=label}}function qaOnly(){document.querySelectorAll('#panel section.card > h2').forEach(h=>{if(!/^Day 6 Human E2E — H(?:10-H19|20-H28)$/.test((h.textContent||'').trim())||h.dataset.day7QaOnly)return;h.dataset.day7QaOnly='1';const p=document.createElement('p');p.className='small';p.innerHTML='<strong>QA regression controls only — not routine GalviClinic patient care.</strong> Use these H10–H28 controls only when executing inherited Day 6/Day 7 release proof for Studio stage-gate, evidence, outcome, authority, and cross-record contracts.';h.after(p)})}function state(){const p=$('#panel');if(!p)return {step:'—',title:'Open a patient GalviChart',detail:'Select the patient from the queue or search results.'};const t=(p.textContent||'').toLowerCase(),hasRec=!!p.querySelector('article.recommendation'),hasPlan=!!p.querySelector('article.treatment_plan');if(p.querySelector('#gov'))return {step:'2 of 6',title:'Govern the clinically relevant finding',detail:t.includes('status: confirmed')?'A finding is already confirmed. Review any unresolved finding only if needed, then continue to Care Plan.':'Confirm, modify, or reject the relevant finding and record clinical rationale before treatment.'};if(p.querySelector('#plan')||p.querySelector('#rec')){if(!hasRec)return {step:'3 of 6',title:'Create the governed recommendation',detail:'Translate the confirmed finding into the recommended care action before authoring treatment.'};if(!hasPlan)return {step:'4 of 6',title:'Confirm the Business Physician Treatment Plan',detail:'Set the measurable objective, action, required evidence, monitoring cadence, escalation trigger, and follow-up; then click Confirm Treatment Plan.'};return {step:'5 of 6',title:'Treatment Plan active — choose the next care disposition',detail:'Continue to GalviClinic Session for only the clinically indicated GalviRx, GalviAudit/GalviLab, referral, or reassessment action. Do not create a duplicate Treatment Plan.'}}if(p.querySelector('#rx,#audit_order,#referral,#reassess'))return {step:'5 of 6',title:'Select only clinically indicated active-care actions',detail:'GalviRx, GalviAudit/GalviLab, referral, and reassessment are decision options, not boxes that must all be completed. Reassess only when sufficient new evidence/outcome exists.'};if(p.querySelector('#audit_result,#referral_outcome,#outcome,#feedback'))return {step:'6 of 6',title:'Record returned evidence and close the loop',detail:'Capture any diagnostic/referral result and treatment outcome, then use Reassessment to continue, modify, escalate, close, or request more evidence.'};if(p.querySelector('#d6-studio-prescribe'))return {step:'5B of 6',title:'Prescribe GalviStudio only when the Treatment Plan calls for development',detail:'Create the bounded FDI/SPUR/Studio intervention from the canonical Treatment Plan. H10–H28 below remain QA regression proof, not normal patient-care steps.'};return {step:'1 of 6',title:'Review the canonical GalviChart before writing',detail:'Review Overview, Timeline, Evidence, current Business Health, and GalviSight interpretation. Then continue to Findings to record Business Physician judgment.'}}function navigator(){const chart=$('#chart'),tabs=$('#tabs');if(!chart||chart.hidden||!tabs)return;let n=$('#galviClinicClinicalNavigator');if(!n){n=document.createElement('section');n.id='galviClinicClinicalNavigator';n.className='card';n.setAttribute('aria-live','polite');chart.insertBefore(n,tabs)}const s=state(),patient=($('#chartTitle')?.textContent||'Current patient').trim(),key=[patient,s.step,s.title,s.detail].join('|');if(n.dataset.state===key)return;n.dataset.state=key;n.innerHTML=`<h3>GalviClinic™ Clinical Navigator</h3><p><strong>${esc(patient)}</strong></p><p><strong>Current completion step: ${esc(s.step)}</strong> — ${esc(s.title)}</p><p>${esc(s.detail)}</p><p class="small"><strong>Standard encounter path:</strong> Review Chart → Govern Finding → Recommendation → Treatment Plan → clinically indicated Rx/Audit/Referral/Studio → Outcome + Reassessment. This navigator sequences the existing canonical workflow; it does not replace Business Physician judgment.</p>`}let pending=false;function apply(){pending=false;relabel();qaOnly();navigator()}function schedule(){if(pending)return;pending=true;queueMicrotask(apply)}function install(){apply();new MutationObserver(schedule).observe(document.body,{subtree:true,childList:true,characterData:true});document.addEventListener('click',schedule,true);document.addEventListener('submit',()=>setTimeout(schedule,0),true)}if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install()})();</script></body></html>
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>GalviStudio QA Operator Workspace</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<header>
+  <strong>GalviStudio™ Operator Workspace</strong>
+  <span class="qa">QA — NOT PRODUCTION</span>
+  <button id="logout" hidden>Logout</button>
+</header>
+<main>
+  <section id="auth">
+    <h1>Mr. GalviPro Secure Workspace</h1>
+    <p id="status">Checking secure clinician session…</p>
+    <div id="authForms" hidden>
+      <form id="login" class="action">
+        <h2>Sign in on this approved browser</h2>
+        <p>Passwordless sign-in uses a private key stored in this browser profile. There is no password to remember or store. Incognito/private windows do not retain a prior approved-device enrollment.</p>
+        <label>Email<input name="email" type="email" autocomplete="username" required></label>
+        <button>Sign in securely</button><p class="msg"></p>
+      </form>
+      <details><summary>First time on this browser or replacing an approved device?</summary>
+        <form id="enroll" class="action">
+          <h2>Enroll approved clinician browser</h2>
+          <p>Use the one-time enrollment or recovery code issued to you. No password is stored. For ongoing GalviClinic/GalviVault use, enroll a normal browser profile rather than Incognito so the device-bound private key remains available after the window closes.</p>
+          <label>Email<input name="email" type="email" autocomplete="username" required></label>
+          <label>One-time enrollment code<input name="enrollment_token" type="password" autocomplete="one-time-code" required></label>
+          <button>Enroll this browser</button><p class="msg"></p>
+        </form>
+      </details>
+    </div>
+  </section>
+
+  <section id="workspace" hidden>
+    <section id="studioNavigator" class="card studio-navigator">
+      <h1>GalviStudio™ Navigator</h1>
+      <p>Choose the job Mr. GalviPro is performing. Each view uses the same secure operator identity while keeping executive management, patient care, and longitudinal-record inspection separate.</p>
+      <div class="grid role-grid">
+        <article class="card role-card">
+          <h2>GalviStudio CEO</h2>
+          <p><strong>GalviBoard™</strong></p>
+          <p>Run the institution: manage by exception, review the four pillars, commercial/developmental loops, operating health, and executive attention.</p>
+          <button id="openGalviBoard" type="button">Open GalviBoard</button>
+        </article>
+        <article class="card role-card">
+          <h2>GalviClinic Business Physician</h2>
+          <p><strong>GalviClinic™</strong></p>
+          <p>Care for the patient: work the Patient Review Queue, open the patient's current record, govern findings, prescribe treatment, and reassess outcomes.</p>
+          <button id="openGalviClinic" type="button">Open GalviClinic</button>
+        </article>
+        <article class="card role-card">
+          <h2>GalviVault Clinician</h2>
+          <p><strong>GalviVault™</strong></p>
+          <p>Inspect longitudinal evidence: locate a founder/venture/BHR/session and review the canonical record, evidence, reasoning, care, timeline, and history.</p>
+          <button id="openGalviVault" type="button">Open GalviVault</button>
+        </article>
+      </div>
+    </section>
+
+    <section id="clinicWorkspace" hidden>
+      <div class="workspace-heading">
+        <div><h1>GalviClinic™ | Business Physician</h1><p>Patient care and governed clinical decision workspace.</p></div>
+        <button type="button" data-studio-home>GalviStudio Navigator</button>
+      </div>
+      <section class="card">
+        <h2>GalviClinic Operating Counts</h2>
+        <p>Read-only operating totals from canonical GalviVault care records. These counts are management context; individual care decisions still require the patient's GalviChart and evidence.</p>
+        <div id="clinicMetrics"><p>Open GalviClinic to load operating counts.</p></div>
+      </section>
+      <section id="clinicQueueSection" class="card">
+        <div class="queue-heading"><div><h2>GalviClinic™ Patient Review Queue</h2><p>Pending cases assigned by canonical care state. Review the patient, why they are being seen, the current GalviScore/acuity, and the evidence that led to the GalviClinic handoff before the encounter.</p></div><button id="refreshClinicQueue" type="button">Refresh queue</button></div>
+        <div id="clinicQueue" aria-live="polite"><p>Loading pending GalviClinic reviews…</p></div>
+      </section>
+      <article id="prefounderChart" class="card" hidden><h2 id="prefounderChartTitle">Pre-Founder GalviChart™</h2><div id="prefounderChartBody"></div></article>
+    </section>
+
+    <section id="vaultWorkspace" hidden>
+      <div class="workspace-heading">
+        <div><h1>GalviVault™ | Longitudinal Evidence</h1><p>Inspect the canonical Business Health Record and its authorized clinician projection.</p></div>
+        <button type="button" data-studio-home>GalviStudio Navigator</button>
+      </div>
+      <form id="search" class="card">
+        <label>Customer founder, venture, BHR, or GalviCare session<input id="query" minlength="3" required></label>
+        <p><strong>Record inspection:</strong> Search for the customer whose longitudinal evidence is being reviewed — not the operator sign-in email. You may use founder email/name, venture name, canonical BHR ID, or GalviCare session ID.</p>
+        <p><strong>Pre-Founder note:</strong> principal-only Pre-Founder cases that have not created a venture/BHR are handled through the GalviClinic Pre-Founder workflow rather than this BHR search.</p>
+        <button>Open customer record</button>
+      </form>
+      <div id="results" aria-live="polite"></div>
+      <article id="chart" hidden><h2 id="chartTitle"></h2><nav id="tabs"></nav><div id="panel"></div></article>
+    </section>
+  </section>
+</main>
+<script src="./day6-studio-bridge.js"></script>
+<script src="./day7-prefounder-queue.js"></script>
+<script src="./day7-membership.js"></script>
+<script src="./day7-studio-navigator.js"></script>
+<script src="./day7-clinic-navigator.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>
