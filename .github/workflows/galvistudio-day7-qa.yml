@@ -82,7 +82,7 @@ jobs:
       - name: Install repository dependencies
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: Day 7 D7A3 syntax and authority gate
+      - name: Day 7 D7A4 syntax and authority gate
         shell: bash
         run: |
           set -euo pipefail
@@ -94,6 +94,7 @@ jobs:
           node --check worker/day7-commercial-entry.js
           node --check worker/domain/day7-commercial-care-service.js
           node --check worker/domain/day7-stripe-systeme-service.js
+          node --check worker/domain/day7-systeme-fulfillment-completion-service.js
           node --check worker/domain/day7-lifecycle-service.js
           node --check worker/day8-day6-entry.js
           node --check worker/day8-day7-entry.js
@@ -108,12 +109,15 @@ jobs:
           if [ -f day7-commercial-browser.js ]; then node --check day7-commercial-browser.js; fi
           grep -Fq "D7A2" migrations/day1/0710_day7_commercial_return_foundershot.sql
           grep -Fq "D7A3" migrations/day1/0720_day7_stripe_systeme_treatment_delivery.sql
+          grep -Fq "D7A4" migrations/day1/0730_day7_multi_sprint_systeme_fulfillment.sql
           grep -Fq "gv1_commercial_care_orders" migrations/day1/0710_day7_commercial_return_foundershot.sql
           grep -Fq "gv1_treatment_payment_events" migrations/day1/0720_day7_stripe_systeme_treatment_delivery.sql
-          grep -Fq '"DAY7_COMMERCIAL_SCHEMA": "D7A3"' wrangler.day7.json
+          grep -Fq "gv1_systeme_course_fulfillments" migrations/day1/0730_day7_multi_sprint_systeme_fulfillment.sql
+          grep -Fq '"DAY7_COMMERCIAL_SCHEMA": "D7A4"' wrangler.day7.json
           grep -Fq '"DAY7_COMMERCIAL_PAYMENT_AUTHORITY": "stripe_test_v1"' wrangler.day7.json
-          grep -Fq '"DAY7_TREATMENT_FULFILLMENT_AUTHORITY": "systeme_v1"' wrangler.day7.json
-          ! grep -RniE 'sk-[A-Za-z0-9_-]{16,}|SYSTEME_WEBHOOK_TOKEN[[:space:]]*[:=][[:space:]]*[A-Za-z0-9_-]{16,}|STRIPE_TREATMENT_WEBHOOK_SECRET[[:space:]]*[:=][[:space:]]*[A-Za-z0-9_-]{16,}' worker wrangler.day7.json wrangler.day8.json
+          grep -Fq '"DAY7_TREATMENT_FULFILLMENT_AUTHORITY": "systeme_public_api_v1"' wrangler.day7.json
+          grep -Fq '"DAY7_TREATMENT_PLAN_ORCHESTRATOR": "galvivault_multi_sprint_v1"' wrangler.day7.json
+          ! grep -RniE 'sk-[A-Za-z0-9_-]{16,}|SYSTEME_WEBHOOK_TOKEN[[:space:]]*[:=][[:space:]]*[A-Za-z0-9_-]{16,}|SYSTEME_API_KEY[[:space:]]*[:=][[:space:]]*[A-Za-z0-9_-]{16,}|STRIPE_TREATMENT_WEBHOOK_SECRET[[:space:]]*[:=][[:space:]]*[A-Za-z0-9_-]{16,}' worker wrangler.day7.json wrangler.day8.json
 
       - name: Full inherited Day 1-6 and Day 7 regression
         shell: bash
@@ -153,11 +157,11 @@ jobs:
           import fs from 'node:fs';
           const w=JSON.parse(fs.readFileSync('wrangler.day7.json','utf8')),db=w.d1_databases?.[0];
           if(w.name!=='galvivault-p0-day1-qa'||w.main!=='worker/day7-commercial-entry.js'||w.vars?.ENVIRONMENT!=='qa') throw new Error('Day7 QA runtime mismatch.');
-          if(w.vars?.DAY7_COMMERCIAL_SCHEMA!=='D7A3'||w.vars?.DAY7_COMMERCIAL_PAYMENT_AUTHORITY!=='stripe_test_v1'||w.vars?.DAY7_TREATMENT_FULFILLMENT_AUTHORITY!=='systeme_v1'||w.vars?.DAY7_FOUNDER_SHOT!=='governed_founder_mri_v1') throw new Error('D7A3 commercial/FounderShot contract missing.');
+          if(w.vars?.DAY7_COMMERCIAL_SCHEMA!=='D7A4'||w.vars?.DAY7_COMMERCIAL_PAYMENT_AUTHORITY!=='stripe_test_v1'||w.vars?.DAY7_TREATMENT_FULFILLMENT_AUTHORITY!=='systeme_public_api_v1'||w.vars?.DAY7_TREATMENT_PLAN_ORCHESTRATOR!=='galvivault_multi_sprint_v1'||w.vars?.DAY7_FOUNDER_SHOT!=='governed_founder_mri_v1') throw new Error('D7A4 commercial/FounderShot contract missing.');
           if(db?.binding!=='DB'||db?.database_name!=='galvivault-0-5-qa'||db?.database_id!=='cdf9042b-ab09-498a-ac66-010b6cce47d4') throw new Error('Day7 must reuse canonical QA D1.');
           NODE
 
-      - name: Verify and apply exact additive Day 6, D7A1, D7A2 and D7A3 schema
+      - name: Verify and apply exact additive Day 6, D7A1, D7A2, D7A3 and D7A4 schema
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -169,24 +173,43 @@ jobs:
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --file migrations/day1/0700_day7_release_membership.sql
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --file migrations/day1/0710_day7_commercial_return_foundershot.sql
           npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --file migrations/day1/0720_day7_stripe_systeme_treatment_delivery.sql
-          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --command "SELECT migration_id,name,checksum FROM gv1_schema_migrations WHERE migration_id IN ('D6A1','D7A1','D7A2','D7A3') ORDER BY migration_id; SELECT name FROM sqlite_master WHERE type='table' AND name IN ('gv1_commercial_care_orders','gv1_systeme_integration_events','gv1_treatment_payment_events','gv1_care_reassessment_queue','gv1_founder_snapshots','gv1_lifecycle_transition_reviews') ORDER BY name;" | tee day7-schema.txt
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --file migrations/day1/0730_day7_multi_sprint_systeme_fulfillment.sql
+          npx --yes wrangler@4.120.0 d1 execute DB --remote --config wrangler.day7.json --command "SELECT migration_id,name,checksum FROM gv1_schema_migrations WHERE migration_id IN ('D6A1','D7A1','D7A2','D7A3','D7A4') ORDER BY migration_id; SELECT name FROM sqlite_master WHERE type='table' AND name IN ('gv1_commercial_care_orders','gv1_systeme_integration_events','gv1_treatment_payment_events','gv1_systeme_course_fulfillments','gv1_care_reassessment_queue','gv1_founder_snapshots','gv1_lifecycle_transition_reviews') ORDER BY name;" | tee day7-schema.txt
           grep -q 'D6A1' day7-schema.txt
           grep -q 'D7A1' day7-schema.txt
           grep -q 'D7A2' day7-schema.txt
           grep -q 'D7A3' day7-schema.txt
-          for t in gv1_commercial_care_orders gv1_systeme_integration_events gv1_treatment_payment_events gv1_care_reassessment_queue gv1_founder_snapshots gv1_lifecycle_transition_reviews; do grep -q "$t" day7-schema.txt; done
+          grep -q 'D7A4' day7-schema.txt
+          for t in gv1_commercial_care_orders gv1_systeme_integration_events gv1_treatment_payment_events gv1_systeme_course_fulfillments gv1_care_reassessment_queue gv1_founder_snapshots gv1_lifecycle_transition_reviews; do grep -q "$t" day7-schema.txt; done
 
-      - name: Deploy exact Day 7 candidate to existing QA Worker
+      - name: Deploy exact Day 7 D7A4 candidate to existing QA Worker
         shell: bash
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           SYSTEME_WEBHOOK_TOKEN: ${{ secrets.SYSTEME_WEBHOOK_TOKEN }}
+          SYSTEME_API_KEY: ${{ secrets.SYSTEME_API_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_TREATMENT_WEBHOOK_SECRET: ${{ secrets.STRIPE_TREATMENT_WEBHOOK_SECRET }}
+          SYSTEME_FOUNDER_READINESS_COURSE_ID: ${{ secrets.SYSTEME_FOUNDER_READINESS_COURSE_ID }}
+          STRIPE_FOUNDER_READINESS_PRICE_ID: ${{ secrets.STRIPE_FOUNDER_READINESS_PRICE_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
           set -euo pipefail
           test -n "${SYSTEME_WEBHOOK_TOKEN:-}"
+          test -n "${SYSTEME_API_KEY:-}"
+          test -n "${STRIPE_SECRET_KEY:-}"
+          test -n "${STRIPE_TREATMENT_WEBHOOK_SECRET:-}"
+          test -n "${SYSTEME_FOUNDER_READINESS_COURSE_ID:-}"
+          test -n "${STRIPE_FOUNDER_READINESS_PRICE_ID:-}"
+          case "$STRIPE_SECRET_KEY" in sk_test_*) ;; *) echo 'STOP: QA treatment Stripe secret must be TEST mode'; exit 71;; esac
           printf '%s' "$SYSTEME_WEBHOOK_TOKEN" | npx --yes wrangler@4.120.0 secret put SYSTEME_WEBHOOK_TOKEN --config wrangler.day7.json
+          printf '%s' "$SYSTEME_API_KEY" | npx --yes wrangler@4.120.0 secret put SYSTEME_API_KEY --config wrangler.day7.json
+          printf '%s' "$STRIPE_SECRET_KEY" | npx --yes wrangler@4.120.0 secret put STRIPE_SECRET_KEY --config wrangler.day7.json
+          printf '%s' "$STRIPE_TREATMENT_WEBHOOK_SECRET" | npx --yes wrangler@4.120.0 secret put STRIPE_TREATMENT_WEBHOOK_SECRET --config wrangler.day7.json
+          printf '%s' "$SYSTEME_FOUNDER_READINESS_COURSE_ID" | npx --yes wrangler@4.120.0 secret put SYSTEME_FOUNDER_READINESS_COURSE_ID --config wrangler.day7.json
+          printf '%s' "$STRIPE_FOUNDER_READINESS_PRICE_ID" | npx --yes wrangler@4.120.0 secret put STRIPE_FOUNDER_READINESS_PRICE_ID --config wrangler.day7.json
+          if [ -n "${OPENAI_API_KEY:-}" ]; then printf '%s' "$OPENAI_API_KEY" | npx --yes wrangler@4.120.0 secret put OPENAI_API_KEY --config wrangler.day7.json; fi
           npx --yes wrangler@4.120.0 deploy --config wrangler.day7.json --var COMMIT_SHA:$GITHUB_SHA | tee day7-worker-deploy.txt
           sleep 12
           curl -fsS -H 'Cache-Control: no-cache' "$DAY7_QA_URL/health?day7=$GITHUB_SHA" | tee day7-health.json
@@ -199,7 +222,7 @@ jobs:
           if(h?.success!==true||h?.data?.commit_sha!==process.env.GITHUB_SHA) throw new Error('Exact deployed SHA mismatch.');
           if(d6?.success!==true||d6?.data?.ready!==true) throw new Error('Day6 readiness failed.');
           if(d7?.success!==true||d7?.data?.ready!==true) throw new Error('Day7 readiness failed.');
-          if(cat?.success!==true||cat?.data?.commercial_schema!=='D7A3'||cat?.data?.payment_authority!=='stripe'||cat?.data?.fulfillment_authority!=='systeme'||!cat?.data?.catalog?.founder_readiness_sprint) throw new Error('D7A3 commercial catalog failed.');
+          if(cat?.success!==true||cat?.data?.commercial_schema!=='D7A4'||cat?.data?.payment_authority!=='stripe'||cat?.data?.fulfillment_authority!=='systeme_public_api'||cat?.data?.treatment_plan_orchestrator!=='galvivault'||!cat?.data?.catalog?.founder_readiness_sprint) throw new Error('D7A4 commercial catalog failed.');
           NODE
           node scripts/day6-deployed-e2e.mjs | tee day7-day6-deployed-e2e.json
           node scripts/day7-deployed-release-e2e.mjs | tee day7-release-deployed-e2e.json
@@ -241,7 +264,8 @@ jobs:
           echo '- New branch created: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Work ref pushed: NO' >> "$GITHUB_STEP_SUMMARY"
           echo '- Canonical QA D1 reused: YES' >> "$GITHUB_STEP_SUMMARY"
-          echo '- D7A1/D7A2 preserved; D7A3 Stripe/Systeme split is additive: YES' >> "$GITHUB_STEP_SUMMARY"
-          echo '- Stripe is payment authority; Systeme.io is treatment-delivery/completion authority: YES' >> "$GITHUB_STEP_SUMMARY"
+          echo '- D7A1/D7A2/D7A3 preserved; D7A4 GalviVault multi-Sprint fulfillment ledger is additive: YES' >> "$GITHUB_STEP_SUMMARY"
+          echo '- Stripe TEST is payment authority; Worker-to-Systeme Public API is enrollment; Systeme completion returns to GalviVault: YES' >> "$GITHUB_STEP_SUMMARY"
+          echo '- GalviVault remains Treatment Plan orchestrator: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- FounderShot AI is proposal-only; Business Physician governs lifecycle transition: YES' >> "$GITHUB_STEP_SUMMARY"
           echo '- Production/main modified: NO' >> "$GITHUB_STEP_SUMMARY"
