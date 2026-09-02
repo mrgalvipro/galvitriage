@@ -105,4 +105,4 @@ for(const prohibited of ['Provider: OpenAI','AI proof:','generated from your app
   if(html.includes(prohibited))throw new Error(`Generated QA frontend exposes customer-facing GalviGuide technical metadata/copy that must remain hidden: ${prohibited}`);
 }
 writeFileSync(OUT,html,'utf8');
-console.log('PASS — cumulative QA frontend contains canonical Score metadata, customer-safe governed GalviGuide AI guidance, Treatment Plan acknowledgement, Stripe-authoritative Commercial + Return/Retrieval, FounderShot projection, and operates without browser score/Acuity/BMR/OpenAI authority.');
+console.log('PASS — cumulative QA frontend contains canonical Score metadata, customer-safe governed GalviGuide AI guidance, AI-synthesized Path evidence support, Treatment Plan acknowledgement, Stripe-authoritative Commercial + Return/Retrieval, FounderShot projection, and operates without browser score/Acuity/BMR/OpenAI authority.');
