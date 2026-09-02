@@ -3,6 +3,7 @@ import { GVError, context, failure, headers, jsonBody, requireRuntime, success }
 import { requireClinicianIdentity } from './auth/operator-identity.js';
 import { generateFounderShot, pendingReassessments } from './domain/day7-commercial-care-service.js';
 import { applyLifecycleReview, latestFounderShot, pendingLifecycleReviews } from './domain/day7-lifecycle-service.js';
+import { buildGalviBoard } from './domain/day7-galviboard-service.js';
 
 export const DAY8_COMMERCIAL_RUNTIME='galvivault_day8_commercial_foundershot_v1';
 const SHOT=/^\/api\/v1\/operator\/principal-contexts\/([^/]+)\/founder-shot$/;
@@ -10,6 +11,7 @@ const CHART=/^\/api\/v1\/operator\/principal-contexts\/([^/]+)\/chart$/;
 const APPLY=/^\/api\/v1\/operator\/lifecycle-reviews\/([^/]+)\/apply$/;
 const REASSESS='/api/v1/operator/commercial-reassessment-queue';
 const LIFECYCLE='/api/v1/operator/lifecycle-review-queue';
+const GALVIBOARD='/api/v1/operator/galviboard';
 const first=(db,sql,...p)=>db.prepare(sql).bind(...p).first();
 const parse=(v,f={})=>{try{return typeof v==='object'&&v!==null?v:JSON.parse(v||'')}catch{return f}};
 function wrap(response){const h=new Headers(response.headers);h.set('X-Galvi-Day8-Commercial',DAY8_COMMERCIAL_RUNTIME);return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});}
@@ -20,7 +22,8 @@ export default {async fetch(request,env,executionContext){
   try{
     requireRuntime(env,ctx);
     if(request.method==='OPTIONS'&&path.startsWith('/api/v1/operator/'))return new Response(null,{status:204,headers:headers(ctx)});
-    if(shot||apply||path===REASSESS||path===LIFECYCLE){const identity=await requireClinicianIdentity(request,env);if(identity.role!=='business_physician')throw new GVError('GV_AUTH_FORBIDDEN','Business Physician authorization is required.',403);
+    if(shot||apply||path===REASSESS||path===LIFECYCLE||path===GALVIBOARD){const identity=await requireClinicianIdentity(request,env);if(identity.role!=='business_physician')throw new GVError('GV_AUTH_FORBIDDEN','Business Physician authorization is required.',403);
+      if(path===GALVIBOARD&&request.method==='GET')return wrap(success(ctx,await buildGalviBoard(env,ctx,identity),200,'ok',{projection:'galviboard_1_0',read_only:true,source_of_truth:'galvivault_d1'}));
       if(shot&&request.method==='POST')return wrap(success(ctx,await generateFounderShot(env,ctx,decodeURIComponent(shot[1]),{role:'business_physician',id:identity.operator_id}),201,'created',{artifact:'FounderShot',ai_governance:'proposal_not_transition'}));
       if(path===REASSESS&&request.method==='GET')return wrap(success(ctx,await pendingReassessments(env),200,'ok',{queue:'commercial_treatment_reassessment'}));
       if(path===LIFECYCLE&&request.method==='GET')return wrap(success(ctx,await pendingLifecycleReviews(env),200,'ok',{queue:'founder_lifecycle_review'}));
