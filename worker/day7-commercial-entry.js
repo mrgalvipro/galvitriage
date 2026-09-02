@@ -24,7 +24,13 @@ const SYSTEME=/^\/api\/v1\/integrations\/systeme\/([^/]+)\/(course-completed)$/;
 
 function wrap(response){const h=new Headers(response.headers);h.set('X-Galvi-Day7-Commercial',DAY7_COMMERCIAL_RUNTIME);h.set('X-Galvi-Day7-Commercial-Schema',COMMERCIAL_SCHEMA_D7A3);return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});}
 async function state(request,env,contextId){
-  try{return await commercialStateD7A3(env,request,contextId)}catch(error){
+  try{
+    const d7a3=await commercialStateD7A3(env,request,contextId);
+    // FounderShot remains a principal-level clinical artifact owned by the D7A2 FounderShot
+    // service; preserve it while D7A3 changes only payment/fulfillment responsibilities.
+    const prior=await preFounderCommercialState(env,request,contextId);
+    return{...d7a3,founder_snapshot:prior?.founder_snapshot||null};
+  }catch(error){
     // Migration-safe compatibility before D7A3 is applied to a runtime. Do not convert a
     // D7A3 database or authorization error into legacy state.
     if(!/no such column|no such table/i.test(String(error?.message||error)))throw error;
@@ -36,7 +42,7 @@ async function enrichProjection(request,env,executionContext,path){
   const downstream=await day7CustomerWorker.fetch(request,env,executionContext);if(!downstream.ok)return downstream;
   const body=await downstream.clone().json().catch(()=>null);if(!body?.success)return downstream;
   const contextId=new URL(request.url).searchParams.get('context_id');const commercial=await state(request,env,contextId);
-  const founder_snapshot=body.data?.founder_snapshot||null;
+  const founder_snapshot=commercial?.founder_snapshot||body.data?.founder_snapshot||null;
   const data={...body.data,commercial,founder_snapshot};
   if(body.data?.events?.some(e=>e.event_type==='customer_acknowledged')&&commercial?.next_action)data.next_step=`commercial:${commercial.next_action}`;
   return new Response(JSON.stringify({...body,data}),{status:downstream.status,headers:downstream.headers});
