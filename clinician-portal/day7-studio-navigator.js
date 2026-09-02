@@ -4,6 +4,7 @@ const $=s=>document.querySelector(s);
 const esc=v=>String(v??'').replace(/[&<>\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;'}[c]));
 const fmt=v=>v===null||v===undefined?'Not instrumented':Number(v).toLocaleString();
 async function api(path){const r=await fetch(path,{credentials:'include',cache:'no-store',headers:{Accept:'application/json'}});let p={};try{p=await r.json()}catch{}if(!r.ok||p?.success===false)throw new Error(p?.error?.message||`Request failed (${r.status})`);return p.data||{};}
+function desiredView(){const v=new URLSearchParams(location.search).get('view');return v==='clinic'||v==='vault'?v:'navigator';}
 function show(view){
   const nav=$('#studioNavigator'),clinic=$('#clinicWorkspace'),vault=$('#vaultWorkspace');
   if(nav)nav.hidden=view!=='navigator';
@@ -21,10 +22,8 @@ function install(){
   $('#openGalviClinic')?.addEventListener('click',()=>show('clinic'));
   $('#openGalviVault')?.addEventListener('click',()=>show('vault'));
   document.querySelectorAll('[data-studio-home]').forEach(b=>b.addEventListener('click',()=>show('navigator')));
-  document.querySelectorAll('[data-open-clinic]').forEach(b=>b.addEventListener('click',()=>show('clinic')));
-  document.querySelectorAll('[data-open-vault]').forEach(b=>b.addEventListener('click',()=>show('vault')));
-  const workspace=$('#workspace');if(workspace&&!workspace.hidden)show('navigator');
-  new MutationObserver(()=>{if(workspace&&!workspace.hidden&&!document.body.dataset.galviRoleView)show('navigator');if(workspace?.hidden)delete document.body.dataset.galviRoleView}).observe(workspace||document.body,{attributes:true,attributeFilter:['hidden']});
+  const workspace=$('#workspace');if(workspace&&!workspace.hidden)show(desiredView());
+  new MutationObserver(()=>{if(workspace&&!workspace.hidden&&!document.body.dataset.galviRoleView)show(desiredView());if(workspace?.hidden)delete document.body.dataset.galviRoleView}).observe(workspace||document.body,{attributes:true,attributeFilter:['hidden']});
 }
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',install,{once:true});else install();
 })();
