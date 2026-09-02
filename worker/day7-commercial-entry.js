@@ -6,11 +6,12 @@ import {
   requireTreatmentCompletionBeforeMonitoring
 } from './domain/day7-commercial-care-service.js';
 import {
-  COMMERCIAL_SCHEMA_D7A3, createStripeTreatmentOrder, ingestStripeTreatmentWebhook,
-  retrySystemeEnrollment, commercialStateD7A3
+  COMMERCIAL_SCHEMA_D7A4, createStripeTreatmentOrder, ingestStripeTreatmentWebhook,
+  retrySystemeEnrollment, commercialStateD7A4
 } from './domain/day7-stripe-systeme-service.js';
+import { recordSystemeFulfillmentCompletion } from './domain/day7-systeme-fulfillment-completion-service.js';
 
-export const DAY7_COMMERCIAL_RUNTIME='galvicare_1_0_day7_stripe_systeme_return_v2';
+export const DAY7_COMMERCIAL_RUNTIME='galvicare_1_0_day7_stripe_systeme_return_v3';
 const SETUP='/api/v1/day7/prefounder/account/setup';
 const LOGIN='/api/v1/day7/prefounder/login';
 const ORDER='/api/v1/day7/prefounder/treatment-order';
@@ -22,17 +23,17 @@ const CARE='/api/v1/day7/prefounder/care-events';
 const STRIPE_TREATMENT='/api/v1/integrations/stripe/treatment';
 const SYSTEME=/^\/api\/v1\/integrations\/systeme\/([^/]+)\/(course-completed)$/;
 
-function wrap(response){const h=new Headers(response.headers);h.set('X-Galvi-Day7-Commercial',DAY7_COMMERCIAL_RUNTIME);h.set('X-Galvi-Day7-Commercial-Schema',COMMERCIAL_SCHEMA_D7A3);return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});}
+function wrap(response){const h=new Headers(response.headers);h.set('X-Galvi-Day7-Commercial',DAY7_COMMERCIAL_RUNTIME);h.set('X-Galvi-Day7-Commercial-Schema',COMMERCIAL_SCHEMA_D7A4);return new Response(response.body,{status:response.status,statusText:response.statusText,headers:h});}
 async function state(request,env,contextId){
   try{
-    const d7a3=await commercialStateD7A3(env,request,contextId);
+    const d7a4=await commercialStateD7A4(env,request,contextId);
     // FounderShot remains a principal-level clinical artifact owned by the D7A2 FounderShot
-    // service; preserve it while D7A3 changes only payment/fulfillment responsibilities.
+    // service; D7A4 changes only payment/fulfillment responsibilities.
     const prior=await preFounderCommercialState(env,request,contextId);
-    return{...d7a3,founder_snapshot:prior?.founder_snapshot||null};
+    return{...d7a4,founder_snapshot:prior?.founder_snapshot||null};
   }catch(error){
-    // Migration-safe compatibility before D7A3 is applied to a runtime. Do not convert a
-    // D7A3 database or authorization error into legacy state.
+    // Migration-safe compatibility before D7A4 is applied to a runtime. Do not convert a
+    // D7A4 database or authorization error into legacy state.
     if(!/no such column|no such table/i.test(String(error?.message||error)))throw error;
     return preFounderCommercialState(env,request,contextId);
   }
@@ -55,22 +56,25 @@ export default {async fetch(request,env,executionContext){
     if(request.method==='OPTIONS'&&(path.startsWith('/api/v1/day7/')||path.startsWith('/api/v1/integrations/systeme/')||path===STRIPE_TREATMENT))return new Response(null,{status:204,headers:headers(ctx)});
     if(path===STRIPE_TREATMENT&&request.method==='POST'){
       const data=await ingestStripeTreatmentWebhook(env,ctx,request);
-      return wrap(success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:!!data.idempotent_replay,payment_authority:'stripe',fulfillment_authority:'systeme'}));
+      return wrap(success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:!!data.idempotent_replay,payment_authority:'stripe',fulfillment_authority:'systeme_public_api'}));
     }
     if(systeme&&request.method==='POST'){
       const completionKey=String(url.searchParams.get('completion_key')||'').trim();
       if(!completionKey)throw new GVError('GV_SYSTEME_COMPLETION_KEY_REQUIRED','Course completion webhook requires completion_key.',422);
-      // Systeme.io is treatment-delivery authority only. There is deliberately no Systeme sale
-      // webhook route in D7A3; payment must already be server-verified by Stripe.
+      // D7A4: Systeme.io is treatment-delivery authority only. Payment must already be
+      // server-verified by Stripe. Preserve a clone so the D7A4 fulfillment ledger can
+      // validate the provider course after the canonical D7A2 completion processor runs.
+      const completionRequest=request.clone();
       const data=await ingestSystemeEvent(env,ctx,request,decodeURIComponent(systeme[1]),'course_completed',completionKey);
-      return wrap(success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,fulfillment_provider:'systeme',payment_authority:'stripe'}));
+      const fulfillment=await recordSystemeFulfillmentCompletion(env,data?.event?.order_id,completionKey,completionRequest);
+      return wrap(success(ctx,{...data,fulfillment},data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{idempotent_replay:data.idempotent_replay,fulfillment_provider:'systeme_public_api',payment_authority:'stripe',treatment_plan_orchestrator:'galvivault'}));
     }
-    if(path===CATALOG&&request.method==='GET')return wrap(success(ctx,{catalog:CARE_CATALOG,commercial_schema:'D7A3',payment_authority:'stripe',fulfillment_authority:'systeme',read_only:true}));
+    if(path===CATALOG&&request.method==='GET')return wrap(success(ctx,{catalog:CARE_CATALOG,commercial_schema:'D7A4',payment_authority:'stripe',fulfillment_authority:'systeme_public_api',treatment_plan_orchestrator:'galvivault',read_only:true}));
     if(path===SETUP&&request.method==='POST')return wrap(success(ctx,await setupPreFounderAccount(env,ctx,request,await jsonBody(request)),201,'created',{manual_repair:'NO'}));
     if(path===LOGIN&&request.method==='POST')return wrap(success(ctx,await loginPreFounder(env,ctx,await jsonBody(request)),200,'ok',{customer_access:'principal_only_return'}));
     if(path===ORDER&&request.method==='POST'){const data=await createStripeTreatmentOrder(env,ctx,request,idempotencyKey(request),await jsonBody(request));return wrap(success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{commercial_event:'stripe_treatment_checkout_started',payment_authority:'stripe',idempotent_replay:data.idempotent_replay}));}
-    if(path===STATE&&request.method==='GET'){const id=url.searchParams.get('context_id');return wrap(success(ctx,await state(request,env,id),200,'ok',{commercial_loop:'stripe_payment_systeme_completion_v2'}));}
-    if(path===RETRY_ENROLL&&request.method==='POST')return wrap(success(ctx,await retrySystemeEnrollment(env,ctx,request,await jsonBody(request)),200,'ok',{fulfillment_authority:'systeme'}));
+    if(path===STATE&&request.method==='GET'){const id=url.searchParams.get('context_id');return wrap(success(ctx,await state(request,env,id),200,'ok',{commercial_loop:'stripe_payment_systeme_completion_v3'}));}
+    if(path===RETRY_ENROLL&&request.method==='POST')return wrap(success(ctx,await retrySystemeEnrollment(env,ctx,request,await jsonBody(request)),200,'ok',{fulfillment_authority:'systeme_public_api',treatment_plan_orchestrator:'galvivault'}));
     if(path===CONFIRM&&request.method==='POST'){const data=await confirmTreatmentCompletion(env,ctx,request,idempotencyKey(request),await jsonBody(request));return wrap(success(ctx,data,data.idempotent_replay?200:201,data.idempotent_replay?'no_change':'created',{commercial_event:'customer_treatment_completion_confirmed',business_physician_queue:'pending'}));}
     if(path===CARE&&request.method==='POST'){const input=await request.clone().json().catch(()=>({}));await requireTreatmentCompletionBeforeMonitoring(env,request,input);}
     const enriched=await enrichProjection(request,env,executionContext,path);if(enriched)return wrap(enriched);
